@@ -35,6 +35,33 @@ type PaystackWebhookEvent = {
   };
 };
 
+type PaystackChargeResponse = {
+  status: boolean;
+  message: string;
+  data?: {
+    reference: string;
+    status: string;
+    display_text?: string;
+  };
+};
+
+type PaystackTransferRecipientResponse = {
+  status: boolean;
+  message: string;
+  data?: {
+    recipient_code: string;
+  };
+};
+
+type PaystackTransferResponse = {
+  status: boolean;
+  message: string;
+  data?: {
+    transfer_code: string;
+    status: string;
+  };
+};
+
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -248,27 +275,197 @@ export class PaymentService {
   async releaseEscrow(orderId: string, userId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { product: { select: { sellerId: true } } },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    if (order.buyerId !== userId) {
-      throw new ForbiddenException('Only the buyer can release escrow after confirming delivery');
-    }
-
-    if (order.paymentStatus !== 'Paid') {
-      throw new BadRequestException('This order has not been paid yet');
-    }
-
-    return this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: 'Completed',
-        escrowStatus: 'Released',
+      include: {
+        product: {
+          select: {
+            sellerId: true,
+            seller: { select: { name: true, business: { select: { momoProvider: true, momoPhone: true } } } },
+          },
+        },
       },
     });
+
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.buyerId !== userId) throw new ForbiddenException('Only the buyer can confirm delivery and release funds');
+    if (order.paymentStatus !== 'Paid') throw new BadRequestException('This order has not been paid yet');
+    if (order.escrowStatus === 'Released') throw new BadRequestException('Funds already released');
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { status: 'Completed', escrowStatus: 'Released' },
+    });
+
+    // Attempt automatic Paystack transfer to seller's MoMo if configured
+    const seller = order.product.seller;
+    const momoProvider = seller.business?.momoProvider;
+    const momoPhone = seller.business?.momoPhone;
+
+    if (momoProvider && momoPhone) {
+      try {
+        await this.initiateSellerPayout(orderId, order.price, seller.name, momoProvider, momoPhone);
+      } catch (err) {
+        this.logger.error(`Seller payout failed for order ${orderId}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } else {
+      this.logger.warn(`Order ${orderId}: seller has no MoMo payout details — manual payout required`);
+    }
+
+    return { message: 'Delivery confirmed. Funds released to seller.' };
+  }
+
+  private async initiateSellerPayout(
+    orderId: string,
+    amountGhs: number,
+    sellerName: string,
+    momoProvider: string,
+    momoPhone: string,
+  ) {
+    const secret = this.getPaystackSecret();
+    if (!secret) return;
+
+    const amountInPesewas = Math.round(amountGhs * 100);
+
+    // Step 1: create transfer recipient
+    const recipientRes = await fetch('https://api.paystack.co/transferrecipient', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'mobile_money',
+        name: sellerName,
+        account_number: momoPhone.replace(/\D/g, ''),
+        bank_code: momoProvider.toUpperCase(),
+        currency: 'GHS',
+      }),
+    });
+    const recipientData = (await recipientRes.json()) as PaystackTransferRecipientResponse;
+    if (!recipientData.status || !recipientData.data) {
+      throw new Error(`Recipient creation failed: ${recipientData.message}`);
+    }
+
+    // Step 2: initiate transfer
+    const transferRes = await fetch('https://api.paystack.co/transfer', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source: 'balance',
+        amount: amountInPesewas,
+        recipient: recipientData.data.recipient_code,
+        reason: `Campus Marche payout — order ${orderId}`,
+      }),
+    });
+    const transferData = (await transferRes.json()) as PaystackTransferResponse;
+    if (!transferData.status) {
+      throw new Error(`Transfer failed: ${transferData.message}`);
+    }
+
+    this.logger.log(`Payout initiated for order ${orderId}: ${transferData.data?.transfer_code}`);
+  }
+
+  async chargeMobileMoney(
+    orderId: string,
+    userId: string,
+    phone: string,
+    provider: 'mtn' | 'vod' | 'tgo',
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        buyer: { select: { email: true } },
+        product: { select: { id: true, title: true, sellerId: true } },
+      },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.buyerId !== userId) throw new ForbiddenException('Only the buyer can pay for this order');
+    if (order.product.sellerId === userId) throw new BadRequestException('You cannot pay for your own listing');
+    if (order.paymentStatus === 'Paid') throw new BadRequestException('This order is already paid');
+
+    const secret = this.getPaystackSecret();
+    if (!secret) throw new BadRequestException('PAYSTACK_SECRET_KEY is not configured');
+
+    const reference = `CM-MOMO-${Date.now()}-${order.id.slice(-6)}`;
+    const amountInPesewas = Math.round(order.price * 100);
+    const normalizedPhone = phone.replace(/\D/g, '').replace(/^0/, '233').replace(/^233/, '233');
+
+    const response = await fetch('https://api.paystack.co/charge', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: order.buyer.email,
+        amount: amountInPesewas,
+        currency: 'GHS',
+        reference,
+        mobile_money: { phone: normalizedPhone, provider },
+        metadata: {
+          orderId: order.id,
+          productId: order.product.id,
+          productTitle: order.product.title,
+          paymentMethod: 'mobile_money',
+          momoProvider: provider,
+        },
+      }),
+    });
+
+    const result = (await response.json()) as PaystackChargeResponse;
+    if (!response.ok || !result.status || !result.data) {
+      throw new BadRequestException(result.message || 'Could not initiate mobile money charge');
+    }
+
+    await this.prisma.paymentTransaction.create({
+      data: {
+        orderId: order.id,
+        userId,
+        reference: result.data.reference,
+        amount: order.price,
+        status: result.data.status,
+        provider: `paystack_momo_${provider}`,
+        metadata: JSON.stringify({ displayText: result.data.display_text }),
+      },
+    });
+
+    return {
+      reference: result.data.reference,
+      status: result.data.status,
+      displayText: result.data.display_text ?? `Check your phone for a ${provider.toUpperCase()} Mobile Money prompt`,
+    };
+  }
+
+  async checkMomoStatus(reference: string, userId: string) {
+    const payment = await this.prisma.paymentTransaction.findUnique({
+      where: { reference },
+      include: { order: true },
+    });
+
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.userId !== userId) throw new ForbiddenException('Access denied');
+
+    const secret = this.getPaystackSecret();
+    if (!secret) throw new BadRequestException('Paystack not configured');
+
+    const response = await fetch(`https://api.paystack.co/charge/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    const result = (await response.json()) as PaystackVerifyResponse;
+
+    if (!result.status || !result.data) {
+      throw new BadRequestException(result.message || 'Could not check payment status');
+    }
+
+    const paid = result.data.status === 'success';
+
+    if (paid && payment.status !== 'Paid') {
+      await this.prisma.$transaction([
+        this.prisma.paymentTransaction.update({
+          where: { reference },
+          data: { status: 'Paid', paidAt: result.data.paid_at ? new Date(result.data.paid_at) : new Date() },
+        }),
+        this.prisma.order.update({
+          where: { id: payment.orderId },
+          data: { status: 'In progress', paymentStatus: 'Paid', escrowStatus: 'Held in escrow' },
+        }),
+      ]);
+    }
+
+    return { status: result.data.status, paid };
   }
 }

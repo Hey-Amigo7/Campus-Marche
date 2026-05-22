@@ -1,9 +1,21 @@
-import { Controller, Get, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
+import { IsEnum, IsString, Matches } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { PaymentService } from './payment.service';
+
+class ChargeMomoDto {
+  @ApiProperty({ example: '0244123456' })
+  @IsString()
+  phone!: string;
+
+  @ApiProperty({ enum: ['mtn', 'vod', 'tgo'] })
+  @IsEnum(['mtn', 'vod', 'tgo'])
+  provider!: 'mtn' | 'vod' | 'tgo';
+}
 
 @ApiTags('payments')
 @Controller('payments')
@@ -40,8 +52,28 @@ export class PaymentController {
   @Post('orders/:orderId/release')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Release escrow after buyer confirms delivery' })
+  @ApiOperation({ summary: 'Confirm delivery and release escrow funds to seller' })
   release(@Param('orderId') orderId: string, @AuthUser() user: { id: string }) {
     return this.paymentService.releaseEscrow(orderId, user.id);
+  }
+
+  @Post('orders/:orderId/mobile-money')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Pay via MTN MoMo / Telecel Cash / AirtelTigo — sends USSD prompt to phone' })
+  chargeMobileMoney(
+    @Param('orderId') orderId: string,
+    @Body() body: ChargeMomoDto,
+    @AuthUser() user: { id: string },
+  ) {
+    return this.paymentService.chargeMobileMoney(orderId, user.id, body.phone, body.provider);
+  }
+
+  @Get('mobile-money/:reference/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Poll mobile money charge status' })
+  checkMomoStatus(@Param('reference') reference: string, @AuthUser() user: { id: string }) {
+    return this.paymentService.checkMomoStatus(reference, user.id);
   }
 }

@@ -36,6 +36,7 @@ import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
 import { SellerController } from './seller.controller';
 import { SellerService } from './seller.service';
+import { SmsService } from './sms.service';
 import { UserController } from './user.controller';
 
 @Module({
@@ -100,6 +101,7 @@ import { UserController } from './user.controller';
     RolesGuard,
     SavedItemsService,
     SellerService,
+    SmsService,
   ],
 })
 export class AppModule {}

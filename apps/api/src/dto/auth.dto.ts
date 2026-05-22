@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, Length, Matches, IsMobilePhone } from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'student@htu.edu.gh' })
@@ -58,4 +58,18 @@ export class ResetPasswordDto {
     message: 'password must contain at least one letter and one number',
   })
   password!: string;
+}
+
+export class VerifyOtpDto {
+  @ApiProperty({ example: '483920', description: '6-digit OTP code' })
+  @IsString()
+  @Length(6, 6)
+  code!: string;
+}
+
+export class SendPhoneOtpDto {
+  @ApiProperty({ example: '0244123456', description: 'Ghana phone number' })
+  @IsString()
+  @IsNotEmpty()
+  phone!: string;
 }

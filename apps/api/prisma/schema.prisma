@@ -14,19 +14,22 @@ enum UserRole {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  avatar    String   @default("A")
-  verified  Boolean  @default(false)
-  premium   Boolean  @default(false)
-  role      UserRole @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  password      String
+  avatar        String   @default("A")
+  verified      Boolean  @default(false)
+  phone         String?
+  phoneVerified Boolean  @default(false)
+  premium       Boolean  @default(false)
+  role          UserRole @default(USER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   products           Product[]
   orders             Order[]
+  deliveries         Order[]               @relation("DeliveryPerson")
   reviews            Review[]
   savedItems         SavedItem[]
   business           BusinessProfile?
@@ -37,22 +40,25 @@ model User {
   adminLogs          AdminLog[]
   passwordResets     PasswordResetToken[]
   emailVerifications EmailVerification[]
+  otpVerifications   OtpVerification[]
   sentMessages       Message[]             @relation("SentMessages")
   conversationsAsA   Conversation[]        @relation("ConversationParticipantA")
   conversationsAsB   Conversation[]        @relation("ConversationParticipantB")
 }
 
 model BusinessProfile {
-  id          String   @id @default(cuid())
-  name        String
-  type        String
-  description String?
-  location    String
-  phone       String?
-  verified    Boolean  @default(false)
-  premium     Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  type         String
+  description  String?
+  location     String
+  phone        String?
+  momoProvider String?
+  momoPhone    String?
+  verified     Boolean  @default(false)
+  premium      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -96,19 +102,24 @@ model Product {
 }
 
 model Order {
-  id            String   @id @default(cuid())
-  status        String   @default("Payment pending")
-  paymentStatus String   @default("Unpaid")
-  escrowStatus  String   @default("Not funded")
-  price         Float
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(cuid())
+  status           String   @default("Payment pending")
+  paymentStatus    String   @default("Unpaid")
+  escrowStatus     String   @default("Not funded")
+  price            Float
+  deliveryAddress  String?
+  deliveryPhone    String?
+  deliveryPersonId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  buyerId   String
-  buyer     User                 @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
-  payments  PaymentTransaction[]
+  buyerId        String
+  buyer          User                 @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  payments       PaymentTransaction[]
+  tracking       DeliveryTracking?
+  deliveryPerson User?                @relation("DeliveryPerson", fields: [deliveryPersonId], references: [id], onDelete: SetNull)
 
   @@index([buyerId])
   @@index([productId])
@@ -288,4 +299,34 @@ model EmailVerification {
 
   @@index([token])
   @@index([userId])
+}
+
+model OtpVerification {
+  id        String   @id @default(cuid())
+  code      String
+  purpose   String   @default("email")
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([purpose])
+}
+
+model DeliveryTracking {
+  id        String   @id @default(cuid())
+  latitude  Float
+  longitude Float
+  heading   Float?
+  speed     Float?
+  updatedAt DateTime @updatedAt
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
 }

@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { AccountType, AuthenticatedUser } from './auth/auth-user.decorator';
 import { EmailService } from './email.service';
+import { SmsService } from './sms.service';
 import { PrismaService } from './prisma.service';
 
 type JwtPayload = {
@@ -45,6 +46,7 @@ export class AuthService {
     private jwtService: JwtService,
     private config: ConfigService,
     private emailService: EmailService,
+    private smsService: SmsService,
   ) {}
 
   private getAccountType(email: string): AccountType {
@@ -78,6 +80,10 @@ export class AuthService {
     return this.jwtService.signAsync(payload);
   }
 
+  private generateOtpCode(): string {
+    return String(crypto.randomInt(100000, 999999));
+  }
+
   async register(email: string, name: string, password: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedName = name.trim();
@@ -101,7 +107,120 @@ export class AuthService {
     });
 
     const token = await this.signToken(user);
-    return { user: this.sanitizeUser(user), token };
+
+    // Send OTP to verify email
+    await this.sendEmailOtp(user.id, user.email).catch((err) => {
+      this.logger.error(`Failed to send registration OTP: ${err instanceof Error ? err.message : String(err)}`);
+    });
+
+    return { user: this.sanitizeUser(user), token, requiresOtp: true };
+  }
+
+  async sendEmailOtp(userId: string, email: string): Promise<void> {
+    await this.prisma.otpVerification.updateMany({
+      where: { userId, purpose: 'email', used: false },
+      data: { used: true },
+    });
+
+    const code = this.generateOtpCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.otpVerification.create({
+      data: { userId, code, purpose: 'email', expiresAt },
+    });
+
+    await this.emailService.sendOtpEmail(email, code);
+  }
+
+  async verifyEmailOtp(userId: string, code: string) {
+    const record = await this.prisma.otpVerification.findFirst({
+      where: { userId, purpose: 'email', used: false },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!record) throw new BadRequestException('No pending verification code found');
+    if (record.expiresAt < new Date()) throw new BadRequestException('Verification code has expired');
+    if (record.attempts >= 5) throw new BadRequestException('Too many incorrect attempts. Please request a new code.');
+
+    if (record.code !== code.trim()) {
+      await this.prisma.otpVerification.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      const remaining = 4 - record.attempts;
+      throw new BadRequestException(`Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.otpVerification.update({ where: { id: record.id }, data: { used: true } }),
+      this.prisma.user.update({ where: { id: userId }, data: { verified: true } }),
+    ]);
+
+    return { message: 'Email verified successfully' };
+  }
+
+  async resendEmailOtp(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.verified) throw new BadRequestException('Email is already verified');
+
+    const recent = await this.prisma.otpVerification.findFirst({
+      where: { userId, purpose: 'email', used: false },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (recent && recent.createdAt > new Date(Date.now() - 60 * 1000)) {
+      throw new BadRequestException('Please wait at least 60 seconds before requesting a new code');
+    }
+
+    await this.sendEmailOtp(userId, user.email);
+    return { message: 'A new verification code has been sent to your email' };
+  }
+
+  async sendPhoneOtp(userId: string, phone: string): Promise<void> {
+    const normalizedPhone = this.smsService.normalizeGhanaPhone(phone);
+
+    await this.prisma.user.update({ where: { id: userId }, data: { phone: normalizedPhone } });
+
+    await this.prisma.otpVerification.updateMany({
+      where: { userId, purpose: 'phone', used: false },
+      data: { used: true },
+    });
+
+    const code = this.generateOtpCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.otpVerification.create({
+      data: { userId, code, purpose: 'phone', expiresAt },
+    });
+
+    await this.smsService.sendOtp(normalizedPhone, code);
+  }
+
+  async verifyPhoneOtp(userId: string, code: string) {
+    const record = await this.prisma.otpVerification.findFirst({
+      where: { userId, purpose: 'phone', used: false },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!record) throw new BadRequestException('No pending phone verification found');
+    if (record.expiresAt < new Date()) throw new BadRequestException('Verification code has expired');
+    if (record.attempts >= 5) throw new BadRequestException('Too many attempts. Please request a new code.');
+
+    if (record.code !== code.trim()) {
+      await this.prisma.otpVerification.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new BadRequestException('Incorrect code');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.otpVerification.update({ where: { id: record.id }, data: { used: true } }),
+      this.prisma.user.update({ where: { id: userId }, data: { phoneVerified: true } }),
+    ]);
+
+    return { message: 'Phone number verified successfully' };
   }
 
   async login(email: string, password: string) {

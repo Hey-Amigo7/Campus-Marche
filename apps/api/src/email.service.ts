@@ -41,6 +41,26 @@ export class EmailService {
     await this.send(to, subject, html);
   }
 
+  async sendOtpEmail(to: string, code: string) {
+    const subject = 'Your Campus Marche verification code';
+    const html = `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+        <div style="background:linear-gradient(135deg,#1e1b4b,#4f46e5,#7c3aed);padding:32px;text-align:center;border-radius:12px 12px 0 0">
+          <h1 style="color:#fff;margin:0;font-size:24px;font-weight:900">Campus Marche</h1>
+        </div>
+        <div style="background:#fff;padding:32px;border:1px solid #e0e7ff;border-top:none;border-radius:0 0 12px 12px">
+          <h2 style="color:#1e1b4b;margin:0 0 16px">Verify your account</h2>
+          <p style="color:#475569;margin:0 0 24px">Enter the code below to verify your Campus Marche account. This code expires in 10 minutes.</p>
+          <div style="background:#f0f0ff;border:2px dashed #4f46e5;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
+            <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#4f46e5">${code}</span>
+          </div>
+          <p style="color:#94a3b8;font-size:13px;margin:0">If you did not create an account, you can safely ignore this email.</p>
+        </div>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
   async sendEmailVerification(to: string, verifyUrl: string) {
     const subject = 'Verify your Campus Marche email';
     const html = `

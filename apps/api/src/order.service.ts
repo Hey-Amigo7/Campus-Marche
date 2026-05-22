@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 
 const ALLOWED_BUYER_TRANSITIONS: Record<string, string[]> = {
@@ -119,5 +119,94 @@ export class OrderService {
     }
 
     return this.prisma.order.update({ where: { id }, data: { status: newStatus } });
+  }
+
+  async assignDeliveryPerson(orderId: string, requesterId: string, deliveryPersonId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { product: { select: { sellerId: true } } },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.product.sellerId !== requesterId) throw new ForbiddenException('Only the seller can assign a delivery person');
+    if (!['In progress'].includes(order.status)) throw new BadRequestException('Can only assign delivery for orders in progress');
+
+    const deliveryPerson = await this.prisma.user.findUnique({ where: { id: deliveryPersonId } });
+    if (!deliveryPerson) throw new NotFoundException('Delivery person not found');
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { deliveryPersonId, status: 'Out for delivery' },
+    });
+  }
+
+  async updateDeliveryLocation(
+    orderId: string,
+    deliveryPersonId: string,
+    latitude: number,
+    longitude: number,
+    heading?: number,
+    speed?: number,
+  ) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.deliveryPersonId !== deliveryPersonId) {
+      throw new ForbiddenException('You are not the assigned delivery person for this order');
+    }
+
+    return this.prisma.deliveryTracking.upsert({
+      where: { orderId },
+      create: { orderId, latitude, longitude, heading, speed },
+      update: { latitude, longitude, heading, speed },
+    });
+  }
+
+  async getDeliveryTracking(orderId: string, userId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        tracking: true,
+        product: { select: { sellerId: true } },
+        deliveryPerson: { select: { id: true, name: true, avatar: true, phone: true } },
+      },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+
+    const isBuyer = order.buyerId === userId;
+    const isSeller = order.product.sellerId === userId;
+    const isDeliveryPerson = order.deliveryPersonId === userId;
+
+    if (!isBuyer && !isSeller && !isDeliveryPerson) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return {
+      orderId,
+      status: order.status,
+      deliveryAddress: order.deliveryAddress,
+      deliveryPhone: order.deliveryPhone,
+      deliveryPerson: order.deliveryPerson,
+      tracking: order.tracking
+        ? {
+            latitude: order.tracking.latitude,
+            longitude: order.tracking.longitude,
+            heading: order.tracking.heading,
+            speed: order.tracking.speed,
+            updatedAt: order.tracking.updatedAt,
+          }
+        : null,
+    };
+  }
+
+  async setDeliveryDetails(orderId: string, buyerId: string, deliveryAddress: string, deliveryPhone: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.buyerId !== buyerId) throw new ForbiddenException('Only the buyer can set delivery details');
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { deliveryAddress, deliveryPhone },
+    });
   }
 }
