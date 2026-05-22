@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { ArrowRight, MessageCircle, ShieldCheck, ShoppingBag, Sparkles, Store, Users, Zap } from "lucide-react";
-import { products as mockProducts } from "@/constants/mock-data";
 import { CategoryCard } from "@/components/category-card";
 import { ProductArt, ProductGrid } from "@/components/product-card";
 import { Logo, SectionHeading, SellerBadge } from "@/components/ui";
@@ -11,7 +10,16 @@ import type { Product } from "@/types";
 
 function HeroProductPreviews() {
   const { data: products } = useProducts();
-  const displayProducts = products.length >= 3 ? products.slice(0, 3) : mockProducts.slice(0, 3);
+  const displayProducts = products.slice(0, 3);
+
+  if (displayProducts.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/40 bg-white/20 p-6 text-center text-white/80 backdrop-blur-sm">
+        <ShoppingBag className="mx-auto h-8 w-8 opacity-60" />
+        <p className="mt-2 text-sm font-semibold">Be the first to list on Campus Marche</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -39,21 +47,29 @@ function HeroProductPreviews() {
   );
 }
 
+function EmptySection({ label }: { label: string }) {
+  return (
+    <div className="rounded-2xl border border-indigo-100/50 bg-white/60 py-14 text-center backdrop-blur-sm">
+      <Store className="mx-auto h-10 w-10 text-indigo-200" />
+      <p className="mt-3 text-sm font-bold text-slate-400">{label}</p>
+      <Link href="/sell" className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-brand-navy hover:underline">
+        List something <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </div>
+  );
+}
+
 function RecentlyListed() {
   const { data: products } = useProducts();
-  const display = products.length > 0
-    ? [...products].sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()).slice(0, 4)
-    : mockProducts.slice(0, 4);
-
+  if (products.length === 0) return <EmptySection label="No listings yet — be the first!" />;
+  const display = [...products].sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()).slice(0, 4);
   return <ProductGrid products={display} />;
 }
 
 function TrendingProducts() {
   const { data: products } = useProducts();
-  const display = products.length > 0
-    ? [...products].sort((a, b) => b.views - a.views).slice(0, 4)
-    : [...mockProducts].sort((a, b) => b.views - a.views).slice(0, 4);
-
+  if (products.length === 0) return <EmptySection label="No trending products yet." />;
+  const display = [...products].sort((a, b) => b.views - a.views).slice(0, 4);
   return <ProductGrid products={display} />;
 }
 
@@ -74,9 +90,9 @@ export default function HomePage() {
     <div>
       {/* ── Hero ── */}
       <section className="container-shell py-8 md:py-12">
-        <div className="grid overflow-hidden rounded-3xl border border-indigo-100 shadow-2xl shadow-indigo-200/40 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid overflow-hidden rounded-3xl border border-white/55 shadow-2xl shadow-indigo-300/25 backdrop-blur-sm lg:grid-cols-[1.05fr_0.95fr]">
           {/* Left: copy */}
-          <div className="bg-white p-6 sm:p-10 lg:p-14">
+          <div className="bg-white/80 p-6 backdrop-blur-md sm:p-10 lg:p-14">
             <span className="chip chip-indigo">
               <Sparkles className="h-3.5 w-3.5" />
               For Students, By Students
@@ -194,7 +210,7 @@ export default function HomePage() {
           ].map((step) => {
             const Icon = step.icon;
             return (
-              <div key={step.title} className="rounded-2xl border border-indigo-100/60 bg-white p-6 shadow-sm shadow-indigo-100/40">
+              <div key={step.title} className="rounded-2xl border border-white/60 bg-white/72 p-6 shadow-sm shadow-indigo-100/30 backdrop-blur-md transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-100/40">
                 <div className={`grid h-11 w-11 place-items-center rounded-2xl ring-1 ${step.color} ${step.ring}`}>
                   <Icon className="h-5 w-5" />
                 </div>

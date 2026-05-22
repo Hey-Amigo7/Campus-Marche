@@ -98,10 +98,10 @@ export default function ProfilePage() {
                 </div>
               ))}
             </div>
-            <button className="btn-secondary mt-5 w-full">
+            <Link href="/profile/edit" className="btn-secondary mt-5 w-full">
               <Edit className="h-4 w-4" />
               Edit profile
-            </button>
+            </Link>
             {!profile.verified ? (
               <Link href={`/verify-email?email=${encodeURIComponent(profile.email ?? "")}`} className="btn-secondary mt-2 w-full text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100">
                 <ShieldCheck className="h-4 w-4" />

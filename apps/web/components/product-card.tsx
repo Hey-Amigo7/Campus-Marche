@@ -33,12 +33,12 @@ export function ProductCard({ product, compact = false }: { product: Product; co
   return (
     <article
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-2xl bg-white transition-all duration-200",
-        "border shadow-sm",
-        "hover:-translate-y-1.5 hover:shadow-xl hover:shadow-indigo-200/60",
+        "group flex h-full flex-col overflow-hidden rounded-2xl transition-all duration-300",
+        "border backdrop-blur-md",
+        "hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-200/50",
         product.featured
-          ? "border-indigo-200 shadow-indigo-100/50"
-          : "border-indigo-100/60 hover:border-indigo-200",
+          ? "border-indigo-200/70 bg-white/80 shadow-md shadow-indigo-100/60"
+          : "border-white/65 bg-white/72 shadow-sm shadow-indigo-100/30 hover:border-indigo-200/60 hover:bg-white/88",
       )}
     >
       <Link href={`/products/${product.id}`} className="block">

@@ -50,7 +50,8 @@ export function Navbar() {
   const accountLabel = isAuthenticated ? "Profile" : "Log in";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-indigo-100/60 bg-white/90 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-white/50 bg-white/75 shadow-sm shadow-indigo-200/20 backdrop-blur-2xl"
+      style={{ backdropFilter: "blur(28px) saturate(180%)" }}>
       <div className="container-shell flex min-h-[68px] items-center gap-5">
         <Logo />
         <nav className="hidden items-center gap-0.5 lg:flex">
@@ -59,10 +60,10 @@ export function Navbar() {
               key={link.href}
               href={link.href}
               className={cn(
-                "rounded-xl px-3 py-2 text-sm font-bold transition-colors",
+                "rounded-xl px-3 py-2 text-sm font-bold transition-all",
                 pathname.startsWith(link.href)
-                  ? "bg-indigo-50 text-brand-navy"
-                  : "text-slate-500 hover:bg-indigo-50/60 hover:text-brand-navy",
+                  ? "bg-indigo-50/80 text-brand-navy shadow-sm shadow-indigo-100/60"
+                  : "text-slate-500 hover:bg-white/70 hover:text-brand-navy hover:shadow-sm hover:shadow-indigo-100/40",
               )}
             >
               {link.label}
@@ -80,7 +81,7 @@ export function Navbar() {
           {isAuthenticated ? <NotificationBell /> : null}
           <Link
             href={accountHref}
-            className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-50 text-brand-navy hover:bg-indigo-100 transition-colors"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-indigo-100/60 bg-white/70 text-brand-navy shadow-sm shadow-indigo-100/30 backdrop-blur-sm hover:bg-white hover:shadow-md hover:shadow-indigo-200/30 transition-all"
             aria-label={accountLabel}
           >
             <UserRound className="h-5 w-5" />
@@ -88,14 +89,14 @@ export function Navbar() {
         </div>
         <button
           onClick={() => setOpen((v) => !v)}
-          className="ml-auto grid h-10 w-10 place-items-center rounded-xl border border-indigo-100 bg-indigo-50/50 text-brand-navy md:hidden"
+          className="ml-auto grid h-10 w-10 place-items-center rounded-xl border border-white/60 bg-white/70 text-brand-navy shadow-sm backdrop-blur-sm md:hidden"
           aria-label="Open menu"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
       {open ? (
-        <div className="border-t border-indigo-100 bg-white/95 p-4 md:hidden">
+        <div className="border-t border-white/50 bg-white/80 p-4 backdrop-blur-2xl md:hidden">
           <SearchBar />
           <div className="mt-4 grid gap-1">
             {[
@@ -109,10 +110,10 @@ export function Navbar() {
                 href={link.href}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "rounded-xl px-4 py-3 text-sm font-bold transition-colors",
+                  "rounded-xl px-4 py-3 text-sm font-bold transition-all",
                   pathname.startsWith(link.href)
-                    ? "bg-indigo-50 text-brand-navy"
-                    : "text-slate-600 hover:bg-indigo-50/60 hover:text-brand-navy",
+                    ? "bg-indigo-50/80 text-brand-navy"
+                    : "text-slate-600 hover:bg-white/70 hover:text-brand-navy",
                 )}
               >
                 {link.label}
@@ -145,7 +146,7 @@ export function MobileNav() {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-indigo-100/60 bg-white/95 px-2 py-2 backdrop-blur-xl md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/50 bg-white/80 px-2 py-2 shadow-lg shadow-indigo-100/20 backdrop-blur-2xl md:hidden">
       <div className="grid grid-cols-4 gap-0.5">
         {items.map((item) => {
           const Icon = item.icon;

@@ -5,7 +5,7 @@ import { Logo } from "@/components/ui";
 
 export function Footer() {
   return (
-    <footer className="bg-[#071d10] text-slate-100">
+    <footer className="glass-dark text-slate-100">
       <div className="container-shell grid gap-12 py-14 lg:grid-cols-[minmax(0,320px)_1fr] lg:items-start">
         <div className="space-y-5">
           <Logo />
@@ -56,7 +56,7 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="border-t border-white/10 bg-white/5 py-5">
+      <div className="border-t border-white/8 bg-white/4 py-5">
         <div className="container-shell flex flex-col items-center justify-between gap-3 text-sm text-slate-400 sm:flex-row">
           <p>© 2026 Campus Marche. Built for students, by students.</p>
           <p>Secure meetups. Local listings. No campus clutter.</p>

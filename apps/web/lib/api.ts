@@ -197,7 +197,7 @@ export const api = {
 
   auth: {
     register: (payload: { email: string; name: string; password: string }) =>
-      request<{ user: { id: string; email: string; name: string }; token: string; requiresOtp?: boolean }>(
+      request<{ user: { id: string; email: string; name: string }; token: string; requiresOtp?: boolean; devCode?: string }>(
         "/auth/register",
         { user: { id: "", email: "", name: "" }, token: "" },
         { method: "POST", body: JSON.stringify(payload), strict: true },
@@ -378,6 +378,9 @@ export const api = {
     }),
 
   getProfile: () => request<Seller | null>("/users/profile", null),
+
+  updateProfile: (payload: { name?: string; avatar?: string }) =>
+    request<Seller | null>("/users/profile", null, { method: "PATCH", body: JSON.stringify(payload), strict: true }),
 
   getNotifications: () =>
     request<Array<{ id: string; type: string; title: string; body: string; read: boolean; createdAt: string }>>(

@@ -11,8 +11,13 @@ export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") ?? "";
+  const devCode = searchParams.get("devCode") ?? "";
 
-  const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
+  const initialDigits = devCode.length === CODE_LENGTH
+    ? devCode.split("")
+    : Array(CODE_LENGTH).fill("");
+
+  const [digits, setDigits] = useState<string[]>(initialDigits);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -138,6 +143,11 @@ export default function VerifyEmailPage() {
 
       <div className="container-shell py-14">
         <div className="mx-auto max-w-md rounded-2xl border border-indigo-100 bg-white p-8 shadow-xl shadow-indigo-100/50">
+          {devCode ? (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <span className="font-bold">Dev mode:</span> OTP auto-filled — SMTP not configured. Code: <span className="font-mono font-black tracking-widest">{devCode}</span>
+            </div>
+          ) : null}
           {success ? (
             <div className="flex flex-col items-center gap-4 py-4 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">

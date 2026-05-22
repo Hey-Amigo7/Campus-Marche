@@ -28,7 +28,9 @@ export default function RegisterPage() {
       setAuthToken(result.token);
 
       if (result.requiresOtp) {
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        const params = new URLSearchParams({ email });
+        if (result.devCode) params.set("devCode", result.devCode);
+        router.push(`/verify-email?${params.toString()}`);
         return;
       }
 

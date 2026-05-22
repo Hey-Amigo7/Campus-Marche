@@ -109,14 +109,20 @@ export class AuthService {
     const token = await this.signToken(user);
 
     // Send OTP to verify email
-    await this.sendEmailOtp(user.id, user.email).catch((err) => {
+    let devCode: string | undefined;
+    const otpCode = await this.sendEmailOtp(user.id, user.email).catch((err) => {
       this.logger.error(`Failed to send registration OTP: ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
     });
 
-    return { user: this.sanitizeUser(user), token, requiresOtp: true };
+    if (this.config.get('NODE_ENV') !== 'production' && otpCode) {
+      devCode = otpCode;
+    }
+
+    return { user: this.sanitizeUser(user), token, requiresOtp: true, devCode };
   }
 
-  async sendEmailOtp(userId: string, email: string): Promise<void> {
+  async sendEmailOtp(userId: string, email: string): Promise<string> {
     await this.prisma.otpVerification.updateMany({
       where: { userId, purpose: 'email', used: false },
       data: { used: true },
@@ -130,6 +136,7 @@ export class AuthService {
     });
 
     await this.emailService.sendOtpEmail(email, code);
+    return code;
   }
 
   async verifyEmailOtp(userId: string, code: string) {
