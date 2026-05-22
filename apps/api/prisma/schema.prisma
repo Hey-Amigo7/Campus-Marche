@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  avatar    String   @default("A")
+  verified  Boolean  @default(false)
+  premium   Boolean  @default(false)
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products           Product[]
+  orders             Order[]
+  reviews            Review[]
+  savedItems         SavedItem[]
+  business           BusinessProfile?
+  payments           PaymentTransaction[]
+  notifications      Notification[]
+  reports            Report[]              @relation("ReportedBy")
+  reportedIn         Report[]              @relation("Reported")
+  adminLogs          AdminLog[]
+  passwordResets     PasswordResetToken[]
+  emailVerifications EmailVerification[]
+  sentMessages       Message[]             @relation("SentMessages")
+  conversationsAsA   Conversation[]        @relation("ConversationParticipantA")
+  conversationsAsB   Conversation[]        @relation("ConversationParticipantB")
+}
+
+model BusinessProfile {
+  id          String   @id @default(cuid())
+  name        String
+  type        String
+  description String?
+  location    String
+  phone       String?
+  verified    Boolean  @default(false)
+  premium     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  price       Float
+  condition   String   @default("Good")
+  location    String
+  imageUrl    String?
+  imageStyle  String   @default("art-laptop")
+  featured    Boolean  @default(false)
+  boosted     Boolean  @default(false)
+  negotiable  Boolean  @default(false)
+  active      Boolean  @default(true)
+  category    String?
+  tags        String   @default("")
+  views       Int      @default(0)
+  postedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sellerId      String
+  seller        User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orders        Order[]
+  reviews       Review[]
+  savedItems    SavedItem[]
+  conversations Conversation[]
+  reports       Report[]
+
+  @@index([sellerId])
+  @@index([category])
+  @@index([title])
+  @@index([featured])
+  @@index([boosted])
+  @@index([active])
+  @@index([postedAt])
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  status        String   @default("Payment pending")
+  paymentStatus String   @default("Unpaid")
+  escrowStatus  String   @default("Not funded")
+  price         Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  buyerId   String
+  buyer     User                 @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  payments  PaymentTransaction[]
+
+  @@index([buyerId])
+  @@index([productId])
+}
+
+model PaymentTransaction {
+  id               String    @id @default(cuid())
+  provider         String    @default("paystack")
+  reference        String    @unique
+  status           String    @default("Pending")
+  amount           Float
+  currency         String    @default("GHS")
+  authorizationUrl String?
+  accessCode       String?
+  paidAt           DateTime?
+  metadata         String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([userId])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participantAId String
+  participantA   User     @relation("ConversationParticipantA", fields: [participantAId], references: [id], onDelete: Cascade)
+  participantBId String
+  participantB   User     @relation("ConversationParticipantB", fields: [participantBId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  messages Message[]
+
+  @@unique([participantAId, participantBId, productId])
+  @@index([participantAId])
+  @@index([participantBId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Float
+  comment   String?
+  author    String
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([productId])
+}
+
+model SavedItem {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model CampusEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  location    String
+  eventDate   DateTime
+  category    String   @default("Campus update")
+  opportunity String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  reason      String
+  description String?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reporterId     String
+  reporter       User     @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUserId String?
+  reportedUser   User?    @relation("Reported", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([reporterId])
+  @@index([status])
+}
+
+model AdminLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  details   String?
+  createdAt DateTime @default(now())
+
+  adminId String
+  admin   User   @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([entity])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}

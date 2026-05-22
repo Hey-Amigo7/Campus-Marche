@@ -1,0 +1,2 @@
+-- No-op.
+-- The PostgreSQL baseline migration already includes Product.tags and the final Order.status default.

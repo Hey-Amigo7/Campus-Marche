@@ -1,0 +1,10 @@
+{
+  "name": "@repo/db",
+  "version": "1.0.0",
+  "description": "Shared database utilities (currently unused — Prisma client lives in apps/api)",
+  "private": true,
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED"
+}

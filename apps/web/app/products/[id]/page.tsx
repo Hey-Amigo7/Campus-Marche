@@ -1,0 +1,254 @@
+"use client";
+
+import Link from "next/link";
+import { Bookmark, BookmarkCheck, Loader2, MapPin, Share2, Star } from "lucide-react";
+import { notFound } from "next/navigation";
+import { use, useState } from "react";
+import { useSWRConfig } from "swr";
+import { api } from "@/lib/api";
+import { formatCurrency, formatRelativeDate } from "@/lib/format";
+import { BuyNowButton } from "@/components/buy-now-button";
+import { ProductArt, ProductGrid } from "@/components/product-card";
+import { Rating, SectionHeading, SellerBadge } from "@/components/ui";
+import { useProducts, useReviews, useSavedStatus } from "@/hooks/use-api";
+import { hasAuthToken } from "@/lib/auth";
+
+type ApiReview = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  author: string;
+  createdAt: string;
+};
+
+function SaveButton({ productId }: { productId: string }) {
+  const { data: status } = useSavedStatus(productId);
+  const { mutate } = useSWRConfig();
+  const [loading, setLoading] = useState(false);
+
+  if (!hasAuthToken()) return null;
+
+  async function toggle() {
+    if (!status) return;
+    setLoading(true);
+    try {
+      if (status.saved) {
+        await api.unsaveItem(productId);
+      } else {
+        await api.saveItem(productId);
+      }
+      await mutate(`saved-status-${productId}`);
+      await mutate("saved-items");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const Icon = status?.saved ? BookmarkCheck : Bookmark;
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={loading}
+      className="btn-secondary"
+      aria-label={status?.saved ? "Remove from wishlist" : "Save to wishlist"}
+    >
+      {loading ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <Icon className="h-5 w-5" />
+      )}
+      {status?.saved ? "Saved" : "Save"}
+    </button>
+  );
+}
+
+function ReviewList({ productId }: { productId: string }) {
+  const { data: reviews, isLoading } = useReviews(productId);
+
+  if (isLoading) {
+    return <p className="text-sm text-slate-400">Loading reviews...</p>;
+  }
+
+  if (!reviews || reviews.length === 0) {
+    return <p className="text-sm text-slate-400">No reviews yet for this product.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {reviews.map((review: ApiReview) => (
+        <div key={review.id} className="rounded-2xl bg-slate-50 p-4">
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                className={`h-4 w-4 ${i < review.rating ? "fill-yellow-400 text-yellow-400" : "text-slate-200"}`}
+              />
+            ))}
+          </div>
+          {review.comment ? (
+            <p className="mt-2 text-sm leading-6 text-slate-600">{review.comment}</p>
+          ) : null}
+          <p className="mt-2 text-xs font-bold text-slate-400">
+            {review.author} · {formatRelativeDate(review.createdAt)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const { data: products } = useProducts();
+  const product = products.find((p) => p.id === id);
+
+  if (products.length > 0 && !product) notFound();
+
+  const { data: allProducts } = useProducts();
+  const similar = allProducts
+    .filter((item) => item.category === product?.category && item.id !== id)
+    .slice(0, 4);
+
+  if (!product) {
+    return (
+      <div className="container-shell flex min-h-[400px] items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  const seller = product.seller;
+
+  return (
+    <div className="container-shell py-8 md:py-10">
+      <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <section>
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <ProductArt
+              style={product.imageStyle}
+              imageUrl={product.imageUrl}
+              title={product.title}
+              className="min-h-[420px] transition hover:scale-[1.01]"
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <button
+                key={index}
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 hover:border-brand-green"
+                aria-label={`Thumbnail ${index + 1}`}
+              >
+                <ProductArt
+                  style={product.imageStyle}
+                  imageUrl={product.imageUrl}
+                  title={product.title}
+                  className="min-h-20 rounded-xl"
+                />
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="max-h-[420px] space-y-6 overflow-y-auto p-6">
+              <div className="flex items-center justify-between gap-3">
+                <Link href={`/store/${seller.id}`} className="flex items-center gap-3">
+                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-navy text-sm font-black text-white">
+                    {seller.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span>
+                    <span className="block font-black text-slate-950">{seller.name}</span>
+                    <span className="block text-sm font-semibold text-slate-500">{seller.location}</span>
+                  </span>
+                </Link>
+                <SellerBadge verified={seller.verified} premium={seller.premium} compact />
+              </div>
+              <div className="flex items-center justify-between">
+                <Rating value={seller.rating} />
+                <Link
+                  href={`/store/${seller.id}`}
+                  className="text-sm font-bold text-brand-green hover:text-green-700"
+                >
+                  View storefront
+                </Link>
+              </div>
+              <p className="text-sm leading-6 text-slate-600">
+                Trusted Campus Marche seller available around {seller.location}.
+              </p>
+              <ReviewList productId={product.id} />
+            </div>
+          </div>
+        </section>
+
+        <aside className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap gap-2">
+            {product.featured ? (
+              <span className="rounded-full bg-brand-navy px-3 py-1 text-xs font-bold text-white">
+                Featured
+              </span>
+            ) : null}
+            {product.boosted ? (
+              <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-brand-green ring-1 ring-green-100">
+                Boosted
+              </span>
+            ) : null}
+          </div>
+          <h1 className="mt-5 text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
+            {product.title}
+          </h1>
+          <p className="mt-3 text-3xl font-black text-brand-navy">{formatCurrency(product.price)}</p>
+          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-600">
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-4 w-4 text-brand-green" />
+              {product.location}
+            </span>
+            <span>{formatRelativeDate(product.postedAt)}</span>
+            <span>{product.condition}</span>
+          </div>
+          <p className="mt-6 leading-7 text-slate-600">{product.description}</p>
+          <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
+            {[
+              ["Category", product.category],
+              ["Condition", product.condition],
+              ["Negotiation", product.negotiable ? "Open" : "Fixed price"],
+              ["Views", product.views.toLocaleString()],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl bg-slate-50 p-4">
+                <dt className="font-semibold text-slate-500">{label}</dt>
+                <dd className="mt-1 font-black text-slate-950">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <BuyNowButton productId={product.id} price={product.price} />
+            <SaveButton productId={product.id} />
+            <button className="btn-secondary sm:col-span-2">
+              <Share2 className="h-5 w-5" />
+              Share
+            </button>
+          </div>
+          {product.tags.length > 0 ? (
+            <div className="mt-6 flex flex-wrap gap-2">
+              {product.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </aside>
+      </div>
+
+      <section className="mt-10">
+        <SectionHeading title="Similar items" subtitle="Related products from the same category." />
+        {similar.length > 0 ? (
+          <ProductGrid products={similar} />
+        ) : (
+          <ProductGrid products={allProducts.slice(0, 4)} />
+        )}
+      </section>
+    </div>
+  );
+}
