@@ -26,6 +26,12 @@ export default function RegisterPage() {
       }
 
       setAuthToken(result.token);
+
+      if (result.requiresOtp) {
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
       const next = new URLSearchParams(window.location.search).get("next");
       router.push(next?.startsWith("/") ? next : "/profile");
     } catch (error) {

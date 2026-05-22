@@ -102,6 +102,16 @@ export default function ProfilePage() {
               <Edit className="h-4 w-4" />
               Edit profile
             </button>
+            {!profile.verified ? (
+              <Link href={`/verify-email?email=${encodeURIComponent(profile.email ?? "")}`} className="btn-secondary mt-2 w-full text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100">
+                <ShieldCheck className="h-4 w-4" />
+                Verify email
+              </Link>
+            ) : null}
+            <Link href="/verify-phone" className="btn-secondary mt-2 w-full">
+              <ShieldCheck className="h-4 w-4" />
+              Verify phone
+            </Link>
           </aside>
         </div>
       </section>

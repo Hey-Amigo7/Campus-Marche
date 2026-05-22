@@ -197,7 +197,7 @@ export const api = {
 
   auth: {
     register: (payload: { email: string; name: string; password: string }) =>
-      request<{ user: { id: string; email: string; name: string }; token: string }>(
+      request<{ user: { id: string; email: string; name: string }; token: string; requiresOtp?: boolean }>(
         "/auth/register",
         { user: { id: "", email: "", name: "" }, token: "" },
         { method: "POST", body: JSON.stringify(payload), strict: true },
@@ -229,6 +229,34 @@ export const api = {
         "/auth/reset-password",
         { message: "" },
         { method: "POST", body: JSON.stringify({ token, password }), strict: true },
+      ),
+
+    verifyEmailOtp: (code: string) =>
+      request<{ message: string }>(
+        "/auth/verify-otp",
+        { message: "" },
+        { method: "POST", body: JSON.stringify({ code }), strict: true },
+      ),
+
+    resendEmailOtp: () =>
+      request<{ message: string }>(
+        "/auth/resend-otp",
+        { message: "" },
+        { method: "POST", strict: true },
+      ),
+
+    sendPhoneOtp: (phone: string) =>
+      request<void>(
+        "/auth/send-phone-otp",
+        undefined,
+        { method: "POST", body: JSON.stringify({ phone }), strict: true },
+      ),
+
+    verifyPhoneOtp: (code: string) =>
+      request<{ message: string }>(
+        "/auth/verify-phone-otp",
+        { message: "" },
+        { method: "POST", body: JSON.stringify({ code }), strict: true },
       ),
   },
 
