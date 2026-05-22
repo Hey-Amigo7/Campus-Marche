@@ -46,6 +46,8 @@ export type BusinessProfile = {
   description?: string | null;
   location: string;
   phone?: string | null;
+  momoProvider?: string | null;
+  momoPhone?: string | null;
   verified: boolean;
   premium: boolean;
 };
@@ -83,8 +85,17 @@ export type OrderStatus =
   | "Payment pending"
   | "Awaiting pickup"
   | "In progress"
+  | "Out for delivery"
   | "Completed"
   | "Cancelled";
+
+export type DeliveryTracking = {
+  latitude: number;
+  longitude: number;
+  heading?: number | null;
+  speed?: number | null;
+  updatedAt: string;
+};
 
 export type Order = {
   id: string;
@@ -92,10 +103,18 @@ export type Order = {
   status: OrderStatus | string;
   paymentStatus?: "Unpaid" | "Paid" | string;
   escrowStatus?: "Not funded" | "Held in escrow" | "Released" | string;
-  meetupLocation: string;
-  counterpart: string;
-  role: "buyer" | "seller";
+  price?: number;
+  meetupLocation?: string;
+  counterpart?: string;
+  role?: "buyer" | "seller" | "delivery";
   updatedAt: string;
+  createdAt?: string;
+  buyerId?: string;
+  deliveryAddress?: string | null;
+  deliveryPhone?: string | null;
+  deliveryPersonId?: string | null;
+  deliveryPerson?: { id: string; name: string; avatar: string; phone?: string | null } | null;
+  tracking?: DeliveryTracking | null;
 };
 
 export type PaymentTransaction = {

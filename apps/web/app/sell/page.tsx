@@ -12,6 +12,88 @@ import { SectionHeading } from "@/components/ui";
 import { useToast } from "@/providers/toast-provider";
 import { AuthGate } from "@/components/auth-gate";
 import { useBusiness, useCategories } from "@/hooks/use-api";
+import type { BusinessProfile } from "@/types";
+
+function MomoPayoutPanel({ business, onSaved }: { business: BusinessProfile; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [provider, setProvider] = useState(business.momoProvider ?? "");
+  const [phone, setPhone] = useState(business.momoPhone ?? "");
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.saveBusiness({
+        name: business.name,
+        type: business.type,
+        location: business.location,
+        description: business.description ?? undefined,
+        phone: business.phone ?? undefined,
+        momoProvider: provider || undefined,
+        momoPhone: phone || undefined,
+      });
+      onSaved();
+      setOpen(false);
+      toast("Payout details saved.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not save payout details.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const configured = business.momoProvider && business.momoPhone;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="font-black text-slate-950">MoMo payout</h3>
+        <button onClick={() => setOpen((v) => !v)} className="text-xs font-bold text-indigo-600 hover:underline">
+          {open ? "Cancel" : configured ? "Edit" : "Set up"}
+        </button>
+      </div>
+      {!open ? (
+        configured ? (
+          <p className="mt-2 text-sm font-semibold text-slate-600">
+            {business.momoProvider?.toUpperCase()} · {business.momoPhone}
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">
+            Add your MoMo details so buyers can pay and you receive funds automatically on delivery confirmation.
+          </p>
+        )
+      ) : (
+        <form onSubmit={handleSave} className="mt-3 space-y-3">
+          <div>
+            <label className="text-xs font-bold text-slate-700">Provider</label>
+            <select value={provider} onChange={(e) => setProvider(e.target.value)} className="input-shell mt-1 text-sm">
+              <option value="">— Select —</option>
+              <option value="mtn">MTN Mobile Money</option>
+              <option value="vod">Telecel Cash</option>
+              <option value="tgo">AirtelTigo Money</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-700">MoMo phone</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0244 123 456"
+              className="input-shell mt-1 text-sm"
+            />
+          </div>
+          <button type="submit" disabled={saving} className="btn-primary w-full justify-center text-sm disabled:opacity-50">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save payout details
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
 
 export default function SellPage() {
   const router = useRouter();
@@ -41,6 +123,8 @@ export default function SellPage() {
         location: String(form.get("location")),
         description: String(form.get("description") || ""),
         phone: String(form.get("phone") || ""),
+        momoProvider: String(form.get("momoProvider") || "") || undefined,
+        momoPhone: String(form.get("momoPhone") || "") || undefined,
       });
       await refreshBusiness();
       toast("Business profile created. You can now publish listings.");
@@ -160,6 +244,25 @@ export default function SellPage() {
               <span className="text-sm font-black text-slate-950">What do you offer?</span>
               <textarea name="description" rows={4} placeholder="Tutoring, hair styling, food delivery, repairs, products, design services..." className="input-shell mt-2 resize-none" />
             </label>
+            <div className="md:col-span-2 rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-black text-slate-950">MoMo payout details <span className="font-semibold text-slate-400">(optional)</span></p>
+              <p className="mt-1 text-xs text-slate-500">When buyers release escrow, funds are automatically sent to this number.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label>
+                  <span className="text-xs font-bold text-slate-700">Provider</span>
+                  <select name="momoProvider" className="input-shell mt-1">
+                    <option value="">— Select provider —</option>
+                    <option value="mtn">MTN Mobile Money</option>
+                    <option value="vod">Telecel Cash</option>
+                    <option value="tgo">AirtelTigo Money</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="text-xs font-bold text-slate-700">MoMo phone</span>
+                  <input name="momoPhone" type="tel" placeholder="0244 123 456" className="input-shell mt-1" />
+                </label>
+              </div>
+            </div>
           </div>
           <button type="submit" disabled={businessLoadingSave} className="btn-primary mt-6 w-full justify-center bg-brand-green hover:bg-green-700">
             {businessLoadingSave ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
@@ -289,6 +392,7 @@ export default function SellPage() {
             <p className="mt-1 text-sm font-semibold text-brand-green">{business.type}</p>
             <p className="mt-3 text-sm leading-6 text-slate-600">{business.description || "Business profile ready for listings."}</p>
           </div>
+          <MomoPayoutPanel business={business} onSaved={refreshBusiness} />
           <PremiumUpsellCard />
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="font-black text-slate-950">Listing quality checklist</h3>

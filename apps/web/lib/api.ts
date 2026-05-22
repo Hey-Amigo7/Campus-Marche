@@ -262,6 +262,8 @@ export const api = {
 
   getOrders: () => request<Order[]>("/orders", []),
 
+  getOrder: (id: string) => request<Order | null>(`/orders/${id}`, null, { strict: true }),
+
   createOrder: (payload: { productId: string }) =>
     request<Order>("/orders", {} as Order, {
       method: "POST",
@@ -275,6 +277,30 @@ export const api = {
       body: JSON.stringify({ status }),
       strict: true,
     }),
+
+  setDeliveryDetails: (orderId: string, deliveryAddress: string, deliveryPhone: string) =>
+    request<Order>(`/orders/${orderId}/delivery-details`, {} as Order, {
+      method: "POST",
+      body: JSON.stringify({ deliveryAddress, deliveryPhone }),
+      strict: true,
+    }),
+
+  assignDeliveryPerson: (orderId: string, deliveryPersonId: string) =>
+    request<Order>(`/orders/${orderId}/assign-delivery`, {} as Order, {
+      method: "POST",
+      body: JSON.stringify({ deliveryPersonId }),
+      strict: true,
+    }),
+
+  updateDeliveryLocation: (orderId: string, latitude: number, longitude: number, heading?: number, speed?: number) =>
+    request<unknown>(`/orders/${orderId}/location`, null, {
+      method: "PUT",
+      body: JSON.stringify({ latitude, longitude, heading, speed }),
+      strict: true,
+    }),
+
+  getDeliveryTracking: (orderId: string) =>
+    request<import("@/types").DeliveryTracking | null>(`/orders/${orderId}/tracking`, null),
 
   initializePayment: (orderId: string) =>
     request<PaymentTransaction>(`/payments/orders/${orderId}/initialize`, {} as PaymentTransaction, {
@@ -290,10 +316,24 @@ export const api = {
     ),
 
   releaseEscrow: (orderId: string) =>
-    request<Order>(`/payments/orders/${orderId}/release`, {} as Order, {
+    request<{ message: string }>(`/payments/orders/${orderId}/release`, { message: "" }, {
       method: "POST",
       strict: true,
     }),
+
+  chargeMobileMoney: (orderId: string, phone: string, provider: "mtn" | "vod" | "tgo") =>
+    request<{ reference: string; status: string; displayText: string }>(
+      `/payments/orders/${orderId}/mobile-money`,
+      {} as never,
+      { method: "POST", body: JSON.stringify({ phone, provider }), strict: true },
+    ),
+
+  checkMomoStatus: (reference: string) =>
+    request<{ status: string; paid: boolean }>(
+      `/payments/mobile-money/${encodeURIComponent(reference)}/status`,
+      { status: "", paid: false },
+      { strict: true },
+    ),
 
   getBusiness: () => request<BusinessProfile | null>("/business/me", null),
 
@@ -301,6 +341,8 @@ export const api = {
     payload: Pick<BusinessProfile, "name" | "type" | "location"> & {
       description?: string;
       phone?: string;
+      momoProvider?: string;
+      momoPhone?: string;
     },
   ) =>
     request<BusinessProfile>("/business/me", {} as BusinessProfile, {

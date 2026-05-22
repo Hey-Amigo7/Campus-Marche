@@ -21,18 +21,9 @@ export function BuyNowButton({ productId, price }: { productId: string; price: n
     setLoading(true);
     try {
       const order = await api.createOrder({ productId });
-      const payment = await api.initializePayment(order.id);
-
-      if (payment.authorizationUrl) {
-        window.location.href = payment.authorizationUrl;
-        return;
-      }
-
-      toast(`Order created for GHS ${price.toLocaleString()}. Add Paystack keys to activate secure payment.`);
-      router.push("/orders");
+      router.push(`/orders/${order.id}`);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not create the order.");
-    } finally {
       setLoading(false);
     }
   }

@@ -4,13 +4,15 @@ import { PrismaService } from './prisma.service';
 const ALLOWED_BUYER_TRANSITIONS: Record<string, string[]> = {
   'Payment pending': [],
   'In progress': ['Completed', 'Cancelled'],
+  'Out for delivery': [],
   Completed: [],
   Cancelled: [],
 };
 
 const ALLOWED_SELLER_TRANSITIONS: Record<string, string[]> = {
   'Payment pending': ['Cancelled'],
-  'In progress': ['Completed'],
+  'In progress': ['Completed', 'Cancelled'],
+  'Out for delivery': ['Completed'],
   Completed: [],
   Cancelled: [],
 };
@@ -64,8 +66,11 @@ export class OrderService {
             location: true,
             imageStyle: true,
             sellerId: true,
+            seller: { select: { id: true, name: true } },
           },
         },
+        tracking: true,
+        deliveryPerson: { select: { id: true, name: true, avatar: true, phone: true } },
       },
     });
 
@@ -73,12 +78,20 @@ export class OrderService {
 
     const isBuyer = order.buyerId === userId;
     const isSeller = order.product.sellerId === userId;
+    const isDelivery = order.deliveryPersonId === userId;
 
-    if (!isBuyer && !isSeller) {
+    if (!isBuyer && !isSeller && !isDelivery) {
       throw new ForbiddenException('You can only view your own orders');
     }
 
-    return { ...order, role: isBuyer ? 'buyer' : 'seller' };
+    const role: 'buyer' | 'seller' | 'delivery' = isBuyer ? 'buyer' : isSeller ? 'seller' : 'delivery';
+
+    return {
+      ...order,
+      role,
+      meetupLocation: order.product.location,
+      counterpart: isBuyer ? order.product.seller.name : order.buyer.name,
+    };
   }
 
   async create(data: { buyerId: string; productId: string }) {

@@ -36,6 +36,17 @@ export function useOrders() {
   return useSWR("orders", api.getOrders, { fallbackData: [] });
 }
 
+export function useOrder(id: string | null) {
+  return useSWR(
+    id ? `order-${id}` : null,
+    () => api.getOrder(id!),
+    {
+      fallbackData: null,
+      refreshInterval: 5000,
+    },
+  );
+}
+
 export function useProfile() {
   return useSWR<Seller | null>("profile", api.getProfile, { fallbackData: null });
 }

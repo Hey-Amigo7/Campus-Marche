@@ -28,4 +28,15 @@ export class UpsertBusinessDto {
   @IsString()
   @Length(0, 30)
   phone?: string;
+
+  @ApiPropertyOptional({ enum: ['mtn', 'vod', 'tgo'], description: 'MoMo provider for seller payouts' })
+  @IsOptional()
+  @IsString()
+  momoProvider?: string;
+
+  @ApiPropertyOptional({ example: '0244123456', description: 'MoMo phone for seller payouts' })
+  @IsOptional()
+  @IsString()
+  @Length(0, 20)
+  momoPhone?: string;
 }
