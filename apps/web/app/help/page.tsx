@@ -4,7 +4,7 @@ export default function HelpPage() {
       <div className="bg-brand-navy py-12 text-white">
         <div className="container-shell text-center">
           <h1 className="text-4xl font-black tracking-tight">Help Center</h1>
-          <p className="mt-3 text-blue-100">Find answers to common questions</p>
+          <p className="mt-3" style={{ color: "#A8D4AE" }}>Find answers to common questions</p>
         </div>
       </div>
 

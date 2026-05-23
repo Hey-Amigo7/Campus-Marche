@@ -13,10 +13,10 @@ const plans = [
 export default function PremiumPage() {
   return (
     <div className="container-shell py-8 md:py-10">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+      <section className="overflow-hidden rounded-2xl" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 8px 48px rgba(15,23,42,0.10)" }}>
         <div className="grid gap-8 p-6 md:grid-cols-[1fr_0.8fr] md:p-10">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-sm font-bold text-brand-green ring-1 ring-green-100">
+            <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold" style={{ background: "rgba(127,182,133,0.12)", color: "#5A9460", border: "1px solid rgba(127,182,133,0.25)" }}>
               <Crown className="h-4 w-4" />
               Premium seller growth
             </span>
@@ -34,7 +34,7 @@ export default function PremiumPage() {
               <Link href="/products" className="btn-secondary">Browse marketplace</Link>
             </div>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-5">
+          <div className="rounded-2xl p-5" style={{ background: "rgba(223,243,227,0.25)", border: "1px solid rgba(127,182,133,0.20)" }}>
             {[
               { icon: TrendingUp, label: "Featured listing priority" },
               { icon: BadgeCheck, label: "Verified seller badge" },

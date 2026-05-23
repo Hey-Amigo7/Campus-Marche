@@ -47,9 +47,9 @@ function MomoPayoutPanel({ business, onSaved }: { business: BusinessProfile; onS
   const configured = business.momoProvider && business.momoPhone;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
       <div className="flex items-center justify-between">
-        <h3 className="font-black text-slate-950">MoMo payout</h3>
+        <h3 className="font-black" style={{ color: "#1E293B" }}>MoMo payout</h3>
         <button onClick={() => setOpen((v) => !v)} className="text-xs font-bold hover:underline" style={{ color: "#5A9460" }}>
           {open ? "Cancel" : configured ? "Edit" : "Set up"}
         </button>
@@ -214,7 +214,7 @@ export default function SellPage() {
       {businessLoading ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm font-bold text-slate-600 shadow-sm">Checking your business profile...</div>
       ) : !business ? (
-        <form onSubmit={handleBusinessSubmit} className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <form onSubmit={handleBusinessSubmit} className="mx-auto max-w-3xl rounded-2xl p-6" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
           <h2 className="text-xl font-black text-slate-950">Create your business profile first</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Buyer accounts can browse and order immediately. To sell products or services, create a business profile so students know who they are dealing with.
@@ -264,14 +264,14 @@ export default function SellPage() {
               </div>
             </div>
           </div>
-          <button type="submit" disabled={businessLoadingSave} className="btn-primary mt-6 w-full justify-center bg-brand-green hover:bg-green-700">
+          <button type="submit" disabled={businessLoadingSave} className="btn-primary mt-6 w-full justify-center">
             {businessLoadingSave ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
             Create business profile
           </button>
         </form>
       ) : (
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <form onSubmit={handleSubmit} className="rounded-2xl p-5 md:p-6" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
           <div className="grid gap-5 md:grid-cols-2">
             <label className="md:col-span-2">
               <span className="text-sm font-black text-slate-950">Title</span>
@@ -345,16 +345,19 @@ export default function SellPage() {
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={handleDrop}
-                  className={`mt-2 grid min-h-52 w-full place-items-center rounded-2xl border border-dashed p-6 text-center transition-colors ${dragOver ? "border-brand-green bg-green-50" : "border-slate-300 bg-slate-50 hover:border-brand-green hover:bg-green-50/40"}`}
+                  className="mt-2 grid min-h-52 w-full place-items-center rounded-2xl border border-dashed p-6 text-center transition-colors"
+                  style={dragOver
+                    ? { borderColor: "#7FB685", background: "rgba(223,243,227,0.35)" }
+                    : { borderColor: "rgba(226,232,240,0.80)", background: "rgba(248,245,239,0.50)" }}
                 >
                   {uploadingImage ? (
                     <span className="flex flex-col items-center gap-3">
-                      <Loader2 className="h-10 w-10 animate-spin text-brand-green" />
+                      <Loader2 className="h-10 w-10 animate-spin" style={{ color: "#7FB685" }} />
                       <span className="text-sm font-black text-slate-950">Uploading...</span>
                     </span>
                   ) : (
                     <span>
-                      <UploadCloud className="mx-auto h-10 w-10 text-brand-green" />
+                      <UploadCloud className="mx-auto h-10 w-10" style={{ color: "#7FB685" }} />
                       <span className="mt-3 block text-sm font-black text-slate-950">Drag and drop or click to upload</span>
                       <span className="mt-1 block text-xs font-semibold text-slate-500">JPEG, PNG, WebP or GIF — max 5 MB</span>
                     </span>
@@ -386,16 +389,16 @@ export default function SellPage() {
           </div>
         </form>
         <aside className="space-y-5">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Selling as</p>
+          <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "#94A3B8" }}>Selling as</p>
             <h3 className="mt-2 text-xl font-black text-slate-950">{business.name}</h3>
             <p className="mt-1 text-sm font-semibold text-brand-green">{business.type}</p>
             <p className="mt-3 text-sm leading-6 text-slate-600">{business.description || "Business profile ready for listings."}</p>
           </div>
           <MomoPayoutPanel business={business} onSaved={refreshBusiness} />
           <PremiumUpsellCard />
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="font-black text-slate-950">Listing quality checklist</h3>
+          <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+            <h3 className="font-black" style={{ color: "#1E293B" }}>Listing quality checklist</h3>
             <div className="mt-4 space-y-3 text-sm font-semibold text-slate-600">
               <p>Clear price and condition</p>
               <p>Safe campus meetup point</p>

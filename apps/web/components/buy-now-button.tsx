@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { hasAuthToken } from "@/lib/auth";
 import { useToast } from "@/providers/toast-provider";
 
-export function BuyNowButton({ productId, price }: { productId: string; price: number }) {
+export function BuyNowButton({ productId, price: _ }: { productId: string; price: number }) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -29,7 +29,7 @@ export function BuyNowButton({ productId, price }: { productId: string; price: n
   }
 
   return (
-    <button onClick={buyNow} disabled={loading} className="btn-primary bg-brand-green hover:bg-green-700">
+    <button onClick={buyNow} disabled={loading} className="btn-primary">
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingBag className="h-5 w-5" />}
       Buy now
     </button>

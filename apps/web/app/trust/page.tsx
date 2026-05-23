@@ -1,10 +1,10 @@
 export default function TrustPage() {
   return (
     <div className="min-h-screen">
-      <div className="bg-brand-green py-12 text-white">
+      <div className="py-12 text-white" style={{ background: "linear-gradient(135deg, #0F172A 0%, #102542 55%, #1a3a2a 100%)" }}>
         <div className="container-shell text-center">
-          <h1 className="text-4xl font-black tracking-tight">Trust & Safety</h1>
-          <p className="mt-3 text-green-100">Your safety is our priority</p>
+          <h1 className="text-4xl font-black tracking-tight">Trust &amp; Safety</h1>
+          <p className="mt-3" style={{ color: "#A8D4AE" }}>Your safety is our priority</p>
         </div>
       </div>
 

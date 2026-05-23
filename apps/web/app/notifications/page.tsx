@@ -9,10 +9,10 @@ import { SectionHeading } from "@/components/ui";
 import { useNotifications } from "@/hooks/use-api";
 
 const iconByType: Record<string, string> = {
-  order: "🛒",
+  order:   "🛒",
   message: "💬",
-  review: "⭐",
-  system: "📢",
+  review:  "⭐",
+  system:  "📢",
 };
 
 export default function NotificationsPage() {
@@ -42,42 +42,52 @@ export default function NotificationsPage() {
           }
         />
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div
+          className="overflow-hidden rounded-2xl"
+          style={{
+            background:    "rgba(255,255,255,0.82)",
+            backdropFilter:"blur(18px) saturate(150%)",
+            border:        "1px solid rgba(226,232,240,0.70)",
+            boxShadow:     "0 4px 24px rgba(15,23,42,0.07)",
+          }}
+        >
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+              <Loader2 className="h-7 w-7 animate-spin" style={{ color: "#7FB685" }} />
             </div>
           ) : notifications && notifications.length > 0 ? (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y" style={{ borderColor: "rgba(226,232,240,0.50)" }}>
               {notifications.map((notification) => (
                 <li
                   key={notification.id}
-                  className={cn(
-                    "flex items-start gap-4 p-4 transition-colors",
-                    !notification.read && "bg-green-50/40",
-                  )}
+                  className={cn("flex items-start gap-4 p-4 transition-colors")}
+                  style={!notification.read ? { background: "rgba(127,182,133,0.06)" } : undefined}
                 >
                   <span className="mt-0.5 text-xl" aria-hidden>
                     {iconByType[notification.type] ?? "🔔"}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-slate-950">{notification.title}</p>
-                    <p className="mt-0.5 text-sm text-slate-600">{notification.body}</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-400">
+                    <p className="font-bold" style={{ color: "#1E293B" }}>{notification.title}</p>
+                    <p className="mt-0.5 text-sm" style={{ color: "#64748B" }}>{notification.body}</p>
+                    <p className="mt-1 text-xs font-semibold" style={{ color: "#94A3B8" }}>
                       {formatRelativeDate(notification.createdAt)}
                     </p>
                   </div>
                   {!notification.read ? (
-                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-green" aria-label="Unread" />
+                    <span
+                      className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: "#7FB685" }}
+                      aria-label="Unread"
+                    />
                   ) : null}
                 </li>
               ))}
             </ul>
           ) : (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-              <Bell className="h-10 w-10 text-slate-300" />
-              <p className="font-black text-slate-950">All caught up!</p>
-              <p className="text-sm text-slate-500">
+              <Bell className="h-10 w-10" style={{ color: "#CBD5E1" }} />
+              <p className="font-black" style={{ color: "#1E293B" }}>All caught up!</p>
+              <p className="text-sm" style={{ color: "#64748B" }}>
                 You&apos;ll see order updates, messages, and alerts here.
               </p>
             </div>

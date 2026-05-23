@@ -270,7 +270,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <div className="space-y-4">
 
             {/* Product summary */}
-            <section className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="flex gap-4 rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
               <ProductArt style={order.product.imageStyle} className="h-24 w-24 shrink-0 rounded-xl" />
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Product</p>
@@ -350,7 +350,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         <button
                           type="submit"
                           disabled={momoState === "sending"}
-                          className="btn-primary w-full justify-center bg-brand-green hover:bg-green-700 disabled:opacity-50 text-sm"
+                          className="btn-primary w-full justify-center disabled:opacity-50 text-sm"
                         >
                           {momoState === "sending" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                           Send payment prompt
@@ -364,8 +364,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* ── DELIVERY DETAILS ── */}
             {isPaid && isActive ? (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-base font-black text-slate-950">Delivery details</h2>
+              <section className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+                <h2 className="text-base font-black" style={{ color: "#1E293B" }}>Delivery details</h2>
 
                 {role === "buyer" ? (
                   hasDeliveryDetails ? (
@@ -548,7 +548,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* ── ESCROW RELEASE ── */}
             {role === "buyer" && isPaid && escrowHeld && (isOutForDelivery || isInProgress) ? (
-              <section className="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+              <section className="rounded-2xl p-5" style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.30)" }}>
                 <h2 className="text-base font-black text-green-900">Confirm delivery</h2>
                 <p className="mt-1 text-sm text-green-700">
                   Once you have received the item, confirm delivery to release payment to the seller.
@@ -557,7 +557,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <button
                   onClick={handleReleaseEscrow}
                   disabled={releasingEscrow}
-                  className="mt-4 w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                  className="mt-4 w-full rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-50 transition-all hover:opacity-90"
+                  style={{ background: "#5A9460" }}
                 >
                   {releasingEscrow ? <Loader2 className="inline h-4 w-4 animate-spin" /> : <CheckCircle2 className="inline h-4 w-4" />}
                   {" "}Confirm delivery &amp; release payment
@@ -570,8 +571,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           {/* ── Right sidebar ── */}
           <aside className="space-y-4">
             {/* Order meta */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-black uppercase tracking-wide text-slate-400">Order info</h3>
+            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+              <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Order info</h3>
               <dl className="mt-3 space-y-3 text-sm">
                 <div className="flex justify-between">
                   <dt className="font-semibold text-slate-500">Total</dt>
@@ -604,8 +605,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Status actions */}
             {allowedTransitions.length > 0 && isActive ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="text-sm font-black uppercase tracking-wide text-slate-400">Update status</h3>
+              <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+                <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Update status</h3>
                 <div className="mt-3 space-y-2">
                   {allowedTransitions.map((s) => (
                     <button
@@ -627,8 +628,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* Chat */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-black uppercase tracking-wide text-slate-400">Contact</h3>
+            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+              <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Contact</h3>
               <p className="mt-2 text-sm text-slate-500">
                 {role === "buyer" ? "Message the seller" : "Message the buyer"} directly about this order.
               </p>

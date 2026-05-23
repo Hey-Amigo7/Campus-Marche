@@ -35,7 +35,7 @@ export default function EventsPage() {
               ) : null}
               <div className="p-5">
                 <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-bold text-brand-green ring-1 ring-green-100">
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: "rgba(127,182,133,0.12)", color: "#5A9460", border: "1px solid rgba(127,182,133,0.25)" }}>
                     <Megaphone className="h-3.5 w-3.5" />
                     {event.category}
                   </span>

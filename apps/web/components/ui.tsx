@@ -7,28 +7,35 @@ export function Logo() {
     <Link href="/" className="flex items-center gap-2.5" aria-label="Campus Marche home">
       <div className="relative flex h-9 w-9 items-center justify-center">
         <svg className="h-9 w-9" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#0F172A" />
-              <stop offset="100%" stopColor="#7FB685" />
-            </linearGradient>
-          </defs>
-          <path d="M8 8C8 6 9 4 12 4C15 4 16 6 16 8" stroke="url(#logoGrad)" strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M7 8H17V18C17 19.1 16.1 20 15 20H9C7.9 20 7 19.1 7 18V8Z" fill="url(#logoGrad)" />
-          <g opacity="0.75">
-            <rect x="10" y="10" width="2" height="3" fill="white" />
-            <rect x="12.5" y="10" width="2" height="4" fill="white" />
+          {/* Bag handle */}
+          <path d="M8 8C8 6 9 4 12 4C15 4 16 6 16 8" stroke="#0F172A" strokeWidth="1.5" strokeLinecap="round" />
+          {/* Bag body — navy */}
+          <path d="M7 8H17V18C17 19.1 16.1 20 15 20H9C7.9 20 7 19.1 7 18V8Z" fill="#0F172A" />
+          {/* Sage bar-chart icon on bag */}
+          <g opacity="0.80">
+            <rect x="10" y="10" width="2" height="3" fill="#7FB685" />
+            <rect x="12.5" y="10" width="2" height="4" fill="#7FB685" />
           </g>
+          {/* Caramel coin badge */}
           <circle cx="19" cy="6" r="3" fill="#C68B59" />
           <text x="19" y="7.2" textAnchor="middle" fill="white" fontSize="2.2" fontWeight="bold">₵</text>
         </svg>
       </div>
       <span className="leading-tight">
         <span className="block text-sm font-extrabold tracking-tight">
-          <span className="gradient-text">Campus</span>
+          <span
+            style={{
+              background: "linear-gradient(135deg, #0F172A, #7FB685)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            Campus
+          </span>
           <span style={{ color: "#C68B59" }}> Marche</span>
         </span>
-        <span className="block text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8]">
+        <span className="block text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#94A3B8" }}>
           Buy · Sell · Connect
         </span>
       </span>
@@ -48,9 +55,9 @@ export function SectionHeading({
   return (
     <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h2 className="text-2xl font-extrabold tracking-tight text-[#1E293B] md:text-3xl">{title}</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl" style={{ color: "#1E293B" }}>{title}</h2>
         {subtitle ? (
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#64748B]">{subtitle}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6" style={{ color: "#64748B" }}>{subtitle}</p>
         ) : null}
       </div>
       {action}
@@ -100,10 +107,10 @@ export function FeaturedBadge() {
 
 export function Rating({ value, reviews }: { value: number; reviews?: number }) {
   return (
-    <span className="inline-flex items-center gap-1 text-sm font-bold text-[#1E293B]">
-      <Star className="h-4 w-4 fill-[#C68B59] text-[#C68B59]" />
+    <span className="inline-flex items-center gap-1 text-sm font-bold" style={{ color: "#1E293B" }}>
+      <Star className="h-4 w-4" style={{ fill: "#C68B59", color: "#C68B59" }} />
       {value.toFixed(1)}
-      {reviews ? <span className="font-medium text-[#64748B]">({reviews})</span> : null}
+      {reviews ? <span className="font-medium" style={{ color: "#64748B" }}>({reviews})</span> : null}
     </span>
   );
 }
@@ -120,18 +127,19 @@ export function SearchBar({
       action="/search"
       className="flex min-h-11 w-full items-center gap-2 rounded-2xl px-3"
       style={{
-        border:     "1.5px solid rgba(226,232,240,0.80)",
-        background: "rgba(255,255,255,0.88)",
+        border:         "1.5px solid rgba(226,232,240,0.80)",
+        background:     "rgba(255,255,255,0.88)",
         backdropFilter: "blur(12px)",
-        boxShadow:  "0 2px 10px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.90)",
+        boxShadow:      "0 2px 10px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.90)",
       }}
     >
-      <Search className="h-4.5 w-4.5 shrink-0 text-[#94A3B8]" />
+      <Search className="h-4.5 w-4.5 shrink-0" style={{ color: "#94A3B8" }} />
       <input
         name="q"
         defaultValue={defaultValue}
         placeholder={placeholder}
-        className="min-w-0 flex-1 bg-transparent py-2.5 text-sm font-medium outline-none placeholder:text-[#94A3B8]"
+        className="min-w-0 flex-1 bg-transparent py-2.5 text-sm font-medium outline-none"
+        style={{ color: "#1E293B" }}
       />
       <button
         className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold text-white transition-all hover:opacity-90"
@@ -164,8 +172,8 @@ export function EmptyState({
         >
           <Search className="h-5 w-5" />
         </div>
-        <h3 className="text-lg font-extrabold text-[#1E293B]">{title}</h3>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">{description}</p>
+        <h3 className="text-lg font-extrabold" style={{ color: "#1E293B" }}>{title}</h3>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6" style={{ color: "#64748B" }}>{description}</p>
         {action ? <div className="mt-5">{action}</div> : null}
       </div>
     </div>
@@ -178,8 +186,8 @@ export function LoadingSkeleton({ cards = 6 }: { cards?: number }) {
       {Array.from({ length: cards }).map((_, index) => (
         <div
           key={index}
-          className="overflow-hidden rounded-2xl border"
-          style={{ borderColor: "rgba(226,232,240,0.70)", background: "#ffffff" }}
+          className="overflow-hidden rounded-2xl"
+          style={{ border: "1px solid rgba(226,232,240,0.70)", background: "rgba(255,255,255,0.82)" }}
         >
           <div
             className="h-48 animate-pulse"
