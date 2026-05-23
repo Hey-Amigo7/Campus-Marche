@@ -24,12 +24,12 @@ function NotificationBell() {
   return (
     <Link
       href="/notifications"
-      className="relative grid h-10 w-10 place-items-center rounded-xl bg-indigo-50 text-brand-navy hover:bg-indigo-100 transition-colors"
+      className="relative grid h-10 w-10 place-items-center rounded-xl bg-pink-50 text-pink-500 hover:bg-pink-100 transition-colors"
       aria-label={unread > 0 ? `${unread} unread notifications` : "Notifications"}
     >
       <Bell className="h-5 w-5" />
       {unread > 0 ? (
-        <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-orange-400 to-red-500 text-[10px] font-black text-white shadow-sm">
+        <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-pink-400 to-rose-500 text-[10px] font-black text-white shadow-sm">
           {unread > 9 ? "9+" : unread}
         </span>
       ) : null}
@@ -50,8 +50,10 @@ export function Navbar() {
   const accountLabel = isAuthenticated ? "Profile" : "Log in";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/50 bg-white/75 shadow-sm shadow-indigo-200/20 backdrop-blur-2xl"
-      style={{ backdropFilter: "blur(28px) saturate(180%)" }}>
+    <header
+      className="sticky top-0 z-40 border-b border-white/50 bg-white/75 shadow-sm shadow-pink-100/20 backdrop-blur-2xl"
+      style={{ backdropFilter: "blur(28px) saturate(180%)" }}
+    >
       <div className="container-shell flex min-h-[68px] items-center gap-5">
         <Logo />
         <nav className="hidden items-center gap-0.5 lg:flex">
@@ -62,8 +64,8 @@ export function Navbar() {
               className={cn(
                 "rounded-xl px-3 py-2 text-sm font-bold transition-all",
                 pathname.startsWith(link.href)
-                  ? "bg-indigo-50/80 text-brand-navy shadow-sm shadow-indigo-100/60"
-                  : "text-slate-500 hover:bg-white/70 hover:text-brand-navy hover:shadow-sm hover:shadow-indigo-100/40",
+                  ? "bg-pink-50/80 text-pink-600 shadow-sm shadow-pink-100/60"
+                  : "text-slate-500 hover:bg-white/70 hover:text-pink-500 hover:shadow-sm hover:shadow-pink-100/30",
               )}
             >
               {link.label}
@@ -81,7 +83,7 @@ export function Navbar() {
           {isAuthenticated ? <NotificationBell /> : null}
           <Link
             href={accountHref}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-indigo-100/60 bg-white/70 text-brand-navy shadow-sm shadow-indigo-100/30 backdrop-blur-sm hover:bg-white hover:shadow-md hover:shadow-indigo-200/30 transition-all"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-pink-100/60 bg-white/70 text-pink-500 shadow-sm shadow-pink-100/20 backdrop-blur-sm hover:bg-pink-50 hover:shadow-md hover:shadow-pink-100/30 transition-all"
             aria-label={accountLabel}
           >
             <UserRound className="h-5 w-5" />
@@ -89,7 +91,7 @@ export function Navbar() {
         </div>
         <button
           onClick={() => setOpen((v) => !v)}
-          className="ml-auto grid h-10 w-10 place-items-center rounded-xl border border-white/60 bg-white/70 text-brand-navy shadow-sm backdrop-blur-sm md:hidden"
+          className="ml-auto grid h-10 w-10 place-items-center rounded-xl border border-white/60 bg-white/70 text-pink-500 shadow-sm backdrop-blur-sm md:hidden"
           aria-label="Open menu"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -112,8 +114,8 @@ export function Navbar() {
                 className={cn(
                   "rounded-xl px-4 py-3 text-sm font-bold transition-all",
                   pathname.startsWith(link.href)
-                    ? "bg-indigo-50/80 text-brand-navy"
-                    : "text-slate-600 hover:bg-white/70 hover:text-brand-navy",
+                    ? "bg-pink-50/80 text-pink-600"
+                    : "text-slate-600 hover:bg-pink-50/50 hover:text-pink-500",
                 )}
               >
                 {link.label}
@@ -146,7 +148,7 @@ export function MobileNav() {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/50 bg-white/80 px-2 py-2 shadow-lg shadow-indigo-100/20 backdrop-blur-2xl md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/50 bg-white/80 px-2 py-2 shadow-lg shadow-pink-100/20 backdrop-blur-2xl md:hidden">
       <div className="grid grid-cols-4 gap-0.5">
         {items.map((item) => {
           const Icon = item.icon;
@@ -159,11 +161,11 @@ export function MobileNav() {
               className={cn(
                 "grid place-items-center gap-1 rounded-xl py-2 text-xs font-bold transition-all",
                 active
-                  ? "bg-indigo-50 text-brand-navy shadow-sm"
-                  : "text-slate-400 hover:text-brand-navy",
+                  ? "bg-pink-50 text-pink-500 shadow-sm"
+                  : "text-slate-400 hover:text-pink-400",
               )}
             >
-              <Icon className={cn("h-5 w-5", active && "text-brand-navy")} />
+              <Icon className={cn("h-5 w-5", active && "text-pink-500")} />
               {item.label}
             </Link>
           );

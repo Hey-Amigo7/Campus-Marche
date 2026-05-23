@@ -3,56 +3,17 @@
 import Link from "next/link";
 import { ArrowRight, MessageCircle, ShieldCheck, ShoppingBag, Sparkles, Store, Users, Zap } from "lucide-react";
 import { CategoryCard } from "@/components/category-card";
-import { ProductArt, ProductGrid } from "@/components/product-card";
-import { Logo, SectionHeading, SellerBadge } from "@/components/ui";
+import { ProductGrid } from "@/components/product-card";
+import { SectionHeading } from "@/components/ui";
 import { useProducts, useCategories } from "@/hooks/use-api";
 import type { Product } from "@/types";
 
-function HeroProductPreviews() {
-  const { data: products } = useProducts();
-  const displayProducts = products.slice(0, 3);
-
-  if (displayProducts.length === 0) {
-    return (
-      <div className="rounded-2xl border border-white/40 bg-white/20 p-6 text-center text-white/80 backdrop-blur-sm">
-        <ShoppingBag className="mx-auto h-8 w-8 opacity-60" />
-        <p className="mt-2 text-sm font-semibold">Be the first to list on Campus Marche</p>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {displayProducts.map((product: Product, index: number) => (
-        <div
-          key={product.id}
-          className={`rounded-2xl border border-white/60 bg-white/85 p-4 shadow-xl shadow-indigo-400/10 backdrop-blur-sm ${index === 1 ? "ml-6" : index === 2 ? "mr-6" : ""}`}
-        >
-          <div className="flex items-center gap-4">
-            <ProductArt
-              style={product.imageStyle}
-              imageUrl={product.imageUrl}
-              title={product.title}
-              className="min-h-20 w-24 shrink-0 rounded-xl"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-slate-900">{product.title}</p>
-              <p className="mt-1 text-sm font-black text-brand-navy">GHS {product.price.toLocaleString()}</p>
-              <SellerBadge verified={product.seller.verified} premium={product.seller.premium} compact />
-            </div>
-          </div>
-        </div>
-      ))}
-    </>
-  );
-}
-
 function EmptySection({ label }: { label: string }) {
   return (
-    <div className="rounded-2xl border border-indigo-100/50 bg-white/60 py-14 text-center backdrop-blur-sm">
-      <Store className="mx-auto h-10 w-10 text-indigo-200" />
+    <div className="rounded-2xl border border-pink-100/50 bg-white py-14 text-center">
+      <Store className="mx-auto h-10 w-10 text-pink-200" />
       <p className="mt-3 text-sm font-bold text-slate-400">{label}</p>
-      <Link href="/sell" className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-brand-navy hover:underline">
+      <Link href="/sell" className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-brand-pink hover:underline">
         List something <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
@@ -69,7 +30,7 @@ function RecentlyListed() {
 function TrendingProducts() {
   const { data: products } = useProducts();
   if (products.length === 0) return <EmptySection label="No trending products yet." />;
-  const display = [...products].sort((a, b) => b.views - a.views).slice(0, 4);
+  const display = [...products].sort((a: Product, b: Product) => b.views - a.views).slice(0, 4);
   return <ProductGrid products={display} />;
 }
 
@@ -90,24 +51,43 @@ export default function HomePage() {
     <div>
       {/* ── Hero ── */}
       <section className="container-shell py-8 md:py-12">
-        <div className="grid overflow-hidden rounded-3xl border border-white/55 shadow-2xl shadow-indigo-300/25 backdrop-blur-sm lg:grid-cols-[1.05fr_0.95fr]">
-          {/* Left: copy */}
-          <div className="bg-white/80 p-6 backdrop-blur-md sm:p-10 lg:p-14">
-            <span className="chip chip-indigo">
+        <div
+          className="relative overflow-hidden rounded-3xl border border-pink-100/60 shadow-2xl shadow-pink-200/20"
+          style={{ background: "linear-gradient(135deg, #fff0f8 0%, #fdf8ff 45%, #f0f8ff 100%)" }}
+        >
+          {/* Decorative blobs */}
+          <div
+            className="pointer-events-none absolute -right-28 -top-28 h-96 w-96 rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(249,168,212,0.45), transparent 70%)" }}
+          />
+          <div
+            className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(125,211,252,0.38), transparent 70%)" }}
+          />
+          <div
+            className="pointer-events-none absolute right-1/4 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(192,132,252,0.18), transparent 70%)" }}
+          />
+
+          <div className="relative mx-auto max-w-3xl px-6 py-14 text-center sm:py-20 sm:px-10">
+            <span className="chip chip-pink">
               <Sparkles className="h-3.5 w-3.5" />
               For Students, By Students
             </span>
-            <h1 className="mt-6 max-w-xl text-4xl font-black leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.5rem]">
+
+            <h1 className="mt-6 text-4xl font-black leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.5rem]">
               Buy. Sell.{" "}
               <span className="gradient-text">Connect.</span>
               <br />
-              <span className="text-brand-gold">All on Campus.</span>
+              <span className="text-brand-pink">All on Campus.</span>
             </h1>
-            <p className="mt-5 max-w-lg text-base leading-7 text-slate-500 sm:text-lg">
+
+            <p className="mx-auto mt-5 max-w-lg text-base leading-7 text-slate-500 sm:text-lg">
               A trusted HTU marketplace for gadgets, textbooks, room essentials, notes, fashion,
               and local vendor deals around campus.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+
+            <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <Link href="/products" className="btn-primary">
                 <ShoppingBag className="h-5 w-5" />
                 Shop Now
@@ -117,34 +97,18 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className="mt-9 grid grid-cols-3 gap-3">
+
+            <div className="mx-auto mt-9 grid max-w-sm grid-cols-3 gap-3">
               {[
-                ["2.8k+", "students", "bg-indigo-50 text-brand-navy"],
-                ["540+", "listings", "bg-amber-50 text-amber-700"],
-                ["4.8/5", "trust score", "bg-emerald-50 text-emerald-700"],
+                ["2.8k+", "students", "bg-pink-50 text-pink-600"],
+                ["540+", "listings", "bg-sky-50 text-sky-600"],
+                ["4.8/5", "trust score", "bg-violet-50 text-violet-600"],
               ].map(([value, label, classes]) => (
                 <div key={label} className={`rounded-2xl p-4 ${classes}`}>
                   <p className="text-xl font-black">{value}</p>
                   <p className="mt-0.5 text-xs font-semibold opacity-70">{label}</p>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Right: product previews */}
-          <div className="relative min-h-[420px] p-6" style={{
-            background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #6d28d9 100%)"
-          }}>
-            <div className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage: "radial-gradient(circle at 30% 20%, #f59e0b 0%, transparent 40%), radial-gradient(circle at 70% 80%, #10b981 0%, transparent 35%)"
-              }}
-            />
-            <div className="relative grid h-full content-center gap-4">
-              <div className="rounded-2xl bg-white/15 p-3 backdrop-blur-sm sm:max-w-xs">
-                <Logo />
-              </div>
-              <HeroProductPreviews />
             </div>
           </div>
         </div>
@@ -156,7 +120,7 @@ export default function HomePage() {
           title="Recently Listed"
           subtitle="Fresh products from students and local vendors around HTU."
           action={
-            <Link href="/products" className="btn-ghost text-brand-navy">
+            <Link href="/products" className="btn-ghost text-brand-pink">
               View all <ArrowRight className="h-4 w-4" />
             </Link>
           }
@@ -190,27 +154,27 @@ export default function HomePage() {
               icon: ShoppingBag,
               title: "List in minutes",
               body: "Add product details, photos, price, and pickup location.",
-              color: "bg-indigo-50 text-brand-navy",
-              ring: "ring-indigo-100",
+              color: "bg-pink-50 text-pink-500",
+              ring: "ring-pink-100",
             },
             {
               icon: MessageCircle,
               title: "Chat securely",
               body: "Coordinate questions and campus meetups inside the marketplace.",
-              color: "bg-amber-50 text-amber-600",
-              ring: "ring-amber-100",
+              color: "bg-sky-50 text-sky-500",
+              ring: "ring-sky-100",
             },
             {
               icon: ShieldCheck,
               title: "Build trust",
               body: "Ratings, verified badges, and premium signals help students buy confidently.",
-              color: "bg-emerald-50 text-emerald-600",
-              ring: "ring-emerald-100",
+              color: "bg-violet-50 text-violet-500",
+              ring: "ring-violet-100",
             },
           ].map((step) => {
             const Icon = step.icon;
             return (
-              <div key={step.title} className="rounded-2xl border border-white/60 bg-white/72 p-6 shadow-sm shadow-indigo-100/30 backdrop-blur-md transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-100/40">
+              <div key={step.title} className="rounded-2xl border border-pink-100/40 bg-white p-6 shadow-sm shadow-pink-100/20 transition-all hover:-translate-y-1 hover:shadow-md hover:shadow-pink-100/30">
                 <div className={`grid h-11 w-11 place-items-center rounded-2xl ring-1 ${step.color} ${step.ring}`}>
                   <Icon className="h-5 w-5" />
                 </div>
@@ -225,33 +189,30 @@ export default function HomePage() {
       {/* ── CTA Banner ── */}
       <section className="container-shell py-8 pb-12">
         <div
-          className="overflow-hidden rounded-3xl p-6 text-white shadow-2xl shadow-indigo-500/25 md:p-10"
-          style={{
-            background: "linear-gradient(135deg, #1e1b4b 0%, #4f46e5 50%, #7c3aed 100%)",
-          }}
+          className="relative overflow-hidden rounded-3xl p-6 text-white shadow-2xl shadow-pink-500/20 md:p-10"
+          style={{ background: "linear-gradient(135deg, #1a0a2e 0%, #831843 55%, #1e3a8a 100%)" }}
         >
-          <div className="absolute inset-0 pointer-events-none opacity-30"
-            style={{
-              backgroundImage: "radial-gradient(circle at 80% 50%, #f59e0b 0%, transparent 50%)"
-            }}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-30"
+            style={{ backgroundImage: "radial-gradient(circle at 80% 50%, #f9a8d4 0%, transparent 55%)" }}
           />
           <div className="relative grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <div className="flex items-center gap-2 text-amber-300">
+              <div className="flex items-center gap-2 text-pink-300">
                 <Users className="h-5 w-5" />
                 <span className="text-sm font-bold">Trusted by HTU students</span>
               </div>
               <h2 className="mt-4 text-3xl font-black tracking-tight">
                 Ready to turn unused items into campus cash?
               </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-indigo-200">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-pink-100">
                 Start free, then boost only when you want extra visibility. No aggressive paywalls,
                 just practical growth tools for sellers.
               </p>
             </div>
             <Link
               href="/sell"
-              className="inline-flex items-center gap-2 rounded-2xl bg-brand-gold px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-amber-500/30 hover:bg-amber-500 hover:-translate-y-1 transition-all"
+              className="inline-flex items-center gap-2 rounded-2xl bg-brand-pink px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-pink-500/30 hover:bg-pink-400 hover:-translate-y-1 transition-all"
             >
               <Zap className="h-5 w-5" />
               Start selling

@@ -3,10 +3,10 @@ import { ArrowRight, Tag } from "lucide-react";
 import type { Category } from "@/types";
 
 const CARD_PALETTES = [
-  { bg: "bg-indigo-50", icon: "text-brand-navy", border: "hover:border-indigo-200", shadow: "hover:shadow-indigo-200/50" },
-  { bg: "bg-amber-50", icon: "text-amber-600", border: "hover:border-amber-200", shadow: "hover:shadow-amber-200/50" },
-  { bg: "bg-emerald-50", icon: "text-emerald-600", border: "hover:border-emerald-200", shadow: "hover:shadow-emerald-200/50" },
-  { bg: "bg-purple-50", icon: "text-purple-600", border: "hover:border-purple-200", shadow: "hover:shadow-purple-200/50" },
+  { bg: "bg-pink-50", icon: "text-pink-500", border: "hover:border-pink-200", shadow: "hover:shadow-pink-200/40" },
+  { bg: "bg-sky-50", icon: "text-sky-500", border: "hover:border-sky-200", shadow: "hover:shadow-sky-200/40" },
+  { bg: "bg-violet-50", icon: "text-violet-500", border: "hover:border-violet-200", shadow: "hover:shadow-violet-200/40" },
+  { bg: "bg-rose-50", icon: "text-rose-400", border: "hover:border-rose-200", shadow: "hover:shadow-rose-200/40" },
 ];
 
 export function CategoryCard({ category, index = 0 }: { category: Category; index?: number }) {
@@ -16,7 +16,7 @@ export function CategoryCard({ category, index = 0 }: { category: Category; inde
   return (
     <Link
       href={`/search?q=${encodeURIComponent(category.name)}`}
-      className={`group rounded-2xl border border-indigo-100/60 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl ${palette.border} ${palette.shadow}`}
+      className={`group rounded-2xl border border-pink-100/50 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl ${palette.border} ${palette.shadow}`}
     >
       <div className="flex items-start justify-between gap-4">
         <span className={`grid h-12 w-12 place-items-center rounded-2xl ${palette.bg} ${palette.icon}`}>
@@ -28,7 +28,7 @@ export function CategoryCard({ category, index = 0 }: { category: Category; inde
       {category.description ? (
         <p className="mt-1.5 text-sm leading-6 text-slate-500">{category.description}</p>
       ) : null}
-      <p className="mt-3 text-sm font-bold text-brand-navy">{category.count} active listings</p>
+      <p className="mt-3 text-sm font-bold text-pink-500">{category.count} active listings</p>
     </Link>
   );
 }

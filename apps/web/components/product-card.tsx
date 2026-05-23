@@ -9,7 +9,7 @@ export function ProductArt({ style, className, imageUrl, title }: { style: strin
 
   if (imageUrl) {
     return (
-      <div className={cn("relative overflow-hidden rounded-3xl bg-indigo-50", className)}>
+      <div className={cn("relative overflow-hidden rounded-3xl bg-pink-50", className)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={imageUrl} alt={title ?? "Product image"} className="h-full w-full object-cover" loading="lazy" />
       </div>
@@ -17,12 +17,12 @@ export function ProductArt({ style, className, imageUrl, title }: { style: strin
   }
 
   return (
-    <div className={cn("relative grid place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-50 to-purple-50 text-slate-400", className)}>
+    <div className={cn("relative grid place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-pink-50 to-sky-50 text-slate-400", className)}>
       <div className="flex flex-col items-center gap-3 px-4 text-center">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/80 shadow-sm shadow-indigo-100">
-          <ImageOff className="h-5 w-5 text-indigo-300" />
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/80 shadow-sm shadow-pink-100">
+          <ImageOff className="h-5 w-5 text-pink-200" />
         </div>
-        <p className="text-xs font-bold uppercase tracking-[0.15em] text-indigo-300">No photo yet</p>
+        <p className="text-xs font-bold uppercase tracking-[0.15em] text-pink-200">No photo yet</p>
         {title ? <span className="text-xs text-slate-400">{title}</span> : null}
       </div>
     </div>
@@ -33,12 +33,12 @@ export function ProductCard({ product, compact = false }: { product: Product; co
   return (
     <article
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-2xl transition-all duration-300",
-        "border backdrop-blur-md",
-        "hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-200/50",
+        "group flex h-full flex-col overflow-hidden rounded-2xl bg-white transition-all duration-300",
+        "border shadow-sm",
+        "hover:-translate-y-1.5 hover:shadow-xl hover:shadow-pink-200/40",
         product.featured
-          ? "border-indigo-200/70 bg-white/80 shadow-md shadow-indigo-100/60"
-          : "border-white/65 bg-white/72 shadow-sm shadow-indigo-100/30 hover:border-indigo-200/60 hover:bg-white/88",
+          ? "border-pink-200/60 shadow-pink-100/40"
+          : "border-pink-100/40 hover:border-pink-200/50",
       )}
     >
       <Link href={`/products/${product.id}`} className="block">
@@ -52,7 +52,7 @@ export function ProductCard({ product, compact = false }: { product: Product; co
           <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
             {product.featured ? <FeaturedBadge /> : null}
             {product.boosted ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-600 shadow-sm ring-1 ring-amber-100">
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-600 shadow-sm ring-1 ring-sky-100">
                 <TrendingUp className="h-3.5 w-3.5" />
                 Boosted
               </span>
@@ -63,11 +63,11 @@ export function ProductCard({ product, compact = false }: { product: Product; co
       <div className="flex flex-1 flex-col p-3.5">
         <div className="flex items-start justify-between gap-2">
           <Link href={`/products/${product.id}`} className="min-w-0">
-            <h3 className="line-clamp-2 text-sm font-bold tracking-tight text-slate-900 group-hover:text-brand-navy">
+            <h3 className="line-clamp-2 text-sm font-bold tracking-tight text-slate-900 group-hover:text-pink-500">
               {product.title}
             </h3>
           </Link>
-          <span className="shrink-0 rounded-lg bg-indigo-50 px-2 py-0.5 text-sm font-black text-brand-navy">
+          <span className="shrink-0 rounded-lg bg-sky-50 px-2 py-0.5 text-sm font-black text-sky-600">
             {formatCurrency(product.price)}
           </span>
         </div>
@@ -78,7 +78,7 @@ export function ProductCard({ product, compact = false }: { product: Product; co
           </span>
         </div>
         <div className="mt-2.5 flex items-center justify-between gap-2">
-          <Link href={`/store/${product.sellerId}`} className="min-w-0 text-xs font-bold text-slate-500 hover:text-brand-navy">
+          <Link href={`/store/${product.sellerId}`} className="min-w-0 text-xs font-bold text-slate-500 hover:text-pink-500">
             {product.seller.name}
           </Link>
           <SellerBadge verified={product.seller.verified} premium={product.seller.premium} compact />

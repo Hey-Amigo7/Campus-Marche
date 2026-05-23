@@ -1,20 +1,41 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8f7ff;
-  --foreground: #1e1b4b;
-  --brand-navy: #4f46e5;
-  --brand-navy-dark: #4338ca;
-  --brand-navy-deep: #1e1b4b;
-  --brand-green: #10b981;
+  --background: #fdf8f6;
+  --foreground: #2d1535;
+
+  /* Baby pink (primary) */
+  --brand-pink: #f472b6;
+  --brand-pink-light: #fce7f3;
+  --brand-pink-dark: #db2777;
+
+  /* Baby blue (secondary) */
+  --brand-blue: #7dd3fc;
+  --brand-blue-dark: #0369a1;
+
+  /* Soft lavender (accent) */
+  --brand-lavender: #c084fc;
+  --brand-lavender-dark: #9333ea;
+
+  /* Cream */
+  --brand-cream: #fff5f0;
+
+  /* Soft mint (keep for verified badges etc.) */
+  --brand-green: #34d399;
   --brand-green-dark: #059669;
-  --brand-gold: #f59e0b;
-  --brand-gold-dark: #d97706;
-  --brand-purple: #7c3aed;
-  --brand-rose: #f43f5e;
-  --line: #e8e5f7;
-  --muted: #6b7280;
-  --soft: #f5f3ff;
+
+  /* Backwards-compat aliases so existing pages don't break */
+  --brand-navy: #60a5fa;          /* baby blue */
+  --brand-navy-dark: #3b82f6;
+  --brand-navy-deep: #1d4ed8;
+  --brand-gold: #f472b6;          /* baby pink (was amber) */
+  --brand-gold-dark: #db2777;
+  --brand-purple: #c084fc;        /* soft lavender */
+  --brand-rose: #fda4af;
+
+  --line: #fce7f3;
+  --muted: #a87ab8;
+  --soft: #fdf0f8;
 }
 
 @theme inline {
@@ -24,6 +45,9 @@
   --color-brand-green: var(--brand-green);
   --color-brand-gold: var(--brand-gold);
   --color-brand-purple: var(--brand-purple);
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-lavender: var(--brand-lavender);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -39,10 +63,9 @@ html {
 body {
   min-width: 320px;
   background:
-    radial-gradient(ellipse 90% 60% at 5% -15%, rgb(79 70 229 / 0.18), transparent),
-    radial-gradient(ellipse 70% 50% at 95% 110%, rgb(245 158 11 / 0.14), transparent),
-    radial-gradient(ellipse 60% 70% at 50% 40%, rgb(124 58 237 / 0.07), transparent),
-    radial-gradient(ellipse 40% 30% at 80% 10%, rgb(16 185 129 / 0.08), transparent),
+    radial-gradient(ellipse 80% 55% at 5% -10%, rgba(244, 114, 182, 0.14), transparent),
+    radial-gradient(ellipse 65% 50% at 95% 105%, rgba(125, 211, 252, 0.16), transparent),
+    radial-gradient(ellipse 55% 65% at 50% 45%, rgba(192, 132, 252, 0.07), transparent),
     var(--background);
   color: var(--foreground);
 }
@@ -71,8 +94,8 @@ button:disabled {
 }
 
 ::selection {
-  background: rgb(79 70 229 / 0.18);
-  color: #1e1b4b;
+  background: rgba(244, 114, 182, 0.18);
+  color: #2d1535;
 }
 
 /* ─── Layout ─── */
@@ -81,7 +104,7 @@ button:disabled {
   margin-inline: auto;
 }
 
-/* ─── Glass utilities ─── */
+/* ─── Glass utilities (used by navbar) ─── */
 .glass {
   background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(20px) saturate(180%);
@@ -96,13 +119,13 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.60);
   border-radius: 1.25rem;
   box-shadow:
-    0 8px 32px rgba(79, 70, 229, 0.10),
+    0 8px 32px rgba(244, 114, 182, 0.09),
     0 2px 8px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .glass-dark {
-  background: rgba(10, 6, 30, 0.88);
+  background: rgba(26, 10, 46, 0.90);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -110,19 +133,16 @@ button:disabled {
 
 /* ─── Cards ─── */
 .card {
-  border: 1px solid rgba(255, 255, 255, 0.60);
+  border: 1px solid rgba(244, 114, 182, 0.14);
   border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  background: #ffffff;
   box-shadow:
-    0 4px 24px rgba(79, 70, 229, 0.09),
-    0 1px 4px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.80);
+    0 4px 24px rgba(244, 114, 182, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .card-soft {
-  border: 1px solid rgb(79 70 229 / 0.08);
+  border: 1px solid rgba(244, 114, 182, 0.10);
   border-radius: 1.25rem;
   background: var(--soft);
 }
@@ -143,21 +163,21 @@ button:disabled {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-purple) 100%);
+  background: linear-gradient(135deg, #f472b6 0%, #c084fc 100%);
   color: #ffffff;
   box-shadow:
-    0 8px 24px rgba(79, 70, 229, 0.32),
-    0 2px 6px rgba(79, 70, 229, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    0 8px 24px rgba(244, 114, 182, 0.36),
+    0 2px 6px rgba(244, 114, 182, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, var(--brand-navy-dark) 0%, #6d28d9 100%);
+  background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
   transform: translateY(-2px);
   box-shadow:
-    0 16px 36px rgba(79, 70, 229, 0.40),
-    0 4px 12px rgba(79, 70, 229, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    0 16px 36px rgba(244, 114, 182, 0.42),
+    0 4px 12px rgba(244, 114, 182, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .btn-primary:active {
@@ -165,47 +185,43 @@ button:disabled {
 }
 
 .btn-secondary {
-  border: 1.5px solid rgba(79, 70, 229, 0.25);
-  background: rgba(255, 255, 255, 0.80);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: var(--brand-navy);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+  border: 1.5px solid rgba(244, 114, 182, 0.28);
+  background: #ffffff;
+  color: #db2777;
+  box-shadow: 0 2px 8px rgba(244, 114, 182, 0.08);
 }
 
 .btn-secondary:hover {
-  border-color: rgba(79, 70, 229, 0.50);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.14), inset 0 1px 0 rgba(255, 255, 255, 1);
+  border-color: rgba(244, 114, 182, 0.55);
+  background: var(--soft);
+  box-shadow: 0 8px 20px rgba(244, 114, 182, 0.16);
   transform: translateY(-2px);
 }
 
 .btn-ghost {
-  color: #4b5563;
+  color: #6b7280;
 }
 
 .btn-ghost:hover {
-  background: rgba(79, 70, 229, 0.06);
-  color: var(--brand-navy);
+  background: var(--soft);
+  color: var(--brand-pink-dark);
 }
 
 /* ─── Inputs ─── */
 .input-shell {
   width: 100%;
-  border: 1.5px solid rgba(79, 70, 229, 0.15);
+  border: 1.5px solid rgba(244, 114, 182, 0.18);
   border-radius: 0.875rem;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
+  background: #ffffff;
   padding: 0.78rem 0.95rem;
   color: var(--foreground);
   outline: 0;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .input-shell:focus {
-  border-color: rgba(79, 70, 229, 0.55);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.10), inset 0 1px 3px rgba(0, 0, 0, 0.03);
+  border-color: rgba(244, 114, 182, 0.60);
+  box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.10), inset 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 /* ─── Product art placeholders ─── */
@@ -215,7 +231,7 @@ button:disabled {
   min-height: 205px;
   place-items: center;
   overflow: hidden;
-  background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+  background: linear-gradient(135deg, #fdf0f8, #f0f7ff);
 }
 
 .product-art::before {
@@ -223,7 +239,7 @@ button:disabled {
   position: absolute;
   inset: 18%;
   border-radius: 999px;
-  background: rgb(79 70 229 / 0.07);
+  background: rgba(244, 114, 182, 0.06);
 }
 
 .product-art span,
@@ -237,8 +253,8 @@ button:disabled {
   width: 144px;
   height: 92px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #ede9fe, #c4b5fd);
-  box-shadow: 16px 20px 28px rgb(79 70 229 / 0.20);
+  background: linear-gradient(135deg, #fce7f3, #e0f2fe);
+  box-shadow: 16px 20px 28px rgba(244, 114, 182, 0.18);
   transform: rotate(-6deg);
 }
 
@@ -246,7 +262,7 @@ button:disabled {
   width: 176px;
   height: 15px;
   border-radius: 0 0 16px 16px;
-  background: #c4b5fd;
+  background: #bfdbfe;
   transform: translateY(56px) rotate(-6deg);
 }
 
@@ -255,13 +271,13 @@ button:disabled {
   width: 104px;
   height: 142px;
   border-radius: 8px;
-  background: linear-gradient(90deg, #4f46e5 0 20%, #7c3aed 20%);
-  box-shadow: 16px 18px 28px rgb(79 70 229 / 0.25);
+  background: linear-gradient(90deg, #f472b6 0 20%, #c084fc 20%);
+  box-shadow: 16px 18px 28px rgba(244, 114, 182, 0.25);
   transform: rotate(-7deg);
 }
 
 .art-notes span {
-  background: repeating-linear-gradient(#ffffff 0 14px, #ddd6fe 15px 16px);
+  background: repeating-linear-gradient(#ffffff 0 14px, #fbcfe8 15px 16px);
 }
 
 .art-phone span,
@@ -269,8 +285,8 @@ button:disabled {
   width: 82px;
   height: 136px;
   border-radius: 20px;
-  background: linear-gradient(135deg, #4f46e5, #f59e0b);
-  box-shadow: 16px 20px 30px rgb(79 70 229 / 0.25);
+  background: linear-gradient(135deg, #f472b6, #7dd3fc);
+  box-shadow: 16px 20px 30px rgba(244, 114, 182, 0.25);
 }
 
 .art-tablet span {
@@ -283,8 +299,8 @@ button:disabled {
   width: 116px;
   height: 138px;
   border-radius: 26px 26px 18px 18px;
-  background: linear-gradient(135deg, #1e1b4b, #4f46e5);
-  box-shadow: 16px 22px 30px rgb(79 70 229 / 0.25);
+  background: linear-gradient(135deg, #831843, #f472b6);
+  box-shadow: 16px 22px 30px rgba(244, 114, 182, 0.25);
 }
 
 .art-bag span::before {
@@ -294,7 +310,7 @@ button:disabled {
   top: -24px;
   width: 46px;
   height: 40px;
-  border: 7px solid #1e1b4b;
+  border: 7px solid #831843;
   border-bottom: 0;
   border-radius: 999px 999px 0 0;
 }
@@ -303,24 +319,24 @@ button:disabled {
   width: 104px;
   height: 78px;
   border-radius: 25px;
-  background: linear-gradient(135deg, #ffffff, #ede9fe);
-  box-shadow: 16px 20px 30px rgb(79 70 229 / 0.15);
+  background: linear-gradient(135deg, #fdf0f8, #e0f2fe);
+  box-shadow: 16px 20px 30px rgba(244, 114, 182, 0.14);
 }
 
 .art-hoodie span {
   width: 118px;
   height: 118px;
   border-radius: 34px 34px 16px 16px;
-  background: linear-gradient(135deg, #ede9fe, #c4b5fd);
-  box-shadow: 16px 20px 30px rgb(79 70 229 / 0.15);
+  background: linear-gradient(135deg, #fce7f3, #ddd6fe);
+  box-shadow: 16px 20px 30px rgba(244, 114, 182, 0.15);
 }
 
 .art-chair span {
   width: 110px;
   height: 82px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  box-shadow: 16px 20px 30px rgb(245 158 11 / 0.25);
+  background: linear-gradient(135deg, #7dd3fc, #60a5fa);
+  box-shadow: 16px 20px 30px rgba(125, 211, 252, 0.25);
 }
 
 .art-ball span {
@@ -328,35 +344,35 @@ button:disabled {
   height: 114px;
   border-radius: 999px;
   background:
-    linear-gradient(90deg, transparent 48%, #1e1b4b 49% 51%, transparent 52%),
-    linear-gradient(135deg, #f59e0b, #ef4444);
-  box-shadow: 16px 20px 30px rgb(245 158 11 / 0.25);
+    linear-gradient(90deg, transparent 48%, #1a0a2e 49% 51%, transparent 52%),
+    linear-gradient(135deg, #f472b6, #7dd3fc);
+  box-shadow: 16px 20px 30px rgba(244, 114, 182, 0.22);
 }
 
 .art-bottle span {
   width: 58px;
   height: 134px;
   border-radius: 18px 18px 28px 28px;
-  background: linear-gradient(135deg, #1e1b4b, #10b981);
-  box-shadow: 16px 20px 30px rgb(79 70 229 / 0.20);
+  background: linear-gradient(135deg, #2d1535, #c084fc);
+  box-shadow: 16px 20px 30px rgba(192, 132, 252, 0.22);
 }
 
-/* ─── Gradient text utility ─── */
+/* ─── Gradient text ─── */
 .gradient-text {
-  background: linear-gradient(135deg, var(--brand-navy), var(--brand-purple));
+  background: linear-gradient(135deg, #f472b6, #7dd3fc);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .gradient-text-gold {
-  background: linear-gradient(135deg, var(--brand-gold), #ef4444);
+  background: linear-gradient(135deg, #f472b6, #c084fc);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-/* ─── Glow pill chip ─── */
+/* ─── Chips ─── */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -367,24 +383,33 @@ button:disabled {
   font-weight: 700;
 }
 
+.chip-pink {
+  background: rgba(244, 114, 182, 0.10);
+  color: #be185d;
+  border: 1px solid rgba(244, 114, 182, 0.25);
+}
+
+.chip-blue {
+  background: rgba(125, 211, 252, 0.12);
+  color: #0369a1;
+  border: 1px solid rgba(125, 211, 252, 0.30);
+}
+
+/* keep chip-indigo alias */
 .chip-indigo {
-  background: rgba(79, 70, 229, 0.10);
-  color: var(--brand-navy);
-  border: 1px solid rgba(79, 70, 229, 0.20);
-  backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.60);
+  background: rgba(96, 165, 250, 0.10);
+  color: #1d4ed8;
+  border: 1px solid rgba(96, 165, 250, 0.22);
 }
 
 .chip-gold {
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--brand-gold-dark);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  backdrop-filter: blur(8px);
+  background: rgba(244, 114, 182, 0.10);
+  color: #be185d;
+  border: 1px solid rgba(244, 114, 182, 0.22);
 }
 
 .chip-green {
-  background: rgba(16, 185, 129, 0.10);
+  background: rgba(52, 211, 153, 0.10);
   color: var(--brand-green-dark);
-  border: 1px solid rgba(16, 185, 129, 0.22);
-  backdrop-filter: blur(8px);
+  border: 1px solid rgba(52, 211, 153, 0.22);
 }

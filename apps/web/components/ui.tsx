@@ -9,8 +9,8 @@ export function Logo() {
         <svg className="h-9 w-9" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#4f46e5" />
-              <stop offset="100%" stopColor="#7c3aed" />
+              <stop offset="0%" stopColor="#f472b6" />
+              <stop offset="100%" stopColor="#7dd3fc" />
             </linearGradient>
           </defs>
           <path d="M8 8C8 6 9 4 12 4C15 4 16 6 16 8" stroke="url(#logoGrad)" strokeWidth="1.5" strokeLinecap="round" />
@@ -19,14 +19,14 @@ export function Logo() {
             <rect x="10" y="10" width="2" height="3" fill="white" />
             <rect x="12.5" y="10" width="2" height="4" fill="white" />
           </g>
-          <circle cx="19" cy="6" r="3" fill="#f59e0b" />
+          <circle cx="19" cy="6" r="3" fill="#c084fc" />
           <text x="19" y="7.2" textAnchor="middle" fill="white" fontSize="2.2" fontWeight="bold">₵</text>
         </svg>
       </div>
       <span className="leading-tight">
         <span className="block text-sm font-black tracking-tight">
           <span className="gradient-text">Campus</span>
-          <span className="text-brand-gold"> Marche</span>
+          <span className="text-brand-lavender"> Marche</span>
         </span>
         <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">Buy · Sell · Connect</span>
       </span>
@@ -69,7 +69,7 @@ export function SellerBadge({ verified, premium, compact = false }: { verified?:
 
 export function FeaturedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-brand-navy to-brand-purple px-2.5 py-1 text-xs font-bold text-white shadow-md shadow-indigo-500/30">
+    <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-brand-pink to-brand-blue px-2.5 py-1 text-xs font-bold text-white shadow-md shadow-pink-300/30">
       <Zap className="h-3 w-3" />
       Featured
     </span>
@@ -79,7 +79,7 @@ export function FeaturedBadge() {
 export function Rating({ value, reviews }: { value: number; reviews?: number }) {
   return (
     <span className="inline-flex items-center gap-1 text-sm font-bold text-slate-800">
-      <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+      <Star className="h-4 w-4 fill-pink-300 text-pink-300" />
       {value.toFixed(1)}
       {reviews ? <span className="font-medium text-slate-500">({reviews})</span> : null}
     </span>
@@ -88,15 +88,15 @@ export function Rating({ value, reviews }: { value: number; reviews?: number }) 
 
 export function SearchBar({ defaultValue = "", placeholder = "Search products, notes, gadgets..." }: { defaultValue?: string; placeholder?: string }) {
   return (
-    <form action="/search" className="flex min-h-12 w-full items-center gap-2 rounded-2xl border border-indigo-100 bg-white px-3 shadow-sm shadow-indigo-100/50 ring-1 ring-indigo-50">
-      <Search className="h-5 w-5 text-indigo-300" />
+    <form action="/search" className="flex min-h-12 w-full items-center gap-2 rounded-2xl border border-pink-100 bg-white px-3 shadow-sm shadow-pink-100/30 ring-1 ring-pink-50">
+      <Search className="h-5 w-5 text-pink-300" />
       <input
         name="q"
         defaultValue={defaultValue}
         placeholder={placeholder}
         className="min-w-0 flex-1 bg-transparent py-3 text-sm font-medium outline-none placeholder:text-slate-400"
       />
-      <button className="rounded-xl bg-gradient-to-r from-brand-navy to-brand-purple px-4 py-2 text-sm font-bold text-white shadow-sm shadow-indigo-300/50 hover:opacity-90">
+      <button className="rounded-xl bg-gradient-to-r from-brand-pink to-brand-lavender px-4 py-2 text-sm font-bold text-white shadow-sm shadow-pink-200/50 hover:opacity-90">
         Search
       </button>
     </form>
@@ -105,9 +105,9 @@ export function SearchBar({ defaultValue = "", placeholder = "Search products, n
 
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) {
   return (
-    <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/30 p-8 text-center">
+    <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-pink-200 bg-pink-50/20 p-8 text-center">
       <div>
-        <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-white text-brand-navy shadow-sm shadow-indigo-100">
+        <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-white text-pink-400 shadow-sm shadow-pink-100">
           <Search className="h-5 w-5" />
         </div>
         <h3 className="text-lg font-black text-slate-950">{title}</h3>
@@ -122,12 +122,12 @@ export function LoadingSkeleton({ cards = 6 }: { cards?: number }) {
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: cards }).map((_, index) => (
-        <div key={index} className="overflow-hidden rounded-2xl border border-indigo-100 bg-white">
-          <div className="h-48 animate-pulse bg-gradient-to-r from-indigo-50 to-purple-50" />
+        <div key={index} className="overflow-hidden rounded-2xl border border-pink-100 bg-white">
+          <div className="h-48 animate-pulse bg-gradient-to-r from-pink-50 to-sky-50" />
           <div className="space-y-3 p-4">
-            <div className="h-4 w-3/4 animate-pulse rounded bg-indigo-50" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-indigo-50" />
-            <div className="h-8 w-full animate-pulse rounded-xl bg-indigo-50" />
+            <div className="h-4 w-3/4 animate-pulse rounded bg-pink-50" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-sky-50" />
+            <div className="h-8 w-full animate-pulse rounded-xl bg-pink-50" />
           </div>
         </div>
       ))}
