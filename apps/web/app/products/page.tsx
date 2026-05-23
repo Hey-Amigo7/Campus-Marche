@@ -137,7 +137,7 @@ export default function ProductsPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <aside className="hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:block">
+        <aside className="hidden rounded-2xl p-5 lg:block" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 2px 12px rgba(15,23,42,0.07)" }}>
           <div className="mb-5 flex items-center gap-2">
             <SlidersHorizontal className="h-5 w-5 text-brand-green" />
             <h2 className="font-black text-slate-950">Filters</h2>

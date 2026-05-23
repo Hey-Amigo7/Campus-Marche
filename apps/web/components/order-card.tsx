@@ -7,7 +7,7 @@ import { ProductArt } from "@/components/product-card";
 const STATUS_COLORS: Record<string, string> = {
   "Payment pending": "bg-amber-100 text-amber-700",
   "In progress": "bg-blue-100 text-blue-700",
-  "Out for delivery": "bg-indigo-100 text-indigo-700",
+  "Out for delivery": "bg-sky-100 text-sky-700",
   Completed: "bg-green-100 text-green-700",
   Cancelled: "bg-red-100 text-red-700",
 };

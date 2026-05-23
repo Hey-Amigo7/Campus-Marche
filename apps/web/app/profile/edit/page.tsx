@@ -56,7 +56,7 @@ export default function ProfileEditPage() {
 
           {/* Avatar preview */}
           <div className="mt-6 flex items-center gap-5">
-            <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-black text-white shadow-md shadow-indigo-200/50">
+            <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-2xl font-black text-white shadow-md" style={{ background: "linear-gradient(135deg, #0F172A, #7FB685)" }}>
               {isImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={avatar} alt="Avatar preview" className="h-full w-full object-cover" />

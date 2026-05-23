@@ -21,9 +21,7 @@ export default function RegisterPage() {
 
     try {
       const result = await api.auth.register({ name, email, password });
-      if (!result?.token) {
-        throw new Error("Registration failed");
-      }
+      if (!result?.token) throw new Error("Registration failed");
 
       setAuthToken(result.token);
 
@@ -37,7 +35,11 @@ export default function RegisterPage() {
       const next = new URLSearchParams(window.location.search).get("next");
       router.push(next?.startsWith("/") ? next : "/profile");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "We could not create your account. Please verify the form and try again.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "We could not create your account. Please verify the form and try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -45,22 +47,46 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="py-14 text-white" style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #4f46e5 60%, #7c3aed 100%)" }}>
+      {/* Header */}
+      <div
+        className="relative overflow-hidden py-14 text-white"
+        style={{ background: "linear-gradient(135deg, #0F172A 0%, #102542 55%, #1a3a2a 100%)" }}
+      >
+        <div
+          className="pointer-events-none absolute -left-24 -top-24 h-64 w-64 rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(127,182,133,0.20), transparent 65%)" }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-20 right-0 h-56 w-56 rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(198,139,89,0.15), transparent 65%)" }}
+        />
         <div className="container-shell text-center">
           <h1 className="text-4xl font-black tracking-tight">Join Campus Marche</h1>
-          <p className="mt-3 text-lg text-indigo-200">Create your account to start buying and selling on campus</p>
+          <p className="mt-3 text-lg" style={{ color: "#94A3B8" }}>
+            Create your account to start buying and selling on campus
+          </p>
         </div>
       </div>
 
       <div className="container-shell py-14">
-        <div className="mx-auto max-w-md rounded-2xl border border-indigo-100 bg-white p-8 shadow-xl shadow-indigo-100/50">
+        <div
+          className="mx-auto max-w-md rounded-2xl p-8"
+          style={{
+            background:    "rgba(255,255,255,0.88)",
+            backdropFilter:"blur(20px) saturate(160%)",
+            border:        "1px solid rgba(226,232,240,0.70)",
+            boxShadow:     "0 8px 32px rgba(15,23,42,0.10)",
+          }}
+        >
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-sm font-bold text-slate-900">Full name</label>
+              <label className="block text-sm font-bold" style={{ color: "#1E293B" }}>
+                Full name
+              </label>
               <input
                 type="text"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Jane Doe"
                 className="input-shell mt-2"
                 required
@@ -68,11 +94,13 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-900">Campus email</label>
+              <label className="block text-sm font-bold" style={{ color: "#1E293B" }}>
+                Campus email
+              </label>
               <input
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@htu.edu.gh"
                 className="input-shell mt-2"
                 required
@@ -80,27 +108,42 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-900">Create password</label>
+              <label className="block text-sm font-bold" style={{ color: "#1E293B" }}>
+                Create password
+              </label>
               <input
                 type="password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="••••••••"
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min 8 characters"
                 className="input-shell mt-2"
+                minLength={8}
                 required
               />
             </div>
 
-            {message ? <p className="text-sm font-semibold text-red-600">{message}</p> : null}
+            {message ? (
+              <p className="text-sm font-semibold text-red-600">{message}</p>
+            ) : null}
 
-            <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base font-bold">
-              {loading ? "Creating account..." : "Create account"}
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full justify-center py-3 text-base font-bold"
+            >
+              {loading ? "Creating account…" : "Create account"}
             </button>
           </form>
 
-          <div className="mt-6 border-t border-indigo-100 pt-6 text-center">
-            <p className="text-sm text-slate-600">
-              Already have an account? <Link href="/login" className="font-bold text-brand-green hover:underline">Log in</Link>
+          <div
+            className="mt-6 border-t pt-6 text-center"
+            style={{ borderColor: "rgba(226,232,240,0.60)" }}
+          >
+            <p className="text-sm" style={{ color: "#64748B" }}>
+              Already have an account?{" "}
+              <Link href="/login" className="font-bold hover:underline" style={{ color: "#5A9460" }}>
+                Log in
+              </Link>
             </p>
           </div>
         </div>

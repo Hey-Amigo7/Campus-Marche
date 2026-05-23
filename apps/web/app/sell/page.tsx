@@ -50,7 +50,7 @@ function MomoPayoutPanel({ business, onSaved }: { business: BusinessProfile; onS
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <h3 className="font-black text-slate-950">MoMo payout</h3>
-        <button onClick={() => setOpen((v) => !v)} className="text-xs font-bold text-indigo-600 hover:underline">
+        <button onClick={() => setOpen((v) => !v)} className="text-xs font-bold hover:underline" style={{ color: "#5A9460" }}>
           {open ? "Cancel" : configured ? "Edit" : "Set up"}
         </button>
       </div>
