@@ -75,6 +75,10 @@ export function useLocations() {
   return useSWR<Array<{ location: string; count: number }>>("locations", api.getLocations, { fallbackData: [] });
 }
 
+export function useMyListings() {
+  return useSWR<Product[]>("my-listings", api.getMyListings, { fallbackData: [] });
+}
+
 export function useConversations() {
   return useSWR<ApiConversation[]>("conversations", api.getConversations, {
     fallbackData: [],

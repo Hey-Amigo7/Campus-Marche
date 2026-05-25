@@ -19,6 +19,7 @@ model User {
   name          String
   password      String
   avatar        String   @default("A")
+  bio           String?
   verified      Boolean  @default(false)
   phone         String?
   phoneVerified Boolean  @default(false)

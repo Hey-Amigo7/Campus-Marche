@@ -20,6 +20,7 @@ const USER_SELECT = {
   email: true,
   name: true,
   avatar: true,
+  bio: true,
   verified: true,
   premium: true,
   role: true,
@@ -313,7 +314,7 @@ export class AuthService {
       business: user.business,
       canSell: Boolean(user.business),
       responseTime: user.business ? '15m' : null,
-      bio: user.business?.description ?? 'Buyer account. Create a business profile before listing products or services.',
+      bio: user.bio ?? user.business?.description ?? '',
       banner: user.business?.name ?? 'Campus Marche member',
       analytics: user.business
         ? await this.getSellerAnalytics(userId)
@@ -418,6 +419,35 @@ export class AuthService {
     ]);
 
     return { message: 'Email verified successfully' };
+  }
+
+  async bootstrapAdmin() {
+    const existingAdmin = await this.prisma.user.findFirst({ where: { role: 'ADMIN' } });
+    if (existingAdmin) {
+      return { message: 'Admin account already exists. Use the admin login to sign in.' };
+    }
+
+    const DEFAULT_EMAIL = 'admin@campus-marche.com';
+    const DEFAULT_PASSWORD = 'Admin@123!';
+    const hash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+
+    const admin = await this.prisma.user.create({
+      data: {
+        email: DEFAULT_EMAIL,
+        name: 'Platform Admin',
+        password: hash,
+        avatar: '🛡️',
+        verified: true,
+        role: 'ADMIN',
+      },
+    });
+
+    return {
+      message: 'Default admin account created. Login with the credentials below and change them immediately.',
+      email: DEFAULT_EMAIL,
+      password: DEFAULT_PASSWORD,
+      userId: admin.id,
+    };
   }
 
 }

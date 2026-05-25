@@ -5,7 +5,6 @@ import { ArrowRight, Sparkles, TrendingUp, Zap } from "lucide-react";
 import { CategoryCard } from "@/components/category-card";
 import { ProductCard } from "@/components/product-card";
 import { useProducts, useCategories } from "@/hooks/use-api";
-import { formatCurrency } from "@/lib/format";
 import type { Product } from "@/types";
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -95,15 +94,27 @@ function CategoryStrip() {
   );
 }
 
+function CategoriesGrid() {
+  const { data: categoriesData } = useCategories();
+  const categories = categoriesData ?? [];
+  if (categories.length === 0) return null;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {categories.map((category, i) => (
+        <CategoryCard key={category.name} category={category} index={i} />
+      ))}
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <div>
-      {/* ── Hero — editorial, not template ── */}
+      {/* ── Hero ── */}
       <section
         className="relative overflow-hidden"
         style={{ background: "linear-gradient(160deg, #0F172A 0%, #0d2118 50%, #0F172A 100%)" }}
       >
-        {/* Subtle texture */}
         <div className="pointer-events-none absolute inset-0"
           style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(127,182,133,0.18) 0%, transparent 55%), radial-gradient(circle at 80% 20%, rgba(198,139,89,0.10) 0%, transparent 45%)" }} />
         <div className="pointer-events-none absolute left-1/2 top-0 h-px w-3/4 -translate-x-1/2"
@@ -146,7 +157,6 @@ export default function HomePage() {
               </Link>
             </div>
 
-            {/* Social proof chips */}
             <div className="mt-8 flex flex-wrap gap-3">
               {[
                 { label: "Free to list", icon: "✓" },
@@ -161,14 +171,27 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Right — floating listing previews */}
-          <div className="hidden md:flex md:flex-col md:justify-center">
-            <RecentHeroCards />
+          {/* Right — trust cards */}
+          <div className="hidden md:flex md:flex-col md:justify-center gap-4">
+            {[
+              { icon: "🎓", title: "HTU verified sellers", body: "Only students and staff from Ho Technical University trade here." },
+              { icon: "🔒", title: "Escrow-protected payments", body: "Your money is held safely until you confirm delivery or pickup." },
+              { icon: "📍", title: "Campus meetups", body: "Arrange safe exchanges right on campus — no strangers at your door." },
+            ].map((card) => (
+              <div key={card.title} className="flex items-start gap-4 rounded-2xl p-4"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(12px)" }}>
+                <span className="text-2xl">{card.icon}</span>
+                <div>
+                  <p className="font-black text-white text-sm">{card.title}</p>
+                  <p className="mt-1 text-xs leading-5" style={{ color: "#94A3B8" }}>{card.body}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── Category Strip (Airbnb-style) ── */}
+      {/* ── Category Strip ── */}
       <section className="container-shell pt-6 pb-2">
         <CategoryStrip />
       </section>
@@ -203,70 +226,6 @@ export default function HomePage() {
         </div>
         <CategoriesGrid />
       </section>
-    </div>
-  );
-}
-
-function RecentHeroCards() {
-  const { data: products } = useProducts();
-  const recent = [...products].sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()).slice(0, 3);
-
-  if (recent.length === 0) {
-    return (
-      <div className="rounded-2xl p-6 text-center" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}>
-        <p className="text-sm font-semibold" style={{ color: "#64748B" }}>Listings will appear here</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative">
-      {/* Stacked cards effect */}
-      {recent[2] && (
-        <div className="absolute -bottom-2 left-6 right-0 overflow-hidden rounded-2xl opacity-40 scale-[0.96] origin-bottom"
-          style={{ height: "80px", background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.12)" }} />
-      )}
-      {recent[1] && (
-        <div className="absolute -bottom-1 left-3 right-0 overflow-hidden rounded-2xl opacity-60 scale-[0.98] origin-bottom"
-          style={{ height: "80px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }} />
-      )}
-      {recent[0] && (
-        <div className="relative overflow-hidden rounded-2xl"
-          style={{ background: "rgba(255,255,255,0.92)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.70)" }}>
-          {recent[0].imageUrl ? (
-            <img src={recent[0].imageUrl} alt={recent[0].title} className="h-40 w-full object-cover" />
-          ) : (
-            <div className="h-40 w-full" style={{ background: "linear-gradient(135deg, #DFF3E3, #F0F7F1)" }}>
-              <div className="flex h-full items-center justify-center text-5xl">
-                {CATEGORY_ICONS[recent[0].category ?? ""] ?? "📦"}
-              </div>
-            </div>
-          )}
-          <div className="flex items-center justify-between p-4">
-            <div>
-              <p className="font-black text-slate-950 line-clamp-1">{recent[0].title}</p>
-              <p className="text-sm text-slate-500">{recent[0].seller.name} · {recent[0].location}</p>
-            </div>
-            <span className="shrink-0 rounded-xl px-3 py-1.5 text-sm font-black"
-              style={{ background: "#DFF3E3", color: "#5A9460" }}>
-              {formatCurrency(recent[0].price)}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CategoriesGrid() {
-  const { data: categoriesData } = useCategories();
-  const categories = categoriesData ?? [];
-  if (categories.length === 0) return null;
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {categories.map((category, i) => (
-        <CategoryCard key={category.name} category={category} index={i} />
-      ))}
     </div>
   );
 }

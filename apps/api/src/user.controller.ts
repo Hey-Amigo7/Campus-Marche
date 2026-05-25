@@ -19,6 +19,11 @@ class UpdateProfileDto {
   @IsString()
   @MaxLength(200)
   avatar?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  bio?: string;
 }
 
 @ApiTags('users')
@@ -41,9 +46,10 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update name and avatar' })
   async updateProfile(@AuthUser() user: { id: string }, @Body() body: UpdateProfileDto) {
-    const data: { name?: string; avatar?: string } = {};
+    const data: { name?: string; avatar?: string; bio?: string } = {};
     if (body.name) data.name = body.name.trim();
     if (body.avatar !== undefined) data.avatar = body.avatar.trim() || body.name?.charAt(0).toUpperCase() || '';
+    if (body.bio !== undefined) data.bio = body.bio.trim();
     await this.prisma.user.update({ where: { id: user.id }, data });
     return this.authService.getProfileDataForUser(user.id);
   }

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
+import Link from "next/link";
 import {
   AlertTriangle,
   BarChart3,
@@ -15,7 +16,6 @@ import {
   Loader2,
   Package,
   Plus,
-  RefreshCw,
   Search,
   Shield,
   ShieldOff,
@@ -115,6 +115,11 @@ function AdminGate({ children }: { children: React.ReactNode }) {
         <Shield className="h-12 w-12" style={{ color: "#E2E8F0" }} />
         <p className="text-lg font-black" style={{ color: "#1E293B" }}>Admin access required</p>
         <p className="text-sm" style={{ color: "#64748B" }}>This area is restricted to platform administrators.</p>
+        <Link href="/admin/login"
+          className="mt-2 inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black text-white"
+          style={{ background: "#0F172A" }}>
+          <Shield className="h-4 w-4" /> Go to admin login
+        </Link>
       </div>
     );
   }

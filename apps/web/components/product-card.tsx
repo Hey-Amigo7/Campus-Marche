@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bookmark, BookmarkCheck, Loader2, MapPin, Star, Wrench } from "lucide-react";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
@@ -113,6 +114,7 @@ function SaveButton({ productId, compact = false }: { productId: string; compact
 }
 
 export function ProductCard({ product, compact = false }: { product: Product; compact?: boolean }) {
+  const router = useRouter();
   const isService = (product as Product & { listingType?: string }).listingType === "service";
 
   return (
@@ -198,14 +200,13 @@ export function ProductCard({ product, compact = false }: { product: Product; co
         </div>
 
         <div className="mt-2 flex items-center justify-between gap-2">
-          <Link
-            href={`/store/${product.sellerId}`}
-            onClick={(e) => e.stopPropagation()}
-            className="min-w-0 truncate text-xs font-semibold hover:underline"
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/store/${product.sellerId}`); }}
+            className="min-w-0 truncate text-xs font-semibold hover:underline text-left"
             style={{ color: "#64748B" }}
           >
             {product.seller.name}
-          </Link>
+          </button>
           <span className="shrink-0 text-[10px] font-medium" style={{ color: "#94A3B8" }}>
             {formatRelativeDate(product.postedAt)}
           </span>

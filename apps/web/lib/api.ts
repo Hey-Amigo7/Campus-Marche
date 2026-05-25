@@ -357,7 +357,7 @@ export const api = {
 
   getProfile: () => request<Seller | null>("/users/profile", null),
 
-  updateProfile: (payload: { name?: string; avatar?: string }) =>
+  updateProfile: (payload: { name?: string; avatar?: string; bio?: string }) =>
     request<Seller | null>("/users/profile", null, { method: "PATCH", body: JSON.stringify(payload), strict: true }),
 
   getNotifications: () =>
@@ -425,6 +425,23 @@ export const api = {
       { message: "" },
       { method: "DELETE", strict: true },
     ),
+
+  getMyListings: () =>
+    request<Product[]>("/products/my-listings", [], { strict: true }),
+
+  updateProduct: (id: string, payload: Partial<Product>) =>
+    request<Product>(`/products/${id}`, {} as Product, {
+      method: "PUT", body: JSON.stringify(payload), strict: true,
+    }),
+
+  markSold: (id: string) =>
+    request<{ id: string }>(`/products/${id}/sold`, {} as never, { method: "PUT", strict: true }),
+
+  archiveListing: (id: string) =>
+    request<{ id: string }>(`/products/${id}/archive`, {} as never, { method: "PUT", strict: true }),
+
+  restoreListing: (id: string) =>
+    request<{ id: string }>(`/products/${id}/restore`, {} as never, { method: "PUT", strict: true }),
 
   getLocations: () =>
     request<Array<{ location: string; count: number }>>(

@@ -112,4 +112,10 @@ export class AuthController {
     const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
     return { ...result, redirectTo: `${frontendUrl}/profile` };
   }
+
+  @Post('bootstrap-admin')
+  @ApiOperation({ summary: 'Create default admin account if none exists (first-time setup only)' })
+  async bootstrapAdmin() {
+    return this.authService.bootstrapAdmin();
+  }
 }

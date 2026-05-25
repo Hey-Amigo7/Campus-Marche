@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, Crown, Edit, LogOut, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { BriefcaseBusiness, Crown, Edit, List, LogOut, ShieldCheck, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
 import { AnalyticsCards } from "@/components/premium";
-import { ProductGrid } from "@/components/product-card";
 import { Rating, SectionHeading, SellerBadge, EmptyState, LoadingSkeleton } from "@/components/ui";
-import { useProducts, useProfile } from "@/hooks/use-api";
+import { useProfile } from "@/hooks/use-api";
 
 const GLASS_PANEL = {
   background:    "rgba(255,255,255,0.82)",
@@ -21,7 +20,6 @@ const GLASS_PANEL = {
 export default function ProfilePage() {
   const router = useRouter();
   const { data: profile, isLoading: profileLoading } = useProfile();
-  const { data: products = [], isLoading: productsLoading } = useProducts();
 
   const [deleteStep, setDeleteStep] = useState<"idle" | "confirm">("idle");
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -49,9 +47,7 @@ export default function ProfilePage() {
     }
   }
 
-  const listed = profile ? products.filter((p) => p.seller?.id === profile.id) : [];
-
-  if (profileLoading || productsLoading) {
+  if (profileLoading) {
     return <div className="container-shell py-8 md:py-10"><LoadingSkeleton /></div>;
   }
 
@@ -175,6 +171,12 @@ export default function ProfilePage() {
               <Edit className="h-4 w-4" />
               Edit profile
             </Link>
+            {profile.business && (
+              <Link href="/profile/listings" className="btn-secondary mt-2 w-full">
+                <List className="h-4 w-4" />
+                Manage listings
+              </Link>
+            )}
             {!profile.verified ? (
               <Link
                 href={`/verify-email?email=${encodeURIComponent(profile.email ?? "")}`}
@@ -243,13 +245,26 @@ export default function ProfilePage() {
       {/* Listings */}
       <section className="mt-10">
         <SectionHeading
-          title={profile.business ? "Listed products and services" : "Seller area"}
-          subtitle={profile.business ? "Your active marketplace listings." : "Create a business profile before listings appear here."}
+          title={profile.business ? "Your listings" : "Seller area"}
+          subtitle={profile.business ? "Manage your active and archived listings." : "Create a business profile to start selling."}
+          action={profile.business ? (
+            <Link href="/profile/listings" className="btn-secondary text-sm px-4 py-2">
+              <List className="h-4 w-4" /> Manage all
+            </Link>
+          ) : undefined}
         />
         {profile.business ? (
-          listed.length
-            ? <ProductGrid products={listed} />
-            : <EmptyState title="No listings found" description="Create your first product or service listing from the sell page." />
+          <div className="rounded-2xl border border-dashed py-12 text-center"
+            style={{ borderColor: "rgba(127,182,133,0.30)", background: "rgba(223,243,227,0.12)" }}>
+            <p className="text-2xl">📦</p>
+            <p className="mt-3 font-bold" style={{ color: "#1E293B" }}>View and manage your listings</p>
+            <p className="mt-1 text-sm" style={{ color: "#64748B" }}>Archive, mark sold, or restore listings from your listing manager.</p>
+            <Link href="/profile/listings"
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black text-white"
+              style={{ background: "#0F172A" }}>
+              <List className="h-4 w-4" /> Open listing manager
+            </Link>
+          </div>
         ) : (
           <EmptyState
             title="No business profile yet"
