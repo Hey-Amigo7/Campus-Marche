@@ -12,8 +12,10 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  Inbox,
   LayoutDashboard,
   Loader2,
+  Megaphone,
   Package,
   Plus,
   Search,
@@ -30,7 +32,7 @@ import { formatCurrency, formatRelativeDate } from "@/lib/format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "users" | "listings" | "reports" | "events";
+type Tab = "overview" | "users" | "listings" | "reports" | "events" | "messages";
 
 type AdminStats = {
   users: number;
@@ -85,6 +87,16 @@ type AdminEvent = {
   opportunity?: string | null;
   imageUrl?: string | null;
   featured?: boolean;
+};
+
+type ContactMessage = {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: string;
+  createdAt: string;
 };
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
@@ -185,6 +197,11 @@ function UsersTab() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const take = 20;
+  const [warnTarget, setWarnTarget] = useState<{ id: string; name: string } | null>(null);
+  const [warnMessage, setWarnMessage] = useState("");
+  const [warnLoading, setWarnLoading] = useState(false);
+  const [warnError, setWarnError] = useState<string | null>(null);
+  const [warnSent, setWarnSent] = useState(false);
 
   const { data, isLoading, mutate } = useSWR(
     ["admin-users", skip, debouncedQ],
@@ -219,8 +236,99 @@ function UsersTab() {
     await mutate();
   }
 
+  async function sendWarn() {
+    if (!warnTarget || !warnMessage.trim()) return;
+    setWarnLoading(true);
+    setWarnError(null);
+    try {
+      await api.admin.sendWarning(warnTarget.id, warnMessage.trim());
+      setWarnSent(true);
+      setTimeout(() => {
+        setWarnTarget(null);
+        setWarnMessage("");
+        setWarnSent(false);
+      }, 1500);
+    } catch (err) {
+      setWarnError(err instanceof Error ? err.message : "Failed to send warning.");
+    } finally {
+      setWarnLoading(false);
+    }
+  }
+
+  function closeWarn() {
+    setWarnTarget(null);
+    setWarnMessage("");
+    setWarnError(null);
+    setWarnSent(false);
+  }
+
   return (
     <div className="space-y-4">
+      {/* ── Warn modal ── */}
+      {warnTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(15,23,42,0.50)", backdropFilter: "blur(8px)" }}>
+          <div className="w-full max-w-md rounded-3xl" style={{ background: "#fff", boxShadow: "0 24px 80px rgba(15,23,42,0.18)" }}>
+            <div className="flex items-center justify-between p-5" style={{ borderBottom: "1px solid rgba(226,232,240,0.60)" }}>
+              <div className="flex items-center gap-2">
+                <div className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: "rgba(234,179,8,0.12)" }}>
+                  <Megaphone className="h-4 w-4" style={{ color: "#B45309" }} />
+                </div>
+                <div>
+                  <p className="text-sm font-black" style={{ color: "#1E293B" }}>Send warning</p>
+                  <p className="text-xs" style={{ color: "#94A3B8" }}>{warnTarget.name}</p>
+                </div>
+              </div>
+              <button onClick={closeWarn} className="grid h-8 w-8 place-items-center rounded-full hover:bg-slate-100">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              {warnSent ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="grid h-12 w-12 place-items-center rounded-full" style={{ background: "rgba(127,182,133,0.15)" }}>
+                    <Check className="h-6 w-6" style={{ color: "#5A9460" }} />
+                  </div>
+                  <p className="font-bold" style={{ color: "#1E293B" }}>Warning sent</p>
+                </div>
+              ) : (
+                <>
+                  <label className="mb-1.5 block text-xs font-black" style={{ color: "#64748B" }}>Warning message</label>
+                  <textarea
+                    rows={4}
+                    placeholder="Describe the policy violation and expected corrective action…"
+                    value={warnMessage}
+                    onChange={(e) => setWarnMessage(e.target.value)}
+                    className="w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none"
+                    style={{ background: "#F8FAFC", border: "1px solid rgba(226,232,240,0.80)", color: "#1E293B" }}
+                  />
+                  <p className="mt-1 text-right text-xs" style={{ color: "#94A3B8" }}>{warnMessage.length}/1000</p>
+                  {warnError && (
+                    <p className="mt-2 rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: "rgba(239,68,68,0.08)", color: "#EF4444" }}>{warnError}</p>
+                  )}
+                  <div className="mt-4 flex gap-2">
+                    <button onClick={closeWarn}
+                      className="flex-1 rounded-xl px-4 py-2.5 text-sm font-bold"
+                      style={{ background: "#F1F5F9", color: "#475569" }}>
+                      Cancel
+                    </button>
+                    <button
+                      onClick={sendWarn}
+                      disabled={warnLoading || warnMessage.trim().length < 10}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-50"
+                      style={{ background: "#B45309" }}
+                    >
+                      {warnLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
+                      Send warning
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "#94A3B8" }} />
@@ -301,14 +409,24 @@ function UsersTab() {
                   </button>
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => suspend(user.id)}
-                    title={user.verified ? "Suspend user" : "User already suspended"}
-                    className="grid h-8 w-8 place-items-center rounded-lg transition-all hover:scale-110"
-                    style={{ background: user.verified ? "rgba(239,68,68,0.10)" : "rgba(148,163,184,0.10)" }}
-                  >
-                    <ShieldOff className="h-4 w-4" style={{ color: user.verified ? "#EF4444" : "#94A3B8" }} />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setWarnTarget({ id: user.id, name: user.name })}
+                      title="Send warning"
+                      className="grid h-8 w-8 place-items-center rounded-lg transition-all hover:scale-110"
+                      style={{ background: "rgba(234,179,8,0.10)" }}
+                    >
+                      <Megaphone className="h-4 w-4" style={{ color: "#B45309" }} />
+                    </button>
+                    <button
+                      onClick={() => suspend(user.id)}
+                      title={user.verified ? "Suspend user" : "User already suspended"}
+                      className="grid h-8 w-8 place-items-center rounded-lg transition-all hover:scale-110"
+                      style={{ background: user.verified ? "rgba(239,68,68,0.10)" : "rgba(148,163,184,0.10)" }}
+                    >
+                      <ShieldOff className="h-4 w-4" style={{ color: user.verified ? "#EF4444" : "#94A3B8" }} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -693,6 +811,103 @@ function EventsTab() {
   );
 }
 
+// ─── Messages tab ─────────────────────────────────────────────────────────────
+
+const MSG_STATUS_COLORS: Record<string, string> = {
+  new: "#7FB685",
+  resolved: "#94A3B8",
+};
+
+function MessagesTab() {
+  const [skip, setSkip] = useState(0);
+  const take = 20;
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  const { data, isLoading, mutate } = useSWR(
+    ["admin-contact-messages", skip],
+    () => api.admin.getContactMessages(skip, take),
+    { keepPreviousData: true },
+  );
+
+  const messages: ContactMessage[] = data?.messages ?? [];
+  const total = data?.total ?? 0;
+
+  async function resolve(id: string) {
+    setResolving(id);
+    try {
+      await api.admin.resolveContactMessage(id);
+      await mutate();
+    } finally {
+      setResolving(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold" style={{ color: "#64748B" }}>{total} messages total</span>
+      </div>
+
+      <div className="space-y-3">
+        {isLoading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-20 animate-pulse rounded-2xl" style={{ background: "rgba(226,232,240,0.40)" }} />
+          ))
+        ) : messages.length === 0 ? (
+          <div className="rounded-2xl py-16 text-center" style={CARD}>
+            <Inbox className="mx-auto h-10 w-10" style={{ color: "#E2E8F0" }} />
+            <p className="mt-3 font-bold" style={{ color: "#1E293B" }}>No messages yet</p>
+            <p className="mt-1 text-sm" style={{ color: "#94A3B8" }}>Contact form submissions will appear here.</p>
+          </div>
+        ) : messages.map((msg) => (
+          <div key={msg.id} className="rounded-2xl overflow-hidden" style={CARD}>
+            <button
+              className="flex w-full items-start gap-4 p-4 text-left transition-colors hover:bg-slate-50/60"
+              onClick={() => setExpanded(expanded === msg.id ? null : msg.id)}
+            >
+              <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: (MSG_STATUS_COLORS[msg.status] ?? "#94A3B8") + "18" }}>
+                <Inbox className="h-4 w-4" style={{ color: MSG_STATUS_COLORS[msg.status] ?? "#94A3B8" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full px-2.5 py-0.5 text-[10px] font-black capitalize"
+                    style={{ background: (MSG_STATUS_COLORS[msg.status] ?? "#94A3B8") + "18", color: MSG_STATUS_COLORS[msg.status] ?? "#94A3B8" }}>
+                    {msg.status}
+                  </span>
+                  <span className="font-bold truncate" style={{ color: "#1E293B" }}>{msg.subject}</span>
+                </div>
+                <p className="mt-0.5 text-xs" style={{ color: "#94A3B8" }}>
+                  {msg.name} · {msg.email} · {formatRelativeDate(msg.createdAt)}
+                </p>
+              </div>
+            </button>
+
+            {expanded === msg.id && (
+              <div className="border-t px-4 pb-4 pt-3" style={{ borderColor: "rgba(226,232,240,0.60)" }}>
+                <p className="text-sm leading-6 whitespace-pre-wrap" style={{ color: "#475569" }}>{msg.message}</p>
+                {msg.status !== "resolved" && (
+                  <button
+                    onClick={() => resolve(msg.id)}
+                    disabled={resolving === msg.id}
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-60"
+                    style={{ background: "rgba(127,182,133,0.15)", color: "#5A9460" }}
+                  >
+                    {resolving === msg.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    Mark resolved
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Pagination skip={skip} take={take} total={total} onPage={setSkip} />
+    </div>
+  );
+}
+
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 function Pagination({ skip, take, total, onPage }: { skip: number; take: number; total: number; onPage: (s: number) => void }) {
@@ -724,6 +939,7 @@ const NAV_ITEMS: { tab: Tab; icon: React.ReactNode; label: string }[] = [
   { tab: "listings", icon: <Package className="h-4 w-4" />, label: "Listings" },
   { tab: "reports", icon: <AlertTriangle className="h-4 w-4" />, label: "Reports" },
   { tab: "events", icon: <CalendarDays className="h-4 w-4" />, label: "Events" },
+  { tab: "messages", icon: <Inbox className="h-4 w-4" />, label: "Messages" },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -770,6 +986,7 @@ export default function AdminPage() {
               {tab === "listings" && <ListingsTab />}
               {tab === "reports" && <ReportsTab />}
               {tab === "events" && <EventsTab />}
+              {tab === "messages" && <MessagesTab />}
             </main>
           </div>
         </div>

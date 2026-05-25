@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsString, Length } from 'class-validator';
 import { AdminService } from './admin.service';
 import { AuthUser } from './auth/auth-user.decorator';
 import { AdminAuthGuard } from './auth/admin-auth.guard';
@@ -27,6 +27,13 @@ class AdminLoginDto {
 class GrantEventsDto {
   @IsBoolean()
   canEdit: boolean;
+}
+
+class SendWarningDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(10, 1000)
+  message: string;
 }
 
 @ApiTags('admin')
@@ -67,6 +74,26 @@ export class AdminController {
   @ApiOperation({ summary: 'Suspend user' })
   suspendUser(@Param('id') id: string, @AuthUser() admin: { id: string }) {
     return this.adminService.suspendUser(id, admin.id);
+  }
+
+  @Post('users/:id/warn')
+  @ApiOperation({ summary: 'Send a warning notification to a user' })
+  sendWarning(@Param('id') id: string, @Body() dto: SendWarningDto, @AuthUser() admin: { id: string }) {
+    return this.adminService.sendWarning(admin.id, id, dto.message);
+  }
+
+  @Get('contact-messages')
+  @ApiOperation({ summary: 'List contact form submissions' })
+  @ApiQuery({ name: 'skip', required: false })
+  @ApiQuery({ name: 'take', required: false })
+  getContactMessages(@Query('skip') skip = 0, @Query('take') take = 30) {
+    return this.adminService.getContactMessages(+skip, +take);
+  }
+
+  @Patch('contact-messages/:id/resolve')
+  @ApiOperation({ summary: 'Mark contact message as resolved' })
+  resolveContactMessage(@Param('id') id: string) {
+    return this.adminService.resolveContactMessage(id);
   }
 
   @Patch('users/:userId/role')

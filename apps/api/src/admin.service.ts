@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
+import { NotificationService } from './notification.service';
 
 @Injectable()
 export class AdminService {
@@ -9,6 +10,7 @@ export class AdminService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private config: ConfigService,
+    private notificationService: NotificationService,
   ) {}
 
   private log(adminId: string, action: string, entity: string, entityId: string, details?: string) {
@@ -317,5 +319,39 @@ export class AdminService {
     return Array.from(merged.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([location, count]) => ({ location, count }));
+  }
+
+  async sendWarning(adminId: string, userId: string, message: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.notificationService.notify(
+      userId,
+      'admin_warning',
+      '⚠️ Platform warning',
+      message.trim(),
+    );
+
+    await this.log(adminId, 'SEND_WARNING', 'User', userId, message.trim().slice(0, 200));
+    return { success: true, userId, message };
+  }
+
+  async getContactMessages(skip = 0, take = 30) {
+    const [messages, total] = await Promise.all([
+      this.prisma.contactMessage.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.contactMessage.count(),
+    ]);
+    return { messages, total };
+  }
+
+  async resolveContactMessage(id: string) {
+    return this.prisma.contactMessage.update({
+      where: { id },
+      data: { status: 'resolved' },
+    });
   }
 }

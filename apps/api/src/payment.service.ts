@@ -32,6 +32,9 @@ type PaystackWebhookEvent = {
     paid_at?: string;
     metadata?: {
       orderId?: string;
+      userId?: string;
+      plan?: string;
+      type?: string;
     };
   };
 };
@@ -251,7 +254,27 @@ export class PaymentService {
       });
 
       if (!payment) {
-        this.logger.warn(`Webhook: payment not found for reference ${reference}`);
+        // Check if this is a subscription payment (no PaymentTransaction record)
+        const meta = event.data.metadata;
+        if (meta?.type === 'subscription' && meta.userId && meta.plan) {
+          const durationMs = 30 * 24 * 60 * 60 * 1000;
+          await this.prisma.subscription.upsert({
+            where: { userId: meta.userId },
+            create: { userId: meta.userId, plan: meta.plan, status: 'active', expiresAt: new Date(Date.now() + durationMs), reference },
+            update: { plan: meta.plan, status: 'active', startsAt: new Date(), expiresAt: new Date(Date.now() + durationMs), reference },
+          });
+          await this.prisma.businessProfile.updateMany({
+            where: { userId: meta.userId },
+            data: { premium: true },
+          });
+          this.notificationService?.notify(
+            meta.userId, 'subscription', '🎉 Subscription activated!',
+            `Your ${meta.plan === 'pro' ? 'Seller Pro' : 'Featured'} plan is now active. Enjoy your premium features.`,
+          ).catch(() => undefined);
+          this.logger.log(`Subscription activated via webhook: ${meta.userId} → ${meta.plan}`);
+        } else {
+          this.logger.warn(`Webhook: payment not found for reference ${reference}`);
+        }
         return { received: true };
       }
 

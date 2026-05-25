@@ -477,6 +477,13 @@ export const api = {
       { method: "POST", body: JSON.stringify({ plan }), strict: true },
     ),
 
+  verifySubscription: (reference: string) =>
+    request<{ success: boolean; plan: string; features: Record<string, unknown> }>(
+      "/subscription/verify",
+      { success: false, plan: "free", features: {} },
+      { method: "POST", body: JSON.stringify({ reference }), strict: true },
+    ),
+
   cancelSubscription: () =>
     request<{ message: string }>(
       "/subscription/cancel",
@@ -569,5 +576,22 @@ export const api = {
 
     deleteEvent: (id: string) =>
       request<void>(`/admin/events/${id}`, undefined, { method: "DELETE", strict: true }),
+
+    sendWarning: (userId: string, message: string) =>
+      request<{ success: boolean }>(`/admin/users/${userId}/warn`, {} as never, {
+        method: "POST", body: JSON.stringify({ message }), strict: true,
+      }),
+
+    getContactMessages: (skip = 0, take = 30) =>
+      request<{ messages: Array<{ id: string; name: string; email: string; subject: string; message: string; status: string; createdAt: string }>; total: number }>(
+        `/admin/contact-messages?skip=${skip}&take=${take}`,
+        { messages: [], total: 0 },
+        { strict: true },
+      ),
+
+    resolveContactMessage: (id: string) =>
+      request<{ id: string }>(`/admin/contact-messages/${id}/resolve`, {} as never, {
+        method: "PATCH", strict: true,
+      }),
   },
 };

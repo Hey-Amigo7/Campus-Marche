@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsIn } from 'class-validator';
+import { IsIn, IsString } from 'class-validator';
 import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { SubscriptionService, type PlanKey } from './subscription.service';
@@ -8,6 +8,11 @@ import { SubscriptionService, type PlanKey } from './subscription.service';
 class UpgradeDto {
   @IsIn(['pro', 'featured'])
   plan!: PlanKey;
+}
+
+class VerifyDto {
+  @IsString()
+  reference!: string;
 }
 
 @ApiTags('subscription')
@@ -27,6 +32,12 @@ export class SubscriptionController {
   @ApiOperation({ summary: 'Initialize a Paystack payment to upgrade plan' })
   async upgrade(@AuthUser() user: { id: string }, @Body() body: UpgradeDto) {
     return this.subscriptionService.initializeUpgrade(user.id, body.plan);
+  }
+
+  @Post('verify')
+  @ApiOperation({ summary: 'Verify a Paystack subscription payment and activate the plan' })
+  async verify(@AuthUser() user: { id: string }, @Body() body: VerifyDto) {
+    return this.subscriptionService.verifyAndActivate(user.id, body.reference);
   }
 
   @Post('cancel')

@@ -72,6 +72,47 @@ export class SubscriptionService {
     return { authorizationUrl: data.data.authorization_url, reference: data.data.reference };
   }
 
+  async verifyAndActivate(userId: string, reference: string) {
+    const paystackKey = this.config.get<string>('PAYSTACK_SECRET_KEY');
+    if (!paystackKey) throw new BadRequestException('Payment system is not configured');
+
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${paystackKey}` },
+    });
+    const result = (await response.json()) as {
+      status: boolean;
+      data?: { status: string; metadata?: { userId?: string; plan?: string; type?: string } };
+    };
+
+    if (!result.status || !result.data) throw new BadRequestException('Could not verify payment with Paystack');
+    if (result.data.status !== 'success') throw new BadRequestException('Payment was not successful');
+
+    const meta = result.data.metadata;
+    if (meta?.type !== 'subscription') throw new BadRequestException('Reference is not a subscription payment');
+
+    const plan = (meta.plan ?? 'pro') as PlanKey;
+    const targetUserId = meta.userId ?? userId;
+
+    await this.activateFromPayment(targetUserId, plan, reference);
+    return { success: true, plan, features: PLANS[plan] };
+  }
+
+  async getSubscriptionStatus(userId: string) {
+    return this.getSubscription(userId);
+  }
+
+  async checkCanCreateListing(userId: string): Promise<{ allowed: boolean; reason?: string }> {
+    const sub = await this.getSubscription(userId);
+    const count = await this.prisma.product.count({ where: { sellerId: userId, active: true } });
+    if (count >= sub.features.maxListings) {
+      return {
+        allowed: false,
+        reason: `Your ${sub.features.name} plan allows up to ${sub.features.maxListings} active listings. Upgrade to Seller Pro for unlimited listings.`,
+      };
+    }
+    return { allowed: true };
+  }
+
   async activateFromPayment(userId: string, plan: PlanKey, reference: string) {
     const durationDays = 30;
     const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);

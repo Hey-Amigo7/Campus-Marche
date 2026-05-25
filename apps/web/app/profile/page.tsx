@@ -9,6 +9,7 @@ import { clearAuthToken } from "@/lib/auth";
 import { AnalyticsCards } from "@/components/premium";
 import { Rating, SectionHeading, SellerBadge, EmptyState, LoadingSkeleton } from "@/components/ui";
 import { useProfile } from "@/hooks/use-api";
+import { UserAvatar } from "@/components/navbar";
 
 const GLASS_PANEL = {
   background:    "rgba(255,255,255,0.82)",
@@ -81,12 +82,9 @@ export default function ProfilePage() {
           />
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-center gap-4">
-              <span
-                className="grid h-20 w-20 place-items-center rounded-2xl text-lg font-black shadow-md"
-                style={{ background: "rgba(255,255,255,0.12)", color: "#ffffff", backdropFilter: "blur(8px)" }}
-              >
-                {profile.avatar}
-              </span>
+              <div className="h-20 w-20 overflow-hidden rounded-2xl shadow-md ring-2 ring-white/20">
+                <UserAvatar avatar={profile.avatar} name={profile.name} size={80} />
+              </div>
               <div>
                 <h1 className="text-3xl font-black">{profile.name}</h1>
                 <p className="mt-1 font-semibold" style={{ color: "#A8D4AE" }}>
