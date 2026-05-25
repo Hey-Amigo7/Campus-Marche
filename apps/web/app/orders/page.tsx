@@ -10,7 +10,7 @@ const tabs = ["To Buy", "To Sell", "Completed"] as const;
 
 export default function OrdersPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]>("To Buy");
-  const { data: orders = [], isLoading } = useOrders();
+  const { data: orders = [], isLoading, mutate } = useOrders();
 
   const visible = useMemo(() => {
     if (tab === "Completed") return orders.filter((order) => order.status === "Completed" || order.status === "Cancelled");
@@ -33,7 +33,7 @@ export default function OrdersPage() {
         {isLoading ? (
           <LoadingSkeleton />
         ) : visible.length ? (
-          visible.map((order) => <OrderCard key={order.id} order={order} />)
+          visible.map((order) => <OrderCard key={order.id} order={order} onStatusChange={mutate} />)
         ) : (
           <EmptyState title="No orders here yet" description="Your marketplace activity will appear here once you buy or sell an item." />
         )}

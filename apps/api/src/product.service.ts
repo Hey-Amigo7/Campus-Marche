@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { SubscriptionService } from './subscription.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 
 const FALLBACK_IMAGES: Record<string, string> = {
@@ -20,10 +21,22 @@ const SELLER_SELECT = {
   avatar: true,
   verified: true,
   premium: true,
+  business: {
+    select: { location: true },
+  },
 } as const;
 
+type SellerWithBusiness = {
+  id: string;
+  name: string;
+  avatar: string | null;
+  verified: boolean;
+  premium: boolean;
+  business?: { location: string | null } | null;
+};
+
 type ProductWithSeller = {
-  seller: { id: string; name: string; avatar: string; verified: boolean; premium: boolean };
+  seller: SellerWithBusiness;
   imageUrl: string | null;
   imageStyle: string;
   category: string | null;
@@ -33,7 +46,10 @@ type ProductWithSeller = {
 
 @Injectable()
 export class ProductService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private subscriptionService: SubscriptionService,
+  ) {}
 
   private normalizeTags(tags: string | null | undefined): string[] {
     if (!tags) return [];
@@ -45,9 +61,14 @@ export class ProductService {
 
   private withDefaults(product: ProductWithSeller) {
     const categoryKey = String(product.category ?? '').trim().toLowerCase();
+    const { business: sellerBusiness, ...sellerBase } = product.seller;
 
     return {
       ...product,
+      seller: {
+        ...sellerBase,
+        location: sellerBusiness?.location ?? null,
+      },
       imageUrl: product.imageUrl || FALLBACK_IMAGES[categoryKey] || FALLBACK_IMAGES.default,
       imageStyle: product.imageStyle || `category-${categoryKey || 'default'}`,
       tags: this.normalizeTags(product.tags as string),
@@ -97,6 +118,17 @@ export class ProductService {
     const business = await this.prisma.businessProfile.findUnique({ where: { userId: sellerId } });
     if (!business) {
       throw new BadRequestException('Create a business profile before listing products or services');
+    }
+
+    const [sub, activeCount] = await Promise.all([
+      this.subscriptionService.getSubscription(sellerId),
+      this.prisma.product.count({ where: { sellerId, active: true } }),
+    ]);
+
+    if (!this.subscriptionService.canListMore(sub, activeCount)) {
+      throw new ForbiddenException(
+        `Your free plan allows up to ${sub.features.maxListings} active listings. Upgrade to Seller Pro for unlimited listings.`,
+      );
     }
 
     const product = await this.prisma.product.create({

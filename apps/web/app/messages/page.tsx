@@ -2,7 +2,9 @@
 
 import { Loader2, Search, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
+import { useSocket, joinConversation, leaveConversation } from "@/hooks/use-socket";
 import { api } from "@/lib/api";
 import { cn, formatRelativeDate } from "@/lib/format";
 import { AuthGate } from "@/components/auth-gate";
@@ -15,22 +17,26 @@ function getInitials(name: string): string {
 }
 
 export default function MessagesPage() {
+  const searchParams = useSearchParams();
   const { data: conversations, isLoading: loadingConversations } = useConversations();
-  const [activeId, setActiveId]   = useState<string | null>(null);
+  const [activeId, setActiveId]   = useState<string | null>(searchParams.get("c"));
   const [query, setQuery]         = useState("");
   const [text, setText]           = useState("");
   const [sending, setSending]     = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { mutate }     = useSWRConfig();
+  const socketRef      = useSocket();
 
   const active = (conversations as ApiConversation[]).find((c) => c.id === activeId) ?? null;
 
   useEffect(() => {
+    const requested = searchParams.get("c");
+    if (requested) { setActiveId(requested); return; }
     if (!activeId && (conversations as ApiConversation[]).length > 0) {
       setActiveId((conversations as ApiConversation[])[0]!.id);
     }
-  }, [conversations, activeId]);
+  }, [conversations, activeId, searchParams]);
 
   const { data: messagesData, isLoading: loadingMessages } = useMessages(active?.id ?? null);
   const messages = messagesData ?? [];
@@ -38,6 +44,13 @@ export default function MessagesPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Join/leave socket room when active conversation changes
+  useEffect(() => {
+    if (!activeId) return;
+    joinConversation(socketRef.current, activeId);
+    return () => leaveConversation(socketRef.current, activeId);
+  }, [activeId, socketRef]);
 
   const visible = (conversations as ApiConversation[]).filter((c) => {
     const q = query.toLowerCase();

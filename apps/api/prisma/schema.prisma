@@ -44,6 +44,7 @@ model User {
   sentMessages       Message[]             @relation("SentMessages")
   conversationsAsA   Conversation[]        @relation("ConversationParticipantA")
   conversationsAsB   Conversation[]        @relation("ConversationParticipantB")
+  subscription       Subscription?
 }
 
 model BusinessProfile {
@@ -329,4 +330,36 @@ model DeliveryTracking {
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  status    String   @default("new")
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Subscription {
+  id        String    @id @default(cuid())
+  plan      String    @default("free")
+  status    String    @default("active")
+  startsAt  DateTime  @default(now())
+  expiresAt DateTime?
+  reference String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
 }

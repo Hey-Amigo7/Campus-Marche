@@ -52,6 +52,16 @@ export type BusinessProfile = {
   premium: boolean;
 };
 
+export type ProductSeller = {
+  id: string;
+  name: string;
+  verified: boolean;
+  premium: boolean;
+  rating?: number;
+  location?: string | null;
+  avatar?: string | null;
+};
+
 export type Product = {
   id: string;
   title: string;
@@ -60,10 +70,10 @@ export type Product = {
   location: string;
   description: string;
   condition: ProductCondition;
-  /** ISO date string from the API, or human-friendly string from mock data */
+  /** ISO date string from the API */
   postedAt: string;
   sellerId: string;
-  seller: Pick<Seller, "id" | "name" | "verified" | "premium" | "rating" | "location">;
+  seller: ProductSeller;
   featured: boolean;
   boosted: boolean;
   negotiable: boolean;
@@ -106,6 +116,7 @@ export type Order = {
   price?: number;
   meetupLocation?: string;
   counterpart?: string;
+  counterpartId?: string;
   role?: "buyer" | "seller" | "delivery";
   updatedAt: string;
   createdAt?: string;

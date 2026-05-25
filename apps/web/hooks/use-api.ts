@@ -4,6 +4,14 @@ import useSWR from "swr";
 import { api, type PaginatedProducts, type ProductFilters } from "@/lib/api";
 import type { ApiConversation, ApiMessage, Category, Notification, Product, Seller } from "@/types";
 
+export function useProduct(id: string | null) {
+  return useSWR<Product | null>(
+    id ? `product-${id}` : null,
+    () => api.getProduct(id!),
+    { fallbackData: null },
+  );
+}
+
 export function useProducts(filters?: ProductFilters) {
   const result = useSWR<PaginatedProducts>(
     ["products", filters],

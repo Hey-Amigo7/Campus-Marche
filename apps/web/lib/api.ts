@@ -1,4 +1,3 @@
-import { categories, products, sellers } from "@/constants/mock-data";
 import type {
   ApiConversation,
   ApiMessage,
@@ -37,7 +36,7 @@ async function request<T>(path: string, fallback: T, init: RequestOptions = {}):
   const { strict = false, revalidate, ...requestInit } = init;
 
   if (!API_BASE) {
-    if (strict) throw new Error("API is not configured. Set NEXT_PUBLIC_API_URL.");
+    if (strict) throw new Error("API is not configured. Set NEXT_PUBLIC_API_URL in apps/web/.env.local");
     return fallback;
   }
 
@@ -61,17 +60,31 @@ async function request<T>(path: string, fallback: T, init: RequestOptions = {}):
 
     if (!response.ok) {
       let message = `Request failed: ${response.status}`;
-      try {
-        const errorBody = (await response.json()) as { message?: unknown };
-        const msg = errorBody.message;
-        message = Array.isArray(msg) ? msg.join(" ") : typeof msg === "string" ? msg : message;
-      } catch {
-        // keep status-based message
+      const errContentType = response.headers.get("content-type") ?? "";
+      if (errContentType.includes("application/json")) {
+        try {
+          const errorBody = (await response.json()) as { message?: unknown };
+          const msg = errorBody.message;
+          message = Array.isArray(msg) ? msg.join(" ") : typeof msg === "string" ? msg : message;
+        } catch {
+          // keep status-based message
+        }
       }
       throw new Error(message);
     }
 
-    const data = (await response.json()) as unknown;
+    // Safely parse JSON — guard against empty/non-JSON bodies
+    let data: unknown;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (response.status === 204 || !contentType.includes("application/json")) {
+      return fallback;
+    }
+    try {
+      data = await response.json();
+    } catch {
+      if (strict) throw new Error("Server returned an unreadable response. Please try again.");
+      return fallback;
+    }
 
     if (Array.isArray(data)) {
       return data.map((item) =>
@@ -100,7 +113,7 @@ async function request<T>(path: string, fallback: T, init: RequestOptions = {}):
     if (strict) {
       if (error instanceof TypeError) {
         throw new Error(
-          "API server is not reachable. Please start the backend on http://localhost:3002 and try again.",
+          "API server is not reachable. Please start the backend (cd apps/api && pnpm start:dev) and try again.",
         );
       }
       throw error;
@@ -126,71 +139,38 @@ export type PaginatedProducts = {
   take: number;
 };
 
-export function filterProducts(filters: ProductFilters = {}): Product[] {
-  const query = filters.q?.toLowerCase().trim();
-  return products.filter((product) => {
-    const matchesQuery =
-      !query ||
-      product.title.toLowerCase().includes(query) ||
-      product.description.toLowerCase().includes(query) ||
-      product.tags.some((tag) => tag.toLowerCase().includes(query));
-    const matchesCategory = !filters.category || product.category === filters.category;
-    const matchesLocation =
-      !filters.location || product.location.toLowerCase().includes(filters.location.toLowerCase());
-    const matchesVerified = !filters.verified || product.seller.verified;
-    const matchesFeatured = !filters.featured || product.featured;
-    const matchesMin = !filters.minPrice || product.price >= filters.minPrice;
-    const matchesMax = !filters.maxPrice || product.price <= filters.maxPrice;
-    return matchesQuery && matchesCategory && matchesLocation && matchesVerified && matchesFeatured && matchesMin && matchesMax;
-  });
-}
-
-const mockPaginatedProducts: PaginatedProducts = {
-  data: products,
-  total: products.length,
-  skip: 0,
-  take: products.length,
-};
+const EMPTY_PAGE: PaginatedProducts = { data: [], total: 0, skip: 0, take: 0 };
 
 export const api = {
   getProducts: (filters?: ProductFilters, opts?: { skip?: number; take?: number }) => {
     const params = new URLSearchParams();
-    if (opts?.skip) params.set("skip", String(opts.skip));
-    if (opts?.take) params.set("take", String(opts.take));
+    if (filters?.q)        params.set("q",        filters.q);
+    if (filters?.category) params.set("category", filters.category);
+    if (filters?.location) params.set("location", filters.location);
+    if (opts?.skip)        params.set("skip",     String(opts.skip));
+    if (opts?.take)        params.set("take",     String(opts.take));
     const qs = params.toString();
-    return request<PaginatedProducts>(`/products${qs ? `?${qs}` : ""}`, {
-      data: filterProducts(filters),
-      total: filterProducts(filters).length,
-      skip: 0,
-      take: filterProducts(filters).length,
-    }, { revalidate: 60 });
+    return request<PaginatedProducts>(`/products${qs ? `?${qs}` : ""}`, EMPTY_PAGE, { revalidate: 60 });
   },
 
   getProduct: (id: string) =>
-    request<Product | undefined>(`/products/${id}`, products.find((p) => p.id === id), {
-      revalidate: 60,
-    }),
+    request<Product | null>(`/products/${id}`, null, { revalidate: 60, strict: true }),
 
   searchProducts: (q: string, opts?: { skip?: number; take?: number }) => {
-    const params = new URLSearchParams({ q: q });
+    const params = new URLSearchParams({ q });
     if (opts?.skip) params.set("skip", String(opts.skip));
     if (opts?.take) params.set("take", String(opts.take));
-    return request<PaginatedProducts>(`/products/search?${params.toString()}`, {
-      data: filterProducts({ q }),
-      total: filterProducts({ q }).length,
-      skip: 0,
-      take: filterProducts({ q }).length,
-    });
+    return request<PaginatedProducts>(`/products/search?${params.toString()}`, EMPTY_PAGE);
   },
 
   getCategories: () =>
-    request<Category[]>("/products/categories", categories, { revalidate: 300 }),
+    request<Category[]>("/products/categories", [], { revalidate: 300 }),
 
   createProduct: (payload: Partial<Product>) => {
     if (!hasAuthToken()) return Promise.reject(new Error("Authentication required"));
     return request<Product>(
       "/products",
-      { ...products[0]!, ...payload, id: `new-${Date.now()}` } as Product,
+      null as unknown as Product,
       { method: "POST", body: JSON.stringify(payload), strict: true },
     );
   },
@@ -246,9 +226,9 @@ export const api = {
       ),
 
     sendPhoneOtp: (phone: string) =>
-      request<void>(
+      request<{ message: string }>(
         "/auth/send-phone-otp",
-        undefined,
+        { message: "" },
         { method: "POST", body: JSON.stringify({ phone }), strict: true },
       ),
 
@@ -373,9 +353,7 @@ export const api = {
     ),
 
   getSeller: (id: string) =>
-    request<Seller | undefined>(`/sellers/${id}`, sellers.find((s) => s.id === id), {
-      revalidate: 60,
-    }),
+    request<Seller | null>(`/sellers/${id}`, null, { revalidate: 60 }),
 
   getProfile: () => request<Seller | null>("/users/profile", null),
 
@@ -437,6 +415,47 @@ export const api = {
   requestEmailVerification: () =>
     request<{ message: string }>(
       "/auth/send-verification",
+      { message: "" },
+      { method: "POST", strict: true },
+    ),
+
+  deleteAccount: () =>
+    request<{ message: string }>(
+      "/users/account",
+      { message: "" },
+      { method: "DELETE", strict: true },
+    ),
+
+  getStats: () =>
+    request<{ users: number; products: number; orders: number }>(
+      "/stats",
+      { users: 0, products: 0, orders: 0 },
+      { revalidate: 300 },
+    ),
+
+  submitContact: (payload: { name: string; email: string; subject: string; message: string }) =>
+    request<{ id: string; message: string }>(
+      "/contact",
+      { id: "", message: "" },
+      { method: "POST", body: JSON.stringify(payload), strict: true },
+    ),
+
+  getSubscription: () =>
+    request<{ plan: string; status: string; expiresAt: string | null; features: Record<string, unknown> }>(
+      "/subscription/me",
+      { plan: "free", status: "active", expiresAt: null, features: {} },
+    ),
+
+  upgradeSubscription: (plan: "pro" | "featured") =>
+    request<{ authorizationUrl: string; reference: string }>(
+      "/subscription/upgrade",
+      { authorizationUrl: "", reference: "" },
+      { method: "POST", body: JSON.stringify({ plan }), strict: true },
+    ),
+
+  cancelSubscription: () =>
+    request<{ message: string }>(
+      "/subscription/cancel",
       { message: "" },
       { method: "POST", strict: true },
     ),

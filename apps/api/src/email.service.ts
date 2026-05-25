@@ -16,13 +16,20 @@ export class EmailService {
     this.fromAddress = config.get<string>('SMTP_FROM') ?? 'noreply@campusmarche.com';
 
     if (host && user && pass) {
-      this.transporter = createTransport({
-        host,
-        port,
-        secure: port === 465,
-        auth: { user, pass },
-      });
-      this.logger.log(`Email transport configured (${host}:${port})`);
+      const isGmail = host.toLowerCase().includes('gmail');
+      this.transporter = createTransport(
+        isGmail
+          ? { service: 'gmail', auth: { user, pass } }
+          : {
+              host,
+              port,
+              secure: port === 465,
+              requireTLS: port !== 465,
+              auth: { user, pass },
+              tls: { minVersion: 'TLSv1.2' },
+            },
+      );
+      this.logger.log(`Email transport configured (${isGmail ? 'gmail-service' : `${host}:${port}`})`);
     } else {
       this.transporter = null;
       this.logger.warn('SMTP not configured — emails will be logged to console only');
@@ -70,6 +77,27 @@ export class EmailService {
       <p>— Campus Marche</p>
     `;
     await this.send(to, subject, html);
+  }
+
+  async sendContactMessage(senderName: string, senderEmail: string, subject: string, message: string) {
+    const safeMsg = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html = `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:linear-gradient(135deg,#0F172A,#102542,#1a3a2a);padding:24px;border-radius:12px 12px 0 0">
+          <h2 style="color:#fff;margin:0;font-size:20px;font-weight:900">Campus Marche — Contact Message</h2>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px">
+          <table style="border-collapse:collapse;width:100%;margin-bottom:20px">
+            <tr><td style="padding:6px 0;color:#64748b;font-size:13px;width:80px">From:</td><td style="padding:6px 0;font-weight:700;color:#0F172A">${senderName} &lt;${senderEmail}&gt;</td></tr>
+            <tr><td style="padding:6px 0;color:#64748b;font-size:13px">Subject:</td><td style="padding:6px 0;font-weight:700;color:#0F172A">${subject}</td></tr>
+          </table>
+          <div style="background:#f8fafc;border-left:3px solid #7FB685;padding:16px;border-radius:0 8px 8px 0">
+            <p style="margin:0;white-space:pre-wrap;color:#334155;line-height:1.7">${safeMsg}</p>
+          </div>
+          <p style="margin-top:20px;font-size:12px;color:#94a3b8">Received via Campus Marche contact form · Reply to ${senderEmail}</p>
+        </div>
+      </div>`;
+    await this.send(this.fromAddress, `[Contact] ${subject}`, html);
   }
 
   private async send(to: string, subject: string, html: string) {

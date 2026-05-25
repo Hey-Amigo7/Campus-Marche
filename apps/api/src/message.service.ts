@@ -1,9 +1,15 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import type { ChatGateway } from './chat.gateway';
+import type { NotificationService } from './notification.service';
 
 @Injectable()
 export class MessageService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private chatGateway?: ChatGateway,
+    @Optional() private notificationService?: NotificationService,
+  ) {}
 
   async getConversations(userId: string) {
     const [conversations, unreadGroups] = await Promise.all([
@@ -38,14 +44,11 @@ export class MessageService {
     return conversations.map((conv) => {
       const other = conv.participantAId === userId ? conv.participantB : conv.participantA;
       const lastMessage = conv.messages[0];
-
       return {
         id: conv.id,
         user: other,
         product: conv.product,
-        lastMessage: lastMessage
-          ? { content: lastMessage.content, createdAt: lastMessage.createdAt }
-          : null,
+        lastMessage: lastMessage ? { content: lastMessage.content, createdAt: lastMessage.createdAt } : null,
         unread: unreadByConversation.get(conv.id) ?? 0,
         updatedAt: conv.updatedAt,
       };
@@ -53,34 +56,23 @@ export class MessageService {
   }
 
   async getOrCreateConversation(userId: string, recipientId: string, productId?: string) {
-    if (userId === recipientId) {
-      throw new BadRequestException('Cannot start a conversation with yourself');
-    }
+    if (userId === recipientId) throw new BadRequestException('Cannot start a conversation with yourself');
 
     const [aId, bId] = [userId, recipientId].sort();
 
     const existing = await this.prisma.conversation.findFirst({
-      where: {
-        participantAId: aId,
-        participantBId: bId,
-        productId: productId ?? null,
-      },
+      where: { participantAId: aId, participantBId: bId, productId: productId ?? null },
     });
 
     if (existing) return existing;
 
     return this.prisma.conversation.create({
-      data: {
-        participantAId: aId!,
-        participantBId: bId!,
-        productId: productId ?? null,
-      },
+      data: { participantAId: aId!, participantBId: bId!, productId: productId ?? null },
     });
   }
 
   async getMessages(conversationId: string, userId: string, opts: { skip?: number; take?: number } = {}) {
     const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
-
     if (!conversation) throw new NotFoundException('Conversation not found');
 
     const isParticipant = conversation.participantAId === userId || conversation.participantBId === userId;
@@ -102,15 +94,11 @@ export class MessageService {
       take,
     });
 
-    return messages.map((msg) => ({
-      ...msg,
-      mine: msg.senderId === userId,
-    }));
+    return messages.map((msg) => ({ ...msg, mine: msg.senderId === userId }));
   }
 
   async sendMessage(conversationId: string, userId: string, content: string) {
     const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
-
     if (!conversation) throw new NotFoundException('Conversation not found');
 
     const isParticipant = conversation.participantAId === userId || conversation.participantBId === userId;
@@ -125,12 +113,22 @@ export class MessageService {
         data: { conversationId, senderId: userId, content: trimmedContent },
         include: { sender: { select: { id: true, name: true, avatar: true } } },
       }),
-      this.prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updatedAt: new Date() },
-      }),
+      this.prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } }),
     ]);
 
-    return { ...message, mine: true };
+    const result = { ...message, mine: true };
+
+    const recipientId =
+      conversation.participantAId === userId ? conversation.participantBId : conversation.participantAId;
+
+    // Emit real-time message to conversation room
+    this.chatGateway?.emitNewMessage(conversationId, { ...result, mine: false }, recipientId);
+
+    // In-app notification for recipient
+    this.notificationService
+      ?.notify(recipientId, 'message', 'New message', `You have a new message`)
+      .catch(() => undefined);
+
+    return result;
   }
 }

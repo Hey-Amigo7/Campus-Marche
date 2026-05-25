@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 import { useOrder } from "@/hooks/use-api";
 import { useToast } from "@/providers/toast-provider";
 import { AuthGate } from "@/components/auth-gate";
+import { OrderTimeline } from "@/components/order-timeline";
 import { ProductArt } from "@/components/product-card";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 
@@ -34,6 +35,35 @@ const MOMO_PROVIDERS = [
   { value: "vod", label: "Telecel Cash" },
   { value: "tgo", label: "AirtelTigo Money" },
 ] as const;
+
+function ChatButton({ counterpartId, productId }: { counterpartId: string; productId: string }) {
+  const router = useRouter();
+  const { error } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  async function handleChat() {
+    setLoading(true);
+    try {
+      const { id } = await api.startConversation(counterpartId, productId);
+      router.push(`/messages?c=${id}`);
+    } catch (err) {
+      error("Could not open chat", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleChat}
+      disabled={loading}
+      className="btn-secondary mt-3 w-full justify-center text-sm disabled:opacity-60"
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+      {loading ? "Opening…" : "Message"}
+    </button>
+  );
+}
 
 function headingToCompass(deg: number): string {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -570,6 +600,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* ── Right sidebar ── */}
           <aside className="space-y-4">
+            {/* Order timeline */}
+            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+              <h3 className="mb-4 text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Order progress</h3>
+              <OrderTimeline status={order.status} />
+            </div>
+
             {/* Order meta */}
             <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
               <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Order info</h3>
@@ -628,19 +664,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* Chat */}
-            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
-              <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Contact</h3>
-              <p className="mt-2 text-sm text-slate-500">
-                {role === "buyer" ? "Message the seller" : "Message the buyer"} directly about this order.
-              </p>
-              <Link
-                href="/messages"
-                className="btn-secondary mt-3 w-full justify-center text-sm"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Open messages
-              </Link>
-            </div>
+            {order.counterpartId ? (
+              <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+                <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Contact</h3>
+                <p className="mt-2 text-sm text-slate-500">
+                  {role === "buyer" ? "Message the seller" : "Message the buyer"} directly about this order.
+                </p>
+                <ChatButton counterpartId={order.counterpartId} productId={order.product.id} />
+              </div>
+            ) : null}
           </aside>
         </div>
       </div>

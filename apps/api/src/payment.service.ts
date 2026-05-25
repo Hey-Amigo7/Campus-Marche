@@ -1,7 +1,8 @@
 import { createHmac } from 'node:crypto';
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
+import type { NotificationService } from './notification.service';
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -69,6 +70,7 @@ export class PaymentService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    @Optional() private notificationService?: NotificationService,
   ) {}
 
   private getPaystackSecret() {
@@ -200,14 +202,19 @@ export class PaymentService {
     });
 
     if (paid) {
-      await this.prisma.order.update({
+      const order = await this.prisma.order.update({
         where: { id: payment.orderId },
-        data: {
-          status: 'In progress',
-          paymentStatus: 'Paid',
-          escrowStatus: 'Held in escrow',
-        },
+        data: { status: 'In progress', paymentStatus: 'Paid', escrowStatus: 'Held in escrow' },
+        include: { product: { select: { sellerId: true, title: true } } },
       });
+
+      this.notificationService?.notify(
+        payment.userId, 'payment', 'Payment confirmed', 'Your payment is held in escrow and the seller has been notified.',
+      ).catch(() => undefined);
+
+      this.notificationService?.notify(
+        order.product.sellerId, 'payment', 'Order payment received', `Payment for "${order.product.title}" is held in escrow. Please arrange the handover.`,
+      ).catch(() => undefined);
     }
 
     return updatedPayment;

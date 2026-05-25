@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Bell, Menu, MessageSquare, ShoppingBag, UserRound, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, LogOut, Menu, MessageSquare, Settings, ShoppingBag, UserRound, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/format";
-import { hasAuthToken } from "@/lib/auth";
+import { clearAuthToken, hasAuthToken } from "@/lib/auth";
 import { Logo, SearchBar } from "@/components/ui";
 import { useNotifications } from "@/hooks/use-api";
 
@@ -38,15 +38,89 @@ function NotificationBell() {
   );
 }
 
+function AccountMenu({ onLogout }: { onLogout: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="grid h-10 w-10 place-items-center rounded-xl border transition-all hover:shadow-sm"
+        style={{
+          borderColor: "rgba(226,232,240,0.70)",
+          background:  "rgba(255,255,255,0.80)",
+          color:       "#1E293B",
+        }}
+        aria-label="Account menu"
+      >
+        <UserRound className="h-5 w-5" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-12 z-50 min-w-[180px] overflow-hidden rounded-2xl py-1.5 shadow-xl"
+          style={{
+            background:    "rgba(255,255,255,0.96)",
+            backdropFilter:"blur(20px)",
+            border:        "1px solid rgba(226,232,240,0.70)",
+          }}
+        >
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50"
+            style={{ color: "#1E293B" }}
+          >
+            <UserRound className="h-4 w-4" style={{ color: "#64748B" }} />
+            My profile
+          </Link>
+          <Link
+            href="/profile/edit"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50"
+            style={{ color: "#1E293B" }}
+          >
+            <Settings className="h-4 w-4" style={{ color: "#64748B" }} />
+            Settings
+          </Link>
+          <div className="my-1 border-t" style={{ borderColor: "rgba(226,232,240,0.60)" }} />
+          <button
+            onClick={() => { setOpen(false); onLogout(); }}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-red-50"
+            style={{ color: "#DC2626" }}
+          >
+            <LogOut className="h-4 w-4" />
+            Log out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
 
-  const accountHref  = isAuthenticated ? "/profile"         : "/login?next=/profile";
-  const accountLabel = isAuthenticated ? "Profile"          : "Log in";
+  function handleLogout() {
+    clearAuthToken();
+    setIsAuthenticated(false);
+    router.push("/");
+    router.refresh();
+  }
 
   return (
     <header
@@ -91,19 +165,25 @@ export function Navbar() {
             <ShoppingBag className="h-4 w-4" />
             Sell
           </Link>
-          {isAuthenticated ? <NotificationBell /> : null}
-          <Link
-            href={accountHref}
-            className="grid h-10 w-10 place-items-center rounded-xl border transition-all hover:shadow-sm"
-            style={{
-              borderColor: "rgba(226,232,240,0.70)",
-              background:  "rgba(255,255,255,0.80)",
-              color:       "#1E293B",
-            }}
-            aria-label={accountLabel}
-          >
-            <UserRound className="h-5 w-5" />
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <NotificationBell />
+              <AccountMenu onLogout={handleLogout} />
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className="grid h-10 w-10 place-items-center rounded-xl border transition-all hover:shadow-sm"
+              style={{
+                borderColor: "rgba(226,232,240,0.70)",
+                background:  "rgba(255,255,255,0.80)",
+                color:       "#1E293B",
+              }}
+              aria-label="Log in"
+            >
+              <UserRound className="h-5 w-5" />
+            </Link>
+          )}
         </div>
 
         <button
@@ -134,7 +214,9 @@ export function Navbar() {
               ...links,
               { href: "/sell",          label: "Sell"          },
               { href: "/notifications", label: "Notifications" },
-              { href: accountHref,      label: accountLabel    },
+              ...(isAuthenticated
+                ? [{ href: "/profile", label: "Profile" }]
+                : [{ href: "/login",   label: "Log in"   }]),
             ].map((link) => (
               <Link
                 key={link.href}
@@ -153,6 +235,14 @@ export function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {isAuthenticated && (
+              <button
+                onClick={() => { setOpen(false); handleLogout(); }}
+                className="rounded-xl px-4 py-3 text-left text-sm font-semibold text-red-600 transition-all hover:bg-red-50"
+              >
+                Log out
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -162,9 +252,16 @@ export function Navbar() {
 
 export function MobileNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
+
+  function handleLogout() {
+    clearAuthToken();
+    router.push("/");
+    router.refresh();
+  }
 
   const items = [
     { href: "/products",  label: "Shop",    icon: ShoppingBag },
@@ -207,6 +304,10 @@ export function MobileNav() {
           );
         })}
       </div>
+      {/* Hidden logout trigger — only here for the mobile logout in hamburger, not visible */}
+      {isAuthenticated && (
+        <button className="sr-only" onClick={handleLogout}>Log out</button>
+      )}
     </nav>
   );
 }

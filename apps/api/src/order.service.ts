@@ -1,5 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import type { NotificationService } from './notification.service';
 
 const ALLOWED_BUYER_TRANSITIONS: Record<string, string[]> = {
   'Payment pending': [],
@@ -19,7 +20,10 @@ const ALLOWED_SELLER_TRANSITIONS: Record<string, string[]> = {
 
 @Injectable()
 export class OrderService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private notificationService?: NotificationService,
+  ) {}
 
   async getForUser(userId: string) {
     const orders = await this.prisma.order.findMany({
@@ -47,6 +51,7 @@ export class OrderService {
         ...order,
         meetupLocation: order.product.location,
         counterpart: isBuyer ? order.product.seller.name : order.buyer.name,
+        counterpartId: isBuyer ? order.product.seller.id : order.buyer.id,
         role: isBuyer ? 'buyer' : 'seller',
       };
     });
@@ -91,6 +96,7 @@ export class OrderService {
       role,
       meetupLocation: order.product.location,
       counterpart: isBuyer ? order.product.seller.name : order.buyer.name,
+      counterpartId: isBuyer ? order.product.seller.id : order.buyer.id,
     };
   }
 
@@ -103,9 +109,16 @@ export class OrderService {
     if (!product) throw new NotFoundException('Product not found or no longer available');
     if (product.sellerId === data.buyerId) throw new BadRequestException('You cannot buy your own listing');
 
-    return this.prisma.order.create({
+    const order = await this.prisma.order.create({
       data: { buyerId: data.buyerId, productId: data.productId, price: product.price },
+      include: { product: { select: { title: true, sellerId: true } } },
     });
+
+    this.notificationService
+      ?.notify(product.sellerId, 'order', 'New order received', `Someone placed an order for your listing.`)
+      .catch(() => undefined);
+
+    return order;
   }
 
   async updateStatus(id: string, userId: string, newStatus: string) {
@@ -131,7 +144,15 @@ export class OrderService {
       );
     }
 
-    return this.prisma.order.update({ where: { id }, data: { status: newStatus } });
+    const updated = await this.prisma.order.update({ where: { id }, data: { status: newStatus } });
+
+    const notifyId = isBuyer ? order.product.sellerId : order.buyerId;
+    const actor = isBuyer ? 'Buyer' : 'Seller';
+    this.notificationService
+      ?.notify(notifyId, 'order_status', 'Order updated', `${actor} changed the order status to "${newStatus}".`)
+      .catch(() => undefined);
+
+    return updated;
   }
 
   async assignDeliveryPerson(orderId: string, requesterId: string, deliveryPersonId: string) {

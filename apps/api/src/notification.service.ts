@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import type { ChatGateway } from './chat.gateway';
 
 @Injectable()
 export class NotificationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private chatGateway?: ChatGateway,
+  ) {}
 
   async getForUser(userId: string) {
     return this.prisma.notification.findMany({
@@ -28,6 +32,12 @@ export class NotificationService {
   }
 
   async create(data: { userId: string; type: string; title: string; body: string }) {
-    return this.prisma.notification.create({ data });
+    const notification = await this.prisma.notification.create({ data });
+    this.chatGateway?.emitNotification(data.userId, notification);
+    return notification;
+  }
+
+  async notify(userId: string, type: string, title: string, body: string) {
+    return this.create({ userId, type, title, body });
   }
 }

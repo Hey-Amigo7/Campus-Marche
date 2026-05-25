@@ -184,7 +184,7 @@ export class AuthService {
     return { message: 'A new verification code has been sent to your email' };
   }
 
-  async sendPhoneOtp(userId: string, phone: string): Promise<void> {
+  async sendPhoneOtp(userId: string, phone: string): Promise<{ message: string }> {
     const normalizedPhone = this.smsService.normalizeGhanaPhone(phone);
 
     await this.prisma.user.update({ where: { id: userId }, data: { phone: normalizedPhone } });
@@ -202,6 +202,7 @@ export class AuthService {
     });
 
     await this.smsService.sendOtp(normalizedPhone, code);
+    return { message: 'Verification code sent to your phone' };
   }
 
   async verifyPhoneOtp(userId: string, code: string) {

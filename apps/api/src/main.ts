@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './filters/all-exceptions.filter';
 import { parseAllowedOrigins } from './config/env.validation';
 
 async function bootstrap() {
@@ -38,6 +39,8 @@ async function bootstrap() {
     },
     credentials: true,
   });
+
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({

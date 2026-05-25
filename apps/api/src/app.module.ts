@@ -11,6 +11,9 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { BusinessController } from './business.controller';
 import { BusinessService } from './business.service';
+import { ChatGateway } from './chat.gateway';
+import { ContactController } from './contact.controller';
+import { ContactService } from './contact.service';
 import { EmailService } from './email.service';
 import { validateEnv } from './config/env.validation';
 import { EventController } from './event.controller';
@@ -37,6 +40,8 @@ import { ProductService } from './product.service';
 import { SellerController } from './seller.controller';
 import { SellerService } from './seller.service';
 import { SmsService } from './sms.service';
+import { SubscriptionController } from './subscription.controller';
+import { SubscriptionService } from './subscription.service';
 import { UserController } from './user.controller';
 
 @Module({
@@ -69,6 +74,7 @@ import { UserController } from './user.controller';
     AppController,
     AuthController,
     BusinessController,
+    ContactController,
     EventController,
     MessageController,
     NotificationController,
@@ -79,6 +85,7 @@ import { UserController } from './user.controller';
     ReviewController,
     SavedItemsController,
     SellerController,
+    SubscriptionController,
     UploadController,
     UserController,
   ],
@@ -87,6 +94,8 @@ import { UserController } from './user.controller';
     AppService,
     AuthService,
     BusinessService,
+    ChatGateway,
+    ContactService,
     EmailService,
     EventService,
     MessageService,
@@ -102,6 +111,7 @@ import { UserController } from './user.controller';
     SavedItemsService,
     SellerService,
     SmsService,
+    SubscriptionService,
   ],
 })
 export class AppModule {}

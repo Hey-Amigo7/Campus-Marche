@@ -9,8 +9,8 @@ import { api } from "@/lib/api";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 import { BuyNowButton } from "@/components/buy-now-button";
 import { ProductArt, ProductGrid } from "@/components/product-card";
-import { Rating, SectionHeading, SellerBadge } from "@/components/ui";
-import { useProducts, useReviews, useSavedStatus } from "@/hooks/use-api";
+import { EmptyState, Rating, SectionHeading, SellerBadge } from "@/components/ui";
+import { useProduct, useProducts, useReviews, useSavedStatus } from "@/hooks/use-api";
 import { hasAuthToken } from "@/lib/auth";
 
 const GLASS_PANEL = {
@@ -67,7 +67,13 @@ function ReviewList({ productId }: { productId: string }) {
   const { data: reviews, isLoading } = useReviews(productId);
 
   if (isLoading) return <p className="text-sm" style={{ color: "#94A3B8" }}>Loading reviews…</p>;
-  if (!reviews || reviews.length === 0) return <p className="text-sm" style={{ color: "#94A3B8" }}>No reviews yet.</p>;
+  if (!reviews || reviews.length === 0) {
+    return (
+      <p className="text-sm italic" style={{ color: "#94A3B8" }}>
+        No reviews yet. Be the first to leave one after your purchase.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -100,13 +106,21 @@ function ReviewList({ productId }: { productId: string }) {
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data: products } = useProducts();
-  const product = products.find((p) => p.id === id);
 
-  if (products.length > 0 && !product) notFound();
-
+  const { data: product, isLoading, error } = useProduct(id);
   const { data: allProducts } = useProducts();
-  const similar = allProducts.filter((item) => item.category === product?.category && item.id !== id).slice(0, 4);
+
+  if (isLoading) {
+    return (
+      <div className="container-shell flex min-h-[400px] items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#7FB685" }} />
+      </div>
+    );
+  }
+
+  if (error || product === null) {
+    notFound();
+  }
 
   if (!product) {
     return (
@@ -117,6 +131,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const seller = product.seller;
+  const sellerLocation = seller.location ?? null;
+  const sellerRating = seller.rating ?? 0;
+
+  const similar = allProducts
+    .filter((item) => item.category === product.category && item.id !== id)
+    .slice(0, 4);
 
   return (
     <div className="container-shell py-8 md:py-10">
@@ -132,24 +152,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             />
           </div>
 
-          <div className="mt-4 grid grid-cols-4 gap-3">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <button
-                key={index}
-                className="overflow-hidden rounded-2xl p-1 transition-all hover:-translate-y-0.5"
-                style={{ border: "1px solid rgba(226,232,240,0.70)", background: "rgba(255,255,255,0.80)" }}
-                aria-label={`Thumbnail ${index + 1}`}
-              >
-                <ProductArt
-                  style={product.imageStyle}
-                  imageUrl={product.imageUrl}
-                  title={product.title}
-                  className="min-h-20 rounded-xl"
-                />
-              </button>
-            ))}
-          </div>
-
           <div className="mt-4 overflow-hidden rounded-3xl" style={GLASS_PANEL}>
             <div className="max-h-[420px] space-y-6 overflow-y-auto p-6">
               <div className="flex items-center justify-between gap-3">
@@ -162,21 +164,29 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   </span>
                   <span>
                     <span className="block font-black" style={{ color: "#1E293B" }}>{seller.name}</span>
-                    <span className="block text-sm font-semibold" style={{ color: "#64748B" }}>{seller.location}</span>
+                    {sellerLocation ? (
+                      <span className="block text-sm font-semibold" style={{ color: "#64748B" }}>{sellerLocation}</span>
+                    ) : null}
                   </span>
                 </Link>
                 <SellerBadge verified={seller.verified} premium={seller.premium} compact />
               </div>
-              <div className="flex items-center justify-between">
-                <Rating value={seller.rating} />
+              {sellerRating > 0 ? (
+                <div className="flex items-center justify-between">
+                  <Rating value={sellerRating} />
+                  <Link href={`/store/${seller.id}`} className="text-sm font-bold hover:underline" style={{ color: "#5A9460" }}>
+                    View storefront
+                  </Link>
+                </div>
+              ) : (
                 <Link href={`/store/${seller.id}`} className="text-sm font-bold hover:underline" style={{ color: "#5A9460" }}>
-                  View storefront
+                  View storefront →
                 </Link>
+              )}
+              <div className="border-t pt-4" style={{ borderColor: "rgba(226,232,240,0.50)" }}>
+                <p className="mb-3 text-sm font-black" style={{ color: "#64748B" }}>Reviews</p>
+                <ReviewList productId={product.id} />
               </div>
-              <p className="text-sm leading-6" style={{ color: "#64748B" }}>
-                Trusted Campus Marche seller available around {seller.location}.
-              </p>
-              <ReviewList productId={product.id} />
             </div>
           </div>
         </section>
@@ -253,7 +263,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
       <section className="mt-10">
         <SectionHeading title="Similar items" subtitle="Related products from the same category." />
-        <ProductGrid products={similar.length > 0 ? similar : allProducts.slice(0, 4)} />
+        {similar.length > 0 ? (
+          <ProductGrid products={similar} />
+        ) : (
+          <EmptyState
+            title="No similar items yet"
+            description="Be the first to list something in this category."
+            action={<Link href="/sell" className="btn-primary">Create listing</Link>}
+          />
+        )}
       </section>
     </div>
   );

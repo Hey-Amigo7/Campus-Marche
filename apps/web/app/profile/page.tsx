@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { BriefcaseBusiness, Crown, Edit, ShieldCheck, Star } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BriefcaseBusiness, Crown, Edit, LogOut, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { api } from "@/lib/api";
+import { clearAuthToken } from "@/lib/auth";
 import { AnalyticsCards } from "@/components/premium";
 import { ProductGrid } from "@/components/product-card";
 import { Rating, SectionHeading, SellerBadge, EmptyState, LoadingSkeleton } from "@/components/ui";
@@ -15,8 +19,35 @@ const GLASS_PANEL = {
 } as const;
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: products = [], isLoading: productsLoading } = useProducts();
+
+  const [deleteStep, setDeleteStep] = useState<"idle" | "confirm">("idle");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  function handleLogout() {
+    clearAuthToken();
+    router.push("/");
+    router.refresh();
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await api.deleteAccount();
+      clearAuthToken();
+      router.push("/?deleted=1");
+      router.refresh();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete account.");
+      setDeleteStep("idle");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   const listed = profile ? products.filter((p) => p.seller?.id === profile.id) : [];
 
@@ -158,6 +189,53 @@ export default function ProfilePage() {
               <ShieldCheck className="h-4 w-4" />
               Verify phone
             </Link>
+            <div className="mt-4 border-t pt-4 space-y-2" style={{ borderColor: "rgba(226,232,240,0.60)" }}>
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-bold transition-colors hover:bg-red-50"
+                style={{ color: "#DC2626", borderColor: "rgba(220,38,38,0.20)" }}
+              >
+                <LogOut className="h-4 w-4" />
+                Log out
+              </button>
+
+              {deleteStep === "idle" ? (
+                <button
+                  onClick={() => setDeleteStep("confirm")}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2 text-xs font-semibold transition-colors hover:bg-red-50"
+                  style={{ color: "#9CA3AF" }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete account
+                </button>
+              ) : (
+                <div className="rounded-2xl border p-3 space-y-2" style={{ borderColor: "rgba(220,38,38,0.30)", background: "rgba(254,242,242,0.60)" }}>
+                  <p className="text-xs font-bold" style={{ color: "#DC2626" }}>
+                    This will permanently remove your personal data and deactivate all listings. This cannot be undone.
+                  </p>
+                  {deleteError ? (
+                    <p className="text-xs font-semibold" style={{ color: "#DC2626" }}>{deleteError}</p>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setDeleteStep("idle"); setDeleteError(null); }}
+                      className="flex-1 rounded-xl border px-3 py-2 text-xs font-bold transition-colors hover:bg-slate-50"
+                      style={{ color: "#64748B", borderColor: "rgba(226,232,240,0.70)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteLoading}
+                      className="flex-1 rounded-xl px-3 py-2 text-xs font-bold text-white transition-colors"
+                      style={{ background: deleteLoading ? "#FCA5A5" : "#DC2626" }}
+                    >
+                      {deleteLoading ? "Deleting…" : "Yes, delete"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </aside>
         </div>
       </section>
@@ -181,25 +259,6 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* Reviews */}
-      {profile.business ? (
-        <section className="mt-10">
-          <SectionHeading title="Reviews" />
-          <div className="grid gap-4 md:grid-cols-3">
-            {[
-              { stars: 5,   text: "Great communication and quick meetup. Recommended for buyers and sellers.", author: "Campus Marketplace Team" },
-              { stars: 4.5, text: "Fast responses and trusted delivery on campus.",                            author: "Study Circle"            },
-              { stars: 4.8, text: "Great seller — helped coordinate a secure pickup at the main gate.",         author: "HTU Buyer"               },
-            ].map((r) => (
-              <div key={r.author} className="rounded-2xl p-5" style={GLASS_PANEL}>
-                <Rating value={r.stars} />
-                <p className="mt-3 text-sm leading-6" style={{ color: "#64748B" }}>{r.text}</p>
-                <p className="mt-3 text-xs font-black" style={{ color: "#94A3B8" }}>{r.author}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

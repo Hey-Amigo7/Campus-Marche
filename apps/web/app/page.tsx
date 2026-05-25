@@ -143,17 +143,15 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="mx-auto mt-10 grid max-w-xs grid-cols-3 gap-3">
-              {[
-                { value: "2.8k+",  label: "students",   bg: "rgba(127,182,133,0.12)", color: "#A8D4AE"  },
-                { value: "540+",   label: "listings",    bg: "rgba(198,139,89,0.12)",  color: "#C68B59"   },
-                { value: "4.8/5",  label: "trust score", bg: "rgba(255,255,255,0.07)", color: "#CBD5E1"   },
-              ].map(({ value, label, bg, color }) => (
-                <div key={label} className="rounded-2xl p-4" style={{ background: bg }}>
-                  <p className="text-xl font-black" style={{ color }}>{value}</p>
-                  <p className="mt-0.5 text-xs font-semibold" style={{ color: "#64748B" }}>{label}</p>
-                </div>
-              ))}
+            <div className="mx-auto mt-10 max-w-xs">
+              <div
+                className="rounded-2xl px-5 py-3 text-center"
+                style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.20)" }}
+              >
+                <p className="text-sm font-bold" style={{ color: "#A8D4AE" }}>
+                  HTU&apos;s student marketplace — free to join, free to list
+                </p>
+              </div>
             </div>
           </div>
         </div>
