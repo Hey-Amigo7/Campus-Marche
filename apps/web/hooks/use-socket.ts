@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import { getAuthToken } from "@/lib/auth";
 
@@ -26,6 +26,7 @@ async function loadSocket() {
 export function useSocket() {
   const { mutate } = useSWRConfig();
   const socketRef = useRef<SocketLike | null>(null);
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -46,6 +47,9 @@ export function useSocket() {
 
       socketRef.current = socket;
 
+      const onConnect = () => setConnected(true);
+      const onDisconnect = () => setConnected(false);
+
       const onMessage = (msg: unknown) => {
         const m = msg as { conversationId?: string };
         if (m.conversationId) void mutate(`messages-${m.conversationId}`);
@@ -60,6 +64,8 @@ export function useSocket() {
         void mutate("notifications");
       };
 
+      socket.on("connect", onConnect);
+      socket.on("disconnect", onDisconnect);
       socket.on("message:new", onMessage);
       socket.on("conversations:update", onConversationsUpdate);
       socket.on("notification:new", onNotification);
@@ -69,10 +75,11 @@ export function useSocket() {
       cancelled = true;
       socketRef.current?.disconnect();
       socketRef.current = null;
+      setConnected(false);
     };
   }, [mutate]);
 
-  return socketRef;
+  return { socketRef, connected };
 }
 
 export function joinConversation(socket: SocketLike | null, conversationId: string) {

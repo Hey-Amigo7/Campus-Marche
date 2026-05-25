@@ -70,7 +70,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Called by MessageService after a message is persisted */
   emitNewMessage(conversationId: string, message: unknown, recipientUserId: string) {
+    // Emit to conversation room (recipient is inside the chat view)
     this.server.to(`conv:${conversationId}`).emit('message:new', message);
+    // Also emit to recipient's personal room in case they haven't joined the conv room yet
+    this.server.to(`user:${recipientUserId}`).emit('message:new', message);
     this.server.to(`user:${recipientUserId}`).emit('conversations:update', { conversationId });
   }
 

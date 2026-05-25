@@ -82,7 +82,7 @@ export function useMyListings() {
 export function useConversations() {
   return useSWR<ApiConversation[]>("conversations", api.getConversations, {
     fallbackData: [],
-    refreshInterval: 10000,
+    refreshInterval: 60000, // socket handles real-time; this is a fallback
   });
 }
 
@@ -90,7 +90,7 @@ export function useMessages(conversationId: string | null) {
   return useSWR<ApiMessage[]>(
     conversationId ? `messages-${conversationId}` : null,
     () => api.getMessages(conversationId!),
-    { fallbackData: [], refreshInterval: 5000 },
+    { fallbackData: [], refreshInterval: 60000 }, // socket handles real-time
   );
 }
 

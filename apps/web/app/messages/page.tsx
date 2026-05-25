@@ -195,7 +195,7 @@ function MessagesContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { mutate } = useSWRConfig();
-  const socketRef = useSocket();
+  const { socketRef, connected } = useSocket();
 
   const active = (conversations as ApiConversation[]).find((c) => c.id === activeId) ?? null;
 
@@ -216,12 +216,12 @@ function MessagesContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Socket room
+  // Socket room — join when both activeId and socket are ready
   useEffect(() => {
     if (!activeId) return;
     joinConversation(socketRef.current, activeId);
     return () => leaveConversation(socketRef.current, activeId);
-  }, [activeId, socketRef]);
+  }, [activeId, socketRef, connected]); // re-run when socket connects/reconnects
 
   // Focus input when opening conversation
   useEffect(() => {
@@ -300,7 +300,18 @@ function MessagesContent() {
             )} style={{ borderColor: "rgba(226,232,240,0.60)" }}>
               {/* Sidebar header */}
               <div className="px-4 pb-3 pt-4" style={{ borderBottom: "1px solid rgba(226,232,240,0.60)" }}>
-                <h1 className="text-lg font-black" style={{ color: "#1E293B" }}>Messages</h1>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-lg font-black" style={{ color: "#1E293B" }}>Messages</h1>
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                    style={{
+                      background: connected ? "rgba(127,182,133,0.12)" : "rgba(148,163,184,0.12)",
+                      color: connected ? "#4A7C59" : "#94A3B8",
+                    }}>
+                    <span className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: connected ? "#7FB685" : "#CBD5E1", display: "inline-block" }} />
+                    {connected ? "Live" : "Connecting…"}
+                  </span>
+                </div>
                 <div className="mt-3 flex items-center gap-2 rounded-2xl px-3"
                   style={{ background: "rgba(248,245,239,0.80)", border: "1px solid rgba(226,232,240,0.70)" }}>
                   <Search className="h-3.5 w-3.5 shrink-0" style={{ color: "#94A3B8" }} />
