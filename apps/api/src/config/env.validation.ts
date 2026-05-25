@@ -20,6 +20,8 @@ export type ApiEnv = {
   SMTP_PASS?: string;
   SMTP_FROM?: string;
   UPLOAD_DIR?: string;
+  ADMIN_EMAIL?: string;
+  ADMIN_PASSWORD?: string;
 };
 
 const DEFAULT_ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001';
@@ -68,6 +70,8 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     SMTP_PASS: config.SMTP_PASS,
     SMTP_FROM: config.SMTP_FROM,
     UPLOAD_DIR: config.UPLOAD_DIR,
+    ADMIN_EMAIL: config.ADMIN_EMAIL,
+    ADMIN_PASSWORD: config.ADMIN_PASSWORD,
   };
 }
 

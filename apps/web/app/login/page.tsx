@@ -8,7 +8,7 @@ import { setAuthToken } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await api.auth.login({ email, password });
+      const result = await api.auth.login({ identifier, password });
       if (!result?.token) throw new Error("Login failed");
 
       setAuthToken(result.token);
@@ -68,14 +68,15 @@ export default function LoginPage() {
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-bold" style={{ color: "#1E293B" }}>
-                Campus email
+                Email, phone, or @handle
               </label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@htu.edu.gh"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="you@htu.edu.gh · 0244… · @ama"
                 className="input-shell mt-2"
+                autoComplete="username"
                 required
               />
             </div>

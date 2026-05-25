@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useProfile } from "@/hooks/use-api";
 import { api } from "@/lib/api";
+import { isEnvAdminToken } from "@/lib/auth";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ type AdminUser = {
   role: string;
   verified: boolean;
   premium: boolean;
+  canEditEvents: boolean;
   createdAt: string;
   business: { name: string } | null;
   _count: { products: number; orders: number };
@@ -100,8 +102,9 @@ const ROW_HOVER = "transition-colors hover:bg-slate-50/60";
 
 function AdminGate({ children }: { children: React.ReactNode }) {
   const { data: profile, isLoading } = useProfile();
+  const envAdmin = typeof window !== "undefined" ? isEnvAdminToken() : false;
 
-  if (isLoading) {
+  if (!envAdmin && isLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin" style={{ color: "#7FB685" }} />
@@ -109,7 +112,7 @@ function AdminGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!profile || profile.role !== "ADMIN") {
+  if (!envAdmin && (!profile || profile.role !== "ADMIN")) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
         <Shield className="h-12 w-12" style={{ color: "#E2E8F0" }} />
@@ -211,6 +214,11 @@ function UsersTab() {
     await mutate();
   }
 
+  async function toggleEventsPermission(userId: string, current: boolean) {
+    await api.admin.grantEventsPermission(userId, !current);
+    await mutate();
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -232,7 +240,7 @@ function UsersTab() {
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(226,232,240,0.60)" }}>
-              {["User", "Role", "Listings", "Orders", "Joined", "Actions"].map((h) => (
+              {["User", "Role", "Listings", "Orders", "Joined", "Events editor", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>{h}</th>
               ))}
             </tr>
@@ -241,7 +249,7 @@ function UsersTab() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 animate-pulse rounded-full" style={{ background: "#F1F5F9", width: j === 0 ? "80%" : "50%" }} />
                     </td>
@@ -250,7 +258,7 @@ function UsersTab() {
               ))
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-sm" style={{ color: "#94A3B8" }}>No users found</td>
+                <td colSpan={7} className="px-4 py-10 text-center text-sm" style={{ color: "#94A3B8" }}>No users found</td>
               </tr>
             ) : users.map((user) => (
               <tr key={user.id} className={ROW_HOVER} style={{ borderBottom: "1px solid rgba(226,232,240,0.40)" }}>
@@ -278,6 +286,20 @@ function UsersTab() {
                 <td className="px-4 py-3 font-semibold" style={{ color: "#1E293B" }}>{user._count.products}</td>
                 <td className="px-4 py-3 font-semibold" style={{ color: "#1E293B" }}>{user._count.orders}</td>
                 <td className="px-4 py-3 text-xs" style={{ color: "#94A3B8" }}>{formatRelativeDate(user.createdAt)}</td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => toggleEventsPermission(user.id, user.canEditEvents)}
+                    title={user.canEditEvents ? "Revoke events editing" : "Grant events editing"}
+                    className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all hover:opacity-80"
+                    style={{
+                      background: user.canEditEvents ? "rgba(127,182,133,0.18)" : "rgba(226,232,240,0.60)",
+                      color: user.canEditEvents ? "#4A7C59" : "#94A3B8",
+                    }}
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {user.canEditEvents ? "Yes" : "No"}
+                  </button>
+                </td>
                 <td className="px-4 py-3">
                   <button
                     onClick={() => suspend(user.id)}

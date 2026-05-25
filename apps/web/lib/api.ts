@@ -183,7 +183,7 @@ export const api = {
         { method: "POST", body: JSON.stringify(payload), strict: true },
       ),
 
-    login: (payload: { email: string; password: string }) =>
+    login: (payload: { identifier: string; password: string }) =>
       request<{ user: { id: string; email: string; name: string }; token: string }>(
         "/auth/login",
         { user: { id: "", email: "", name: "" }, token: "" },
@@ -485,6 +485,13 @@ export const api = {
     ),
 
   admin: {
+    adminLogin: (email: string, password: string) =>
+      request<{ token: string; admin: { email: string; role: string } }>(
+        "/admin/auth/login",
+        { token: "", admin: { email: "", role: "" } },
+        { method: "POST", body: JSON.stringify({ email, password }), strict: true },
+      ),
+
     getStats: () =>
       request<{ users: number; products: number; orders: number; pendingReports: number; revenue: number }>(
         "/admin/stats",
@@ -495,7 +502,7 @@ export const api = {
     getUsers: (skip = 0, take = 50, q?: string) => {
       const params = new URLSearchParams({ skip: String(skip), take: String(take) });
       if (q) params.set("q", q);
-      return request<{ users: Array<{ id: string; name: string; email: string; role: string; verified: boolean; premium: boolean; createdAt: string; business: { name: string } | null; _count: { products: number; orders: number } }>; total: number }>(
+      return request<{ users: Array<{ id: string; name: string; email: string; role: string; verified: boolean; premium: boolean; canEditEvents: boolean; createdAt: string; business: { name: string } | null; _count: { products: number; orders: number } }>; total: number }>(
         `/admin/users?${params}`,
         { users: [], total: 0 },
         { strict: true },
@@ -508,6 +515,11 @@ export const api = {
     setUserRole: (userId: string, role: string) =>
       request<{ id: string; role: string }>(`/admin/users/${userId}/role`, {} as never, {
         method: "PATCH", body: JSON.stringify({ role }), strict: true,
+      }),
+
+    grantEventsPermission: (userId: string, canEdit: boolean) =>
+      request<{ id: string; canEditEvents: boolean }>(`/admin/users/${userId}/can-edit-events`, {} as never, {
+        method: "PATCH", body: JSON.stringify({ canEdit }), strict: true,
       }),
 
     getProducts: (skip = 0, take = 50, q?: string) => {

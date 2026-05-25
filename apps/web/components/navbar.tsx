@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, MessageSquare, Settings, Shield, ShoppingBag, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/format";
-import { clearAuthToken, hasAuthToken } from "@/lib/auth";
+import { clearAuthToken, hasAuthToken, isEnvAdminToken } from "@/lib/auth";
 import { Logo, SearchBar } from "@/components/ui";
 import { useNotifications, useProfile } from "@/hooks/use-api";
 
@@ -42,7 +42,7 @@ function AccountMenu({ onLogout }: { onLogout: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { data: profile } = useProfile();
-  const isAdmin = profile?.role === "ADMIN";
+  const isAdmin = profile?.role === "ADMIN" || isEnvAdminToken();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

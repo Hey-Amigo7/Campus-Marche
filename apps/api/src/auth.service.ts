@@ -24,6 +24,7 @@ const USER_SELECT = {
   verified: true,
   premium: true,
   role: true,
+  canEditEvents: true,
   business: {
     select: {
       id: true,
@@ -63,7 +64,7 @@ export class AuthService {
     return 'Local vendor';
   }
 
-  private sanitizeUser(user: AuthenticatedUser) {
+  private sanitizeUser(user: AuthenticatedUser & { canEditEvents?: boolean }) {
     return {
       id: user.id,
       email: user.email,
@@ -72,6 +73,7 @@ export class AuthService {
       verified: user.verified,
       premium: user.premium,
       role: user.role,
+      canEditEvents: (user as { canEditEvents?: boolean }).canEditEvents ?? false,
       accountType: this.getAccountType(user.email),
     };
   }
@@ -232,23 +234,57 @@ export class AuthService {
     return { message: 'Phone number verified successfully' };
   }
 
-  async login(email: string, password: string) {
-    const normalizedEmail = email.trim().toLowerCase();
+  async login(identifier: string, password: string) {
+    const raw = identifier.trim();
+    const lower = raw.toLowerCase();
 
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: { ...USER_SELECT, password: true },
-    });
+    let candidates: Array<(typeof USER_SELECT extends object ? { [K in keyof typeof USER_SELECT]: unknown } : never) & { id: string; email: string; password: string }> = [];
 
-    const passwordHash = user?.password ?? DUMMY_PASSWORD_HASH;
-    const passwordMatch = await bcrypt.compare(password, passwordHash);
-
-    if (!user || !passwordMatch) {
-      throw new UnauthorizedException('Invalid credentials');
+    if (lower.includes('@') && !lower.startsWith('@')) {
+      // Looks like an email address
+      const user = await this.prisma.user.findUnique({
+        where: { email: lower },
+        select: { ...USER_SELECT, password: true },
+      });
+      if (user) candidates = [user as typeof candidates[0]];
+    } else if (/^(\+?233|0)\d{8,9}$/.test(raw.replace(/\s/g, ''))) {
+      // Looks like a Ghana phone number
+      try {
+        const normalizedPhone = this.smsService.normalizeGhanaPhone(raw);
+        const user = await this.prisma.user.findFirst({
+          where: { phone: normalizedPhone },
+          select: { ...USER_SELECT, password: true },
+        });
+        if (user) candidates = [user as typeof candidates[0]];
+      } catch {
+        // invalid phone format — fall through to dummy hash check
+      }
+    } else {
+      // Handle (@firstname) or plain first name
+      const handle = lower.startsWith('@') ? lower.slice(1) : lower;
+      const users = await this.prisma.user.findMany({
+        where: { name: { startsWith: handle, mode: 'insensitive' } },
+        select: { ...USER_SELECT, password: true },
+        take: 10,
+      });
+      candidates = users as typeof candidates;
     }
 
-    const token = await this.signToken(user);
-    return { user: this.sanitizeUser(user), token };
+    // Find the candidate whose password matches
+    for (const candidate of candidates) {
+      const match = await bcrypt.compare(password, candidate.password ?? DUMMY_PASSWORD_HASH);
+      if (match) {
+        const token = await this.signToken(candidate);
+        return { user: this.sanitizeUser(candidate as Parameters<typeof this.sanitizeUser>[0]), token };
+      }
+    }
+
+    // Timing-safe dummy compare when no candidates found
+    if (candidates.length === 0) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    }
+
+    throw new UnauthorizedException('Invalid credentials');
   }
 
   async validateToken(token: string) {
@@ -311,6 +347,7 @@ export class AuthService {
       verified: user.verified,
       premium: user.business?.premium ?? false,
       role: user.role,
+      canEditEvents: (user as { canEditEvents?: boolean }).canEditEvents ?? false,
       business: user.business,
       canSell: Boolean(user.business),
       responseTime: user.business ? '15m' : null,

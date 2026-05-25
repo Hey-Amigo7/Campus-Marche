@@ -3,8 +3,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AdminController } from './admin.controller';
+import { AdminAuthController, AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
+import { AdminAuthGuard } from './auth/admin-auth.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthController } from './auth.controller';
@@ -70,6 +71,7 @@ import { UserController } from './user.controller';
     }),
   ],
   controllers: [
+    AdminAuthController,
     AdminController,
     AppController,
     AuthController,
@@ -90,6 +92,7 @@ import { UserController } from './user.controller';
     UserController,
   ],
   providers: [
+    AdminAuthGuard,
     AdminService,
     AppService,
     AuthService,

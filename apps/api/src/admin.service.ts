@@ -1,14 +1,40 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private config: ConfigService,
+  ) {}
 
   private log(adminId: string, action: string, entity: string, entityId: string, details?: string) {
+    // Env-based admin has no DB user record — skip the FK-bound log entry
+    if (adminId === 'ENV_ADMIN') return Promise.resolve(null);
     return this.prisma.adminLog.create({
       data: { adminId, action, entity, entityId, details },
     });
+  }
+
+  async adminLogin(email: string, password: string) {
+    const adminEmail = this.config.get<string>('ADMIN_EMAIL', 'admin@campus-marche.com');
+    const adminPassword = this.config.get<string>('ADMIN_PASSWORD', 'Admin@123!');
+
+    if (email.trim().toLowerCase() !== adminEmail.toLowerCase() || password !== adminPassword) {
+      throw new UnauthorizedException('Invalid admin credentials');
+    }
+
+    const token = await this.jwtService.signAsync({
+      sub: 'ENV_ADMIN',
+      email: adminEmail,
+      role: 'ADMIN',
+      isEnvAdmin: true,
+    });
+
+    return { token, admin: { email: adminEmail, role: 'ADMIN' } };
   }
 
   // Legacy method kept for backward compatibility
@@ -52,6 +78,7 @@ export class AdminService {
           role: true,
           verified: true,
           premium: true,
+          canEditEvents: true,
           createdAt: true,
           business: { select: { name: true, premium: true } },
           _count: { select: { products: true, orders: true } },
@@ -88,9 +115,7 @@ export class AdminService {
       where: { id: userId },
       data: { verified: false },
     });
-    await this.prisma.adminLog.create({
-      data: { adminId, action: 'suspend_user', entity: 'user', entityId: userId },
-    });
+    await this.log(adminId, 'suspend_user', 'user', userId);
     return user;
   }
 
@@ -112,9 +137,7 @@ export class AdminService {
 
   async toggleProductActive(productId: string, adminId: string, active: boolean) {
     const product = await this.prisma.product.update({ where: { id: productId }, data: { active } });
-    await this.prisma.adminLog.create({
-      data: { adminId, action: active ? 'activate_product' : 'deactivate_product', entity: 'product', entityId: productId },
-    });
+    await this.log(adminId, active ? 'activate_product' : 'deactivate_product', 'product', productId);
     return product;
   }
 
@@ -250,6 +273,20 @@ export class AdminService {
 
   async deleteEvent(id: string) {
     return this.prisma.campusEvent.delete({ where: { id } });
+  }
+
+  async grantEventsPermission(adminId: string, userId: string, canEdit: boolean) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { canEditEvents: canEdit },
+      select: { id: true, email: true, canEditEvents: true },
+    });
+
+    await this.log(adminId, canEdit ? 'GRANT_EVENTS' : 'REVOKE_EVENTS', 'User', userId);
+    return updated;
   }
 
   async getLocations() {

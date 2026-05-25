@@ -27,6 +27,7 @@ export type Seller = {
   verified: boolean;
   premium: boolean;
   role?: string;
+  canEditEvents?: boolean;
   canSell?: boolean;
   business?: BusinessProfile | null;
   responseTime: string | null;

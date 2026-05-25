@@ -1,11 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { IsIn, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsString } from 'class-validator';
 import { AdminService } from './admin.service';
 import { AuthUser } from './auth/auth-user.decorator';
-import { JwtAuthGuard } from './auth/jwt-auth.guard';
-import { Roles } from './auth/roles.decorator';
-import { RolesGuard } from './auth/roles.guard';
+import { AdminAuthGuard } from './auth/admin-auth.guard';
 
 class SetRoleDto {
   @IsString()
@@ -18,11 +16,35 @@ class ResolveReportDto {
   status: string;
 }
 
+class AdminLoginDto {
+  @IsString()
+  email: string;
+
+  @IsString()
+  password: string;
+}
+
+class GrantEventsDto {
+  @IsBoolean()
+  canEdit: boolean;
+}
+
+@ApiTags('admin')
+@Controller('admin/auth')
+export class AdminAuthController {
+  constructor(private adminService: AdminService) {}
+
+  @Post('login')
+  @ApiOperation({ summary: 'Admin login via environment credentials — no database account required' })
+  adminLogin(@Body() body: AdminLoginDto) {
+    return this.adminService.adminLogin(body.email, body.password);
+  }
+}
+
 @ApiTags('admin')
 @ApiBearerAuth()
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
+@UseGuards(AdminAuthGuard)
 export class AdminController {
   constructor(private adminService: AdminService) {}
 
@@ -48,13 +70,23 @@ export class AdminController {
   }
 
   @Patch('users/:userId/role')
-  @ApiOperation({ summary: 'Change a user role (ADMIN only)' })
+  @ApiOperation({ summary: 'Set a user role' })
   setRole(
     @Param('userId') userId: string,
     @Body() dto: SetRoleDto,
     @AuthUser() admin: { id: string },
   ) {
     return this.adminService.setUserRole(admin.id, userId, dto.role);
+  }
+
+  @Patch('users/:id/can-edit-events')
+  @ApiOperation({ summary: 'Grant or revoke events editing permission for a user' })
+  grantEventsPermission(
+    @Param('id') id: string,
+    @Body() body: GrantEventsDto,
+    @AuthUser() admin: { id: string },
+  ) {
+    return this.adminService.grantEventsPermission(admin.id, id, body.canEdit);
   }
 
   @Get('products')

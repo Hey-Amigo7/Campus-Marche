@@ -39,11 +39,11 @@ export class AuthController {
   }
 
   @Post('login')
-  @ApiOperation({ summary: 'Login a user' })
+  @ApiOperation({ summary: 'Login a user (accepts email, phone number, or @handle)' })
   async login(@Body() body: LoginDto) {
     const throttle = this.authThrottle;
     void throttle;
-    return this.authService.login(body.email, body.password);
+    return this.authService.login(body.identifier, body.password);
   }
 
   @Post('validate')

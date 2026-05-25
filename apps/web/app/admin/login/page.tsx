@@ -12,43 +12,17 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [bootstrapping, setBootstrapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  async function handleBootstrap() {
-    setBootstrapping(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/auth/bootstrap-admin`, { method: "POST" });
-      const data = await res.json() as { message: string; email?: string; password?: string };
-      setNotice(data.message);
-      if (data.email) { setEmail(data.email); setPassword(data.password ?? ""); }
-    } catch {
-      setError("Bootstrap failed. Check your API connection.");
-    } finally {
-      setBootstrapping(false);
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const res = await api.auth.login({ email: email.trim().toLowerCase(), password });
-      // Verify admin role
-      if ((res as { user: { id: string; email: string; name: string; role?: string } }).user) {
-        const profile = await api.getProfile();
-        if (!profile || profile.role !== "ADMIN") {
-          setError("Access denied. This portal is for administrators only.");
-          return;
-        }
-        setAuthToken(res.token);
-        router.push("/admin");
-        router.refresh();
-      }
+      const res = await api.admin.adminLogin(email.trim(), password);
+      setAuthToken(res.token);
+      router.push("/admin");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed. Check your credentials.");
     } finally {
@@ -67,7 +41,7 @@ export default function AdminLoginPage() {
         {/* Card */}
         <div className="overflow-hidden rounded-3xl"
           style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.10)", boxShadow: "0 24px 80px rgba(0,0,0,0.40)" }}>
-          {/* Header stripe */}
+          {/* Header */}
           <div className="px-8 pb-6 pt-8">
             <div className="mb-6 flex items-center gap-3">
               <div className="grid h-11 w-11 place-items-center rounded-2xl"
@@ -82,7 +56,7 @@ export default function AdminLoginPage() {
 
             <p className="text-sm leading-6" style={{ color: "#94A3B8" }}>
               This portal is for platform administrators only.
-              Unauthorised access attempts are logged.
+              Credentials are set in the server environment — no account sign-up required.
             </p>
           </div>
 
@@ -97,11 +71,7 @@ export default function AdminLoginPage() {
                 required
                 autoComplete="username"
                 className="w-full rounded-2xl px-4 py-3.5 text-sm font-semibold outline-none transition-all"
-                style={{
-                  background: "rgba(255,255,255,0.07)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  color: "#fff",
-                }}
+                style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff" }}
                 placeholder="admin@campus-marche.com"
               />
             </div>
@@ -117,11 +87,7 @@ export default function AdminLoginPage() {
                   required
                   autoComplete="current-password"
                   className="w-full rounded-2xl px-4 py-3.5 pr-12 text-sm font-semibold outline-none transition-all"
-                  style={{
-                    background: "rgba(255,255,255,0.07)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    color: "#fff",
-                  }}
+                  style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff" }}
                   placeholder="••••••••"
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)}
@@ -158,23 +124,15 @@ export default function AdminLoginPage() {
           </form>
         </div>
 
-        {/* First-time setup */}
+        {/* Info box */}
         <div className="mt-4 rounded-2xl px-5 py-4"
           style={{ background: "rgba(198,139,89,0.10)", border: "1px solid rgba(198,139,89,0.20)" }}>
-          <p className="text-xs font-black" style={{ color: "#C68B59" }}>First-time setup</p>
-          {notice && (
-            <p className="mt-1 rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: "rgba(127,182,133,0.15)", color: "#A8D4AE" }}>{notice}</p>
-          )}
+          <p className="text-xs font-black" style={{ color: "#C68B59" }}>Developer note</p>
           <p className="mt-1 text-xs leading-5" style={{ color: "#94A3B8" }}>
-            No admin account yet? Click below to create the default admin.
-            Change the credentials immediately after your first login.
+            Admin credentials are configured via <code className="rounded px-1" style={{ background: "rgba(255,255,255,0.08)", color: "#C68B59" }}>ADMIN_EMAIL</code> and{" "}
+            <code className="rounded px-1" style={{ background: "rgba(255,255,255,0.08)", color: "#C68B59" }}>ADMIN_PASSWORD</code> environment variables.
+            No database account is created — the admin exists outside the user system entirely.
           </p>
-          <button onClick={handleBootstrap} disabled={bootstrapping}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition-all hover:opacity-80 disabled:opacity-50"
-            style={{ background: "rgba(198,139,89,0.25)", color: "#C68B59" }}>
-            {bootstrapping ? <Loader2 className="h-3 w-3 animate-spin" /> : "⚙️"}
-            {bootstrapping ? "Creating…" : "Bootstrap default admin"}
-          </button>
         </div>
       </div>
     </div>
