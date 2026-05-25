@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Check, CheckCheck, Loader2, Search, Send } from "lucide-react";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
 import { useSocket, joinConversation, leaveConversation } from "@/hooks/use-socket";
@@ -174,6 +174,18 @@ function ConvItem({ conv, active, onClick }: { conv: ApiConversation; active: bo
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function MessagesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-7 w-7 animate-spin" style={{ color: "#7FB685" }} />
+      </div>
+    }>
+      <MessagesContent />
+    </Suspense>
+  );
+}
+
+function MessagesContent() {
   const searchParams = useSearchParams();
   const { data: conversations, isLoading: loadingConv } = useConversations();
   const [activeId, setActiveId] = useState<string | null>(searchParams.get("c"));
