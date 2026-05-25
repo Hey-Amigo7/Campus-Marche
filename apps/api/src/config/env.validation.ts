@@ -19,6 +19,7 @@ export type ApiEnv = {
   SMTP_USER?: string;
   SMTP_PASS?: string;
   SMTP_FROM?: string;
+  CONTACT_EMAIL?: string;
   UPLOAD_DIR?: string;
   ADMIN_EMAIL?: string;
   ADMIN_PASSWORD?: string;
@@ -69,6 +70,7 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     SMTP_USER: config.SMTP_USER,
     SMTP_PASS: config.SMTP_PASS,
     SMTP_FROM: config.SMTP_FROM,
+    CONTACT_EMAIL: config.CONTACT_EMAIL,
     UPLOAD_DIR: config.UPLOAD_DIR,
     ADMIN_EMAIL: config.ADMIN_EMAIL,
     ADMIN_PASSWORD: config.ADMIN_PASSWORD,
