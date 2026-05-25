@@ -2,13 +2,17 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } fro
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { AdminService } from './admin.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { ProductService } from './product.service';
 
 @ApiTags('products')
 @Controller('products')
 export class ProductController {
-  constructor(private productService: ProductService) {}
+  constructor(
+    private productService: ProductService,
+    private adminService: AdminService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all active products (paginated)' })
@@ -37,6 +41,20 @@ export class ProductController {
   @ApiOperation({ summary: 'Get product categories with counts' })
   getCategories() {
     return this.productService.getCategories();
+  }
+
+  @Get('locations')
+  @ApiOperation({ summary: 'Get real product locations' })
+  getLocations() {
+    return this.adminService.getLocations();
+  }
+
+  @Get('my-listings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get seller own listings including inactive' })
+  async getMyListings(@AuthUser() user: { id: string }) {
+    return this.productService.getBySellerFull(user.id);
   }
 
   @Get('category/:category')
@@ -72,6 +90,30 @@ export class ProductController {
   @ApiOperation({ summary: 'Update your own product' })
   update(@Param('id') id: string, @Body() body: UpdateProductDto, @AuthUser() user: { id: string }) {
     return this.productService.update(id, user.id, body);
+  }
+
+  @Put(':id/sold')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark listing as sold' })
+  async markSold(@Param('id') id: string, @AuthUser() user: { id: string }) {
+    return this.productService.markSold(id, user.id);
+  }
+
+  @Put(':id/archive')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Archive listing' })
+  async archive(@Param('id') id: string, @AuthUser() user: { id: string }) {
+    return this.productService.archive(id, user.id);
+  }
+
+  @Put(':id/restore')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Restore archived listing' })
+  async restore(@Param('id') id: string, @AuthUser() user: { id: string }) {
+    return this.productService.restore(id, user.id);
   }
 
   @Delete(':id')

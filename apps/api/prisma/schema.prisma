@@ -79,6 +79,8 @@ model Product {
   negotiable  Boolean  @default(false)
   active      Boolean  @default(true)
   category    String?
+  listingType String   @default("product")
+  soldAt      DateTime?
   tags        String   @default("")
   views       Int      @default(0)
   postedAt    DateTime @default(now())
@@ -221,6 +223,8 @@ model CampusEvent {
   category    String   @default("Campus update")
   opportunity String?
   imageUrl    String?
+  featured    Boolean  @default(false)
+  publishedAt DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

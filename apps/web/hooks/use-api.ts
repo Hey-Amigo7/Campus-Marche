@@ -71,6 +71,10 @@ export function useCategories() {
   return useSWR<Category[]>("categories", api.getCategories, { fallbackData: [] });
 }
 
+export function useLocations() {
+  return useSWR<Array<{ location: string; count: number }>>("locations", api.getLocations, { fallbackData: [] });
+}
+
 export function useConversations() {
   return useSWR<ApiConversation[]>("conversations", api.getConversations, {
     fallbackData: [],

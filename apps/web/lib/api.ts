@@ -426,6 +426,13 @@ export const api = {
       { method: "DELETE", strict: true },
     ),
 
+  getLocations: () =>
+    request<Array<{ location: string; count: number }>>(
+      "/products/locations",
+      [],
+      { revalidate: 120 },
+    ),
+
   getStats: () =>
     request<{ users: number; products: number; orders: number }>(
       "/stats",
@@ -459,4 +466,79 @@ export const api = {
       { message: "" },
       { method: "POST", strict: true },
     ),
+
+  admin: {
+    getStats: () =>
+      request<{ users: number; products: number; orders: number; pendingReports: number; revenue: number }>(
+        "/admin/stats",
+        { users: 0, products: 0, orders: 0, pendingReports: 0, revenue: 0 },
+        { strict: true },
+      ),
+
+    getUsers: (skip = 0, take = 50, q?: string) => {
+      const params = new URLSearchParams({ skip: String(skip), take: String(take) });
+      if (q) params.set("q", q);
+      return request<{ users: Array<{ id: string; name: string; email: string; role: string; verified: boolean; premium: boolean; createdAt: string; business: { name: string } | null; _count: { products: number; orders: number } }>; total: number }>(
+        `/admin/users?${params}`,
+        { users: [], total: 0 },
+        { strict: true },
+      );
+    },
+
+    suspendUser: (userId: string) =>
+      request<{ id: string }>(`/admin/users/${userId}/suspend`, {} as never, { method: "PATCH", strict: true }),
+
+    setUserRole: (userId: string, role: string) =>
+      request<{ id: string; role: string }>(`/admin/users/${userId}/role`, {} as never, {
+        method: "PATCH", body: JSON.stringify({ role }), strict: true,
+      }),
+
+    getProducts: (skip = 0, take = 50, q?: string) => {
+      const params = new URLSearchParams({ skip: String(skip), take: String(take) });
+      if (q) params.set("q", q);
+      return request<{ products: Array<{ id: string; title: string; price: number; category: string | null; active: boolean; featured: boolean; views: number; createdAt: string; seller: { id: string; name: string } }>; total: number }>(
+        `/admin/products?${params}`,
+        { products: [], total: 0 },
+        { strict: true },
+      );
+    },
+
+    activateProduct: (id: string) =>
+      request<{ id: string }>(`/admin/products/${id}/activate`, {} as never, { method: "PATCH", strict: true }),
+
+    deactivateProduct: (id: string) =>
+      request<{ id: string }>(`/admin/products/${id}/deactivate`, {} as never, { method: "PATCH", strict: true }),
+
+    getReports: (skip = 0, take = 50) =>
+      request<{ reports: Array<{ id: string; reason: string; status: string; createdAt: string; reporter: { id: string; name: string } | null; reportedUser: { id: string; name: string } | null; product: { id: string; title: string } | null }>; total: number }>(
+        `/admin/reports?skip=${skip}&take=${take}`,
+        { reports: [], total: 0 },
+        { strict: true },
+      ),
+
+    resolveReport: (id: string, status: string) =>
+      request<{ id: string }>(`/admin/reports/${id}/resolve`, {} as never, {
+        method: "PATCH", body: JSON.stringify({ status }), strict: true,
+      }),
+
+    getEvents: () =>
+      request<Array<{ id: string; title: string; description: string; location: string; eventDate: string; category: string; opportunity?: string | null; imageUrl?: string | null; featured?: boolean }>>(
+        "/admin/events",
+        [],
+        { strict: true },
+      ),
+
+    createEvent: (payload: { title: string; description: string; location: string; eventDate: string; category: string; opportunity?: string; imageUrl?: string }) =>
+      request<{ id: string }>("/admin/events", {} as never, {
+        method: "POST", body: JSON.stringify(payload), strict: true,
+      }),
+
+    updateEvent: (id: string, payload: Partial<{ title: string; description: string; location: string; eventDate: string; category: string; opportunity: string; imageUrl: string; featured: boolean }>) =>
+      request<{ id: string }>(`/admin/events/${id}`, {} as never, {
+        method: "PATCH", body: JSON.stringify(payload), strict: true,
+      }),
+
+    deleteEvent: (id: string) =>
+      request<void>(`/admin/events/${id}`, undefined, { method: "DELETE", strict: true }),
+  },
 };

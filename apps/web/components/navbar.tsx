@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, Menu, MessageSquare, Settings, ShoppingBag, UserRound, X } from "lucide-react";
+import { Bell, LogOut, Menu, MessageSquare, Settings, Shield, ShoppingBag, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/format";
 import { clearAuthToken, hasAuthToken } from "@/lib/auth";
 import { Logo, SearchBar } from "@/components/ui";
-import { useNotifications } from "@/hooks/use-api";
+import { useNotifications, useProfile } from "@/hooks/use-api";
 
 const links = [
   { href: "/products",  label: "Products"   },
@@ -41,6 +41,8 @@ function NotificationBell() {
 function AccountMenu({ onLogout }: { onLogout: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { data: profile } = useProfile();
+  const isAdmin = profile?.role === "ADMIN";
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -92,6 +94,17 @@ function AccountMenu({ onLogout }: { onLogout: () => void }) {
             <Settings className="h-4 w-4" style={{ color: "#64748B" }} />
             Settings
           </Link>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-red-50"
+              style={{ color: "#EF4444" }}
+            >
+              <Shield className="h-4 w-4" />
+              Admin panel
+            </Link>
+          )}
           <div className="my-1 border-t" style={{ borderColor: "rgba(226,232,240,0.60)" }} />
           <button
             onClick={() => { setOpen(false); onLogout(); }}

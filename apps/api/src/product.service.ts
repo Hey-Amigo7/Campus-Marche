@@ -247,4 +247,34 @@ export class ProductService {
       .map((g) => ({ name: g.category!, count: g._count.id }))
       .sort((a, b) => b.count - a.count);
   }
+
+  async getBySellerFull(sellerId: string) {
+    const products = await this.prisma.product.findMany({
+      where: { sellerId },
+      include: { seller: { select: SELLER_SELECT } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return products.map((p) => this.withDefaults(p as ProductWithSeller));
+  }
+
+  async markSold(id: string, sellerId: string) {
+    const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true } });
+    if (!existing) throw new NotFoundException('Product not found');
+    if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only modify your own products');
+    return this.prisma.product.update({ where: { id }, data: { active: false, soldAt: new Date() } });
+  }
+
+  async archive(id: string, sellerId: string) {
+    const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true } });
+    if (!existing) throw new NotFoundException('Product not found');
+    if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only modify your own products');
+    return this.prisma.product.update({ where: { id }, data: { active: false } });
+  }
+
+  async restore(id: string, sellerId: string) {
+    const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true } });
+    if (!existing) throw new NotFoundException('Product not found');
+    if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only modify your own products');
+    return this.prisma.product.update({ where: { id }, data: { active: true, soldAt: null } });
+  }
 }

@@ -69,6 +69,11 @@ export class CreateProductDto {
   @Length(0, 80)
   category?: string;
 
+  @ApiPropertyOptional({ enum: ['product', 'service'] })
+  @IsOptional()
+  @IsString()
+  listingType?: string;
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
@@ -137,6 +142,11 @@ export class UpdateProductDto {
   @IsString()
   @Length(0, 80)
   category?: string;
+
+  @ApiPropertyOptional({ enum: ['product', 'service'] })
+  @IsOptional()
+  @IsString()
+  listingType?: string;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
