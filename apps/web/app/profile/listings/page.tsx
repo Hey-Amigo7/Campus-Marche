@@ -115,12 +115,21 @@ function ListingCard({ product, onAction }: { product: Product & { active?: bool
             </>
           )}
 
-          {(isArchived) && (
+          {isArchived && (
             <button onClick={() => action("restore")} disabled={loading === "restore"}
               className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold transition-all hover:-translate-y-0.5"
               style={{ background: "rgba(127,182,133,0.15)", color: "#5A9460" }}>
               {loading === "restore" ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
               Restore
+            </button>
+          )}
+
+          {!!soldAt && (
+            <button onClick={() => action("restore")} disabled={loading === "restore"}
+              className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold transition-all hover:-translate-y-0.5"
+              style={{ background: "rgba(127,182,133,0.15)", color: "#5A9460" }}>
+              {loading === "restore" ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Relist
             </button>
           )}
         </div>

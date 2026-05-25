@@ -534,11 +534,13 @@ function EventsTab() {
   const { data: events = [], isLoading, mutate } = useSWR("admin-events", api.admin.getEvents);
   const [editing, setEditing] = useState<(typeof EMPTY_EVENT & { id?: string }) | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   async function save() {
     if (!editing) return;
     setSaving(true);
+    setSaveError(null);
     try {
       if (editing.id) {
         await api.admin.updateEvent(editing.id, { ...editing, eventDate: editing.eventDate });
@@ -547,9 +549,16 @@ function EventsTab() {
       }
       await mutate();
       setEditing(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save event. Please try again.");
     } finally {
       setSaving(false);
     }
+  }
+
+  function closeModal() {
+    setEditing(null);
+    setSaveError(null);
   }
 
   async function remove(id: string) {
@@ -579,14 +588,14 @@ function EventsTab() {
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(15,23,42,0.50)", backdropFilter: "blur(8px)" }}>
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl" style={{ background: "#fff", boxShadow: "0 24px 80px rgba(15,23,42,0.18)" }}>
-            <div className="flex items-center justify-between p-5" style={{ borderBottom: "1px solid rgba(226,232,240,0.60)" }}>
+          <div className="w-full max-w-lg rounded-3xl flex flex-col" style={{ background: "#fff", boxShadow: "0 24px 80px rgba(15,23,42,0.18)", maxHeight: "90vh" }}>
+            <div className="flex shrink-0 items-center justify-between p-5" style={{ borderBottom: "1px solid rgba(226,232,240,0.60)" }}>
               <h3 className="font-black" style={{ color: "#1E293B" }}>{editing.id ? "Edit event" : "New event"}</h3>
-              <button onClick={() => setEditing(null)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-slate-100">
+              <button onClick={closeModal} className="grid h-8 w-8 place-items-center rounded-full hover:bg-slate-100">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-3 p-5">
+            <div className="space-y-3 overflow-y-auto p-5">
               {[
                 { key: "title", label: "Title", type: "text" },
                 { key: "location", label: "Location", type: "text" },
@@ -617,8 +626,14 @@ function EventsTab() {
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 p-5" style={{ borderTop: "1px solid rgba(226,232,240,0.60)" }}>
-              <button onClick={() => setEditing(null)}
+            {saveError && (
+              <div className="mx-5 mb-1 rounded-xl px-3 py-2.5 text-sm font-semibold"
+                style={{ background: "rgba(239,68,68,0.08)", color: "#EF4444", border: "1px solid rgba(239,68,68,0.20)" }}>
+                {saveError}
+              </div>
+            )}
+            <div className="flex shrink-0 justify-end gap-2 p-5" style={{ borderTop: "1px solid rgba(226,232,240,0.60)" }}>
+              <button onClick={closeModal}
                 className="rounded-xl px-4 py-2 text-sm font-bold"
                 style={{ background: "#F1F5F9", color: "#475569" }}>
                 Cancel
