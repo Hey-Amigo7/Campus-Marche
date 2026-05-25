@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, Menu, MessageSquare, Settings, Shield, ShoppingBag, UserRound, X } from "lucide-react";
+import { Bell, LogOut, Menu, MessageSquare, Palette, Settings, Shield, ShoppingBag, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/format";
 import { clearAuthToken, hasAuthToken, isEnvAdminToken } from "@/lib/auth";
 import { Logo, SearchBar } from "@/components/ui";
 import { useNotifications, useProfile } from "@/hooks/use-api";
+import { THEMES, useTheme } from "@/providers/theme-provider";
 
 const links = [
   { href: "/products",  label: "Products"   },
@@ -38,15 +39,63 @@ function NotificationBell() {
   );
 }
 
+export function UserAvatar({
+  avatar,
+  name,
+  size = 40,
+  className = "",
+}: {
+  avatar?: string | null;
+  name?: string | null;
+  size?: number;
+  className?: string;
+}) {
+  const isImageUrl = avatar && (avatar.startsWith("http") || avatar.startsWith("/uploads"));
+  const initials = name ? name.charAt(0).toUpperCase() : "?";
+
+  if (isImageUrl) {
+    return (
+      <img
+        src={avatar}
+        alt={name ?? "Avatar"}
+        width={size}
+        height={size}
+        className={cn("rounded-xl object-cover", className)}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={cn("grid place-items-center rounded-xl font-bold select-none", className)}
+      style={{
+        width: size,
+        height: size,
+        background: "linear-gradient(135deg, #0F172A, #1a3a2a)",
+        color: "#DFF3E3",
+        fontSize: avatar ? Math.round(size * 0.42) : Math.round(size * 0.38),
+      }}
+    >
+      {avatar || initials}
+    </div>
+  );
+}
+
 function AccountMenu({ onLogout }: { onLogout: () => void }) {
   const [open, setOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { data: profile } = useProfile();
   const isAdmin = profile?.role === "ADMIN" || isEnvAdminToken();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setThemeOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -56,26 +105,32 @@ function AccountMenu({ onLogout }: { onLogout: () => void }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="grid h-10 w-10 place-items-center rounded-xl border transition-all hover:shadow-sm"
+        className="overflow-hidden rounded-xl border transition-all hover:shadow-sm"
         style={{
           borderColor: "rgba(226,232,240,0.70)",
-          background:  "rgba(255,255,255,0.80)",
-          color:       "#1E293B",
+          width: 40,
+          height: 40,
         }}
         aria-label="Account menu"
       >
-        <UserRound className="h-5 w-5" />
+        <UserAvatar avatar={profile?.avatar} name={profile?.name} size={40} />
       </button>
 
       {open && (
         <div
-          className="absolute right-0 top-12 z-50 min-w-[180px] overflow-hidden rounded-2xl py-1.5 shadow-xl"
+          className="absolute right-0 top-12 z-50 min-w-[210px] overflow-hidden rounded-2xl py-1.5 shadow-xl"
           style={{
             background:    "rgba(255,255,255,0.96)",
             backdropFilter:"blur(20px)",
             border:        "1px solid rgba(226,232,240,0.70)",
           }}
         >
+          {profile && (
+            <div className="px-4 py-2.5 border-b" style={{ borderColor: "rgba(226,232,240,0.60)" }}>
+              <p className="text-xs font-black truncate" style={{ color: "#1E293B" }}>{profile.name}</p>
+              <p className="text-[11px] truncate" style={{ color: "#94A3B8" }}>{profile.email}</p>
+            </div>
+          )}
           <Link
             href="/profile"
             onClick={() => setOpen(false)}
@@ -94,6 +149,47 @@ function AccountMenu({ onLogout }: { onLogout: () => void }) {
             <Settings className="h-4 w-4" style={{ color: "#64748B" }} />
             Settings
           </Link>
+
+          {/* Theme switcher */}
+          <button
+            onClick={() => setThemeOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-2.5 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50"
+            style={{ color: "#1E293B" }}
+          >
+            <span className="flex items-center gap-2.5">
+              <Palette className="h-4 w-4" style={{ color: "#64748B" }} />
+              Theme
+            </span>
+            <span className="text-xs font-bold" style={{ color: "#94A3B8" }}>
+              {THEMES.find((t) => t.id === theme)?.label ?? "Classic"}
+            </span>
+          </button>
+
+          {themeOpen && (
+            <div className="px-3 pb-2 pt-1">
+              <div className="grid grid-cols-5 gap-1.5">
+                {THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    title={t.label}
+                    onClick={() => { setTheme(t.id); setThemeOpen(false); }}
+                    className="flex flex-col items-center gap-1 rounded-xl p-1.5 transition-all hover:scale-110"
+                    style={{
+                      background: theme === t.id ? "rgba(127,182,133,0.15)" : "transparent",
+                      border: theme === t.id ? "1.5px solid rgba(127,182,133,0.40)" : "1.5px solid transparent",
+                    }}
+                  >
+                    <span
+                      className="block h-5 w-5 rounded-lg border"
+                      style={{ background: t.swatch, borderColor: `${t.accent}55` }}
+                    />
+                    <span style={{ width: 18, height: 4, borderRadius: 999, background: t.accent, display: "block" }} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isAdmin && (
             <Link
               href="/admin"
@@ -267,6 +363,7 @@ export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { data: profile } = useProfile();
 
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
 
@@ -276,16 +373,8 @@ export function MobileNav() {
     router.refresh();
   }
 
-  const items = [
-    { href: "/products",  label: "Shop",    icon: ShoppingBag },
-    { href: "/messages",  label: "Chat",    icon: MessageSquare },
-    { href: "/sell",      label: "Sell",    icon: ShoppingBag },
-    {
-      href:  isAuthenticated ? "/profile" : "/login?next=/profile",
-      label: isAuthenticated ? "Profile"  : "Log in",
-      icon:  UserRound,
-    },
-  ];
+  const profileHref = isAuthenticated ? "/profile" : "/login?next=/profile";
+  const profileLabel = isAuthenticated ? "Profile" : "Log in";
 
   return (
     <nav
@@ -299,25 +388,41 @@ export function MobileNav() {
       }}
     >
       <div className="grid grid-cols-4 gap-0.5">
-        {items.map((item) => {
-          const Icon   = item.icon;
-          const active = pathname.startsWith(item.href);
+        {(
+          [
+            { href: "/products", label: "Shop",  Icon: ShoppingBag },
+            { href: "/messages", label: "Chat",  Icon: MessageSquare },
+            { href: "/sell",     label: "Sell",  Icon: ShoppingBag },
+          ] as const
+        ).map(({ href, label, Icon }) => {
+          const active = pathname.startsWith(href);
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={href}
+              href={href}
               className="grid place-items-center gap-1 rounded-xl py-2 text-xs font-semibold transition-all"
-              style={active
-                ? { background: "rgba(127,182,133,0.12)", color: "#5A9460" }
-                : { color: "#94A3B8" }}
+              style={active ? { background: "rgba(127,182,133,0.12)", color: "#5A9460" } : { color: "#94A3B8" }}
             >
               <Icon className="h-5 w-5" />
-              {item.label}
+              {label}
             </Link>
           );
         })}
+
+        {/* Profile tab with real avatar */}
+        <Link
+          href={profileHref}
+          className="grid place-items-center gap-1 rounded-xl py-2 text-xs font-semibold transition-all"
+          style={pathname.startsWith("/profile") ? { background: "rgba(127,182,133,0.12)", color: "#5A9460" } : { color: "#94A3B8" }}
+        >
+          {isAuthenticated && profile ? (
+            <UserAvatar avatar={profile.avatar} name={profile.name} size={22} className="rounded-lg" />
+          ) : (
+            <UserRound className="h-5 w-5" />
+          )}
+          {profileLabel}
+        </Link>
       </div>
-      {/* Hidden logout trigger — only here for the mobile logout in hamburger, not visible */}
       {isAuthenticated && (
         <button className="sr-only" onClick={handleLogout}>Log out</button>
       )}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArrowLeft, Eye, Loader2, Package, Plus, RefreshCw, Tag } from "lucide-react";
+import { Archive, ArrowLeft, Eye, Loader2, Package, Pencil, Plus, RefreshCw, Tag } from "lucide-react";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
@@ -97,6 +97,15 @@ function ListingCard({ product, onAction }: { product: Product & { active?: bool
             style={{ background: "rgba(15,23,42,0.07)", color: "#1E293B" }}>
             View
           </Link>
+
+          {isActive && (
+            <Link href={`/profile/listings/${product.id}/edit`}
+              className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold transition-all hover:-translate-y-0.5"
+              style={{ background: "rgba(127,182,133,0.10)", color: "#5A9460" }}>
+              <Pencil className="h-3 w-3" />
+              Edit
+            </Link>
+          )}
 
           {isActive && (
             <>

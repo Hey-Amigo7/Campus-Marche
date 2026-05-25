@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { MobileNav, Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { ToastProvider } from "@/providers/toast-provider";
+import { ThemeProvider } from "@/providers/theme-provider";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -53,12 +54,14 @@ export default function RootLayout({
       className={`${plusJakarta.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">
-        <ToastProvider>
-          <Navbar />
-          <main className="pb-24 md:pb-0">{children}</main>
-          <Footer />
-          <MobileNav />
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <Navbar />
+            <main className="pb-24 md:pb-0">{children}</main>
+            <Footer />
+            <MobileNav />
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
