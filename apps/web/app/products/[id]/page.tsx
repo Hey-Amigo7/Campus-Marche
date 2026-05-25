@@ -10,7 +10,7 @@ import { formatCurrency, formatRelativeDate } from "@/lib/format";
 import { BuyNowButton } from "@/components/buy-now-button";
 import { ProductArt, ProductGrid } from "@/components/product-card";
 import { EmptyState, Rating, SectionHeading, SellerBadge } from "@/components/ui";
-import { useProduct, useProducts, useReviews, useSavedStatus } from "@/hooks/use-api";
+import { useProduct, useProducts, useProfile, useReviews, useSavedStatus } from "@/hooks/use-api";
 import { hasAuthToken } from "@/lib/auth";
 
 const GLASS_PANEL = {
@@ -104,6 +104,101 @@ function ReviewList({ productId }: { productId: string }) {
   );
 }
 
+function StarPicker({ value, hover, onHover, onLeave, onPick }: {
+  value: number; hover: number;
+  onHover: (n: number) => void; onLeave: () => void; onPick: (n: number) => void;
+}) {
+  const active = hover || value;
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onMouseEnter={() => onHover(n)}
+          onMouseLeave={onLeave}
+          onClick={() => onPick(n)}
+          className="transition-transform hover:scale-110 focus:outline-none"
+          aria-label={`Rate ${n} star${n > 1 ? "s" : ""}`}
+        >
+          <Star
+            className="h-7 w-7"
+            style={n <= active ? { fill: "#C68B59", color: "#C68B59" } : { color: "#E2E8F0" }}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewForm({ productId, sellerId }: { productId: string; sellerId: string }) {
+  const { mutate } = useSWRConfig();
+  const { data: profile } = useProfile();
+  const [rating, setRating] = useState(0);
+  const [hover, setHover] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!hasAuthToken()) return null;
+  if (profile?.id === sellerId) return null;
+  if (submitted) return (
+    <div className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold"
+      style={{ background: "rgba(127,182,133,0.12)", color: "#4A7C59", border: "1px solid rgba(127,182,133,0.25)" }}>
+      <Star className="h-4 w-4" style={{ fill: "#4A7C59", color: "#4A7C59" }} />
+      Review submitted — thanks!
+    </div>
+  );
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!rating) { setError("Please select a star rating."); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.submitReview(productId, { rating, comment: comment.trim() || undefined });
+      await mutate(`reviews-${productId}`);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit review.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-2xl p-4"
+      style={{ background: "rgba(248,245,239,0.80)", border: "1px solid rgba(226,232,240,0.60)" }}>
+      <p className="text-xs font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Write a review</p>
+      <StarPicker
+        value={rating} hover={hover}
+        onHover={setHover} onLeave={() => setHover(0)} onPick={setRating}
+      />
+      <textarea
+        rows={3}
+        placeholder="What did you think? (optional)"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        className="w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none"
+        style={{ background: "rgba(255,255,255,0.90)", border: "1px solid rgba(226,232,240,0.80)", color: "#1E293B" }}
+      />
+      {error && (
+        <p className="text-xs font-semibold" style={{ color: "#EF4444" }}>{error}</p>
+      )}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black text-white disabled:opacity-60 transition-all hover:-translate-y-0.5"
+        style={{ background: "#0F172A" }}
+      >
+        {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
+        {submitting ? "Submitting…" : "Submit review"}
+      </button>
+    </form>
+  );
+}
+
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
@@ -186,6 +281,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div className="border-t pt-4" style={{ borderColor: "rgba(226,232,240,0.50)" }}>
                 <p className="mb-3 text-sm font-black" style={{ color: "#64748B" }}>Reviews</p>
                 <ReviewList productId={product.id} />
+                <ReviewForm productId={product.id} sellerId={seller.id} />
               </div>
             </div>
           </div>
