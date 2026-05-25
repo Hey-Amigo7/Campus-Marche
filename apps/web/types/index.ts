@@ -92,13 +92,66 @@ export type Category = {
   description?: string;
 };
 
+export type EscrowStatus =
+  | "PENDING_PAYMENT"
+  | "PAYMENT_INITIALIZED"
+  | "PAYMENT_VERIFIED"
+  | "ESCROW_HELD"
+  | "PROCESSING"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "RELEASE_PENDING"
+  | "RELEASED"
+  | "DISPUTED"
+  | "REFUNDED"
+  | "FAILED";
+
+export type EscrowStatusLabel =
+  | "Awaiting Payment"
+  | "Payment Initiated"
+  | "Payment Verified"
+  | "Funds Held in Escrow"
+  | "Processing"
+  | "Shipped"
+  | "Delivered"
+  | "Releasing Funds"
+  | "Funds Released"
+  | "Under Dispute"
+  | "Refunded"
+  | "Payment Failed";
+
+export const ESCROW_LABELS: Record<EscrowStatus, EscrowStatusLabel> = {
+  PENDING_PAYMENT:     "Awaiting Payment",
+  PAYMENT_INITIALIZED: "Payment Initiated",
+  PAYMENT_VERIFIED:    "Payment Verified",
+  ESCROW_HELD:         "Funds Held in Escrow",
+  PROCESSING:          "Processing",
+  SHIPPED:             "Shipped",
+  DELIVERED:           "Delivered",
+  RELEASE_PENDING:     "Releasing Funds",
+  RELEASED:            "Funds Released",
+  DISPUTED:            "Under Dispute",
+  REFUNDED:            "Refunded",
+  FAILED:              "Payment Failed",
+};
+
+export const PAID_ESCROW_STATES: EscrowStatus[] = [
+  "PAYMENT_VERIFIED", "ESCROW_HELD", "PROCESSING",
+  "SHIPPED", "DELIVERED", "RELEASE_PENDING", "RELEASED",
+];
+
 export type OrderStatus =
-  | "Payment pending"
-  | "Awaiting pickup"
+  | "Awaiting payment"
+  | "Payment initiated"
   | "In progress"
   | "Out for delivery"
+  | "Delivered"
+  | "Releasing funds"
   | "Completed"
-  | "Cancelled";
+  | "Disputed"
+  | "Refunded"
+  | "Cancelled"
+  | "Payment failed";
 
 export type DeliveryTracking = {
   latitude: number;
@@ -112,9 +165,13 @@ export type Order = {
   id: string;
   product: Pick<Product, "id" | "title" | "price" | "imageUrl" | "imageStyle" | "location">;
   status: OrderStatus | string;
+  escrowStatus: EscrowStatus | string;
+  /** Kept for backward-compat; prefer escrowStatus for logic */
   paymentStatus?: "Unpaid" | "Paid" | string;
-  escrowStatus?: "Not funded" | "Held in escrow" | "Released" | string;
   price?: number;
+  totalAmount?: number;
+  platformFee?: number;
+  sellerAmount?: number;
   meetupLocation?: string;
   counterpart?: string;
   counterpartId?: string;
@@ -122,11 +179,56 @@ export type Order = {
   updatedAt: string;
   createdAt?: string;
   buyerId?: string;
+  sellerId?: string;
   deliveryAddress?: string | null;
   deliveryPhone?: string | null;
   deliveryPersonId?: string | null;
   deliveryPerson?: { id: string; name: string; avatar: string; phone?: string | null } | null;
   tracking?: DeliveryTracking | null;
+};
+
+export type Wallet = {
+  id: string;
+  userId: string;
+  availableBalance: number;
+  pendingBalance: number;
+  totalEarnings: number;
+  totalWithdrawn: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PayoutStatus = "PENDING" | "APPROVED" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
+export type PayoutMethod = "MTN_MOMO" | "TELECEL_CASH" | "AIRTELTIGO_MONEY" | "BANK_TRANSFER";
+
+export const PAYOUT_STATUS_LABELS: Record<PayoutStatus, string> = {
+  PENDING:    "Awaiting approval",
+  APPROVED:   "Approved",
+  PROCESSING: "Payout Processing",
+  COMPLETED:  "Payout Completed",
+  FAILED:     "Payout Failed",
+  CANCELLED:  "Cancelled",
+};
+
+export const PAYOUT_METHOD_LABELS: Record<PayoutMethod, string> = {
+  MTN_MOMO:         "MTN MoMo",
+  TELECEL_CASH:     "Telecel Cash",
+  AIRTELTIGO_MONEY: "AirtelTigo Money",
+  BANK_TRANSFER:    "Bank Transfer",
+};
+
+export type Payout = {
+  id: string;
+  sellerId: string;
+  orderId?: string | null;
+  amount: number;
+  payoutMethod: PayoutMethod;
+  transferCode?: string | null;
+  status: PayoutStatus;
+  failureReason?: string | null;
+  approvedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
 };
 
 export type PaymentTransaction = {

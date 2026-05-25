@@ -5,6 +5,7 @@ import useSWR, { mutate as globalMutate } from "swr";
 import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowDownCircle,
   BarChart3,
   CalendarDays,
   Check,
@@ -27,12 +28,13 @@ import {
 } from "lucide-react";
 import { useProfile } from "@/hooks/use-api";
 import { api } from "@/lib/api";
+import { PAYOUT_METHOD_LABELS, PAYOUT_STATUS_LABELS, type Payout } from "@/types";
 import { isEnvAdminToken } from "@/lib/auth";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "users" | "listings" | "reports" | "events" | "messages";
+type Tab = "overview" | "users" | "listings" | "reports" | "events" | "messages" | "payouts";
 
 type AdminStats = {
   users: number;
@@ -908,6 +910,121 @@ function MessagesTab() {
   );
 }
 
+// ─── Payouts tab ──────────────────────────────────────────────────────────────
+
+const PAYOUT_STATUS_COLORS: Record<string, string> = {
+  PENDING:    "bg-amber-100 text-amber-800",
+  APPROVED:   "bg-blue-100 text-blue-800",
+  PROCESSING: "bg-sky-100 text-sky-800",
+  COMPLETED:  "bg-green-100 text-green-800",
+  FAILED:     "bg-red-100 text-red-800",
+  CANCELLED:  "bg-slate-100 text-slate-600",
+};
+
+function PayoutsTab() {
+  const { data: payouts, isLoading, mutate } = useSWR<Payout[]>(
+    "admin-pending-payouts",
+    api.admin.getPendingPayouts,
+    { fallbackData: [] },
+  );
+  const [acting, setActing] = useState<string | null>(null);
+
+  async function handleApprove(id: string) {
+    setActing(id);
+    try {
+      await api.admin.approvePayout(id);
+      await mutate();
+    } finally {
+      setActing(null);
+    }
+  }
+
+  async function handleCancel(id: string) {
+    setActing(id);
+    try {
+      await api.admin.cancelPayout(id);
+      await mutate();
+    } finally {
+      setActing(null);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-16 animate-pulse rounded-2xl" style={{ background: "rgba(226,232,240,0.40)" }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (!payouts || payouts.length === 0) {
+    return (
+      <div className="rounded-2xl p-10 text-center" style={CARD}>
+        <ArrowDownCircle className="mx-auto h-10 w-10" style={{ color: "#E2E8F0" }} />
+        <p className="mt-3 text-sm font-black" style={{ color: "#1E293B" }}>No pending payouts</p>
+        <p className="mt-1 text-xs" style={{ color: "#94A3B8" }}>
+          Payout requests from sellers will appear here for approval.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {payouts.map((payout) => {
+        const isActing = acting === payout.id;
+        const statusClass = PAYOUT_STATUS_COLORS[payout.status] ?? "bg-slate-100 text-slate-600";
+        const statusLabel = PAYOUT_STATUS_LABELS[payout.status] ?? payout.status;
+        const methodLabel = PAYOUT_METHOD_LABELS[payout.payoutMethod] ?? payout.payoutMethod;
+        return (
+          <div key={payout.id} className="rounded-2xl p-4" style={CARD}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-black" style={{ color: "#1E293B" }}>
+                    {formatCurrency(payout.amount)}
+                  </p>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${statusClass}`}>
+                    {statusLabel}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs font-semibold" style={{ color: "#94A3B8" }}>
+                  {methodLabel}
+                  {payout.orderId ? ` · Order ${payout.orderId.slice(0, 8).toUpperCase()}` : ""}
+                  {" · "}{formatRelativeDate(payout.createdAt)}
+                </p>
+              </div>
+              {payout.status === "PENDING" ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleApprove(payout.id)}
+                    disabled={isActing}
+                    className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                    style={{ background: "#5A9460" }}
+                  >
+                    {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleCancel(payout.id)}
+                    disabled={isActing}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 function Pagination({ skip, take, total, onPage }: { skip: number; take: number; total: number; onPage: (s: number) => void }) {
@@ -940,6 +1057,7 @@ const NAV_ITEMS: { tab: Tab; icon: React.ReactNode; label: string }[] = [
   { tab: "reports", icon: <AlertTriangle className="h-4 w-4" />, label: "Reports" },
   { tab: "events", icon: <CalendarDays className="h-4 w-4" />, label: "Events" },
   { tab: "messages", icon: <Inbox className="h-4 w-4" />, label: "Messages" },
+  { tab: "payouts", icon: <ArrowDownCircle className="h-4 w-4" />, label: "Payouts" },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -987,6 +1105,7 @@ export default function AdminPage() {
               {tab === "reports" && <ReportsTab />}
               {tab === "events" && <EventsTab />}
               {tab === "messages" && <MessagesTab />}
+              {tab === "payouts" && <PayoutsTab />}
             </main>
           </div>
         </div>

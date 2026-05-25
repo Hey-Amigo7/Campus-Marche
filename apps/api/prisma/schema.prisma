@@ -7,11 +7,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
 enum UserRole {
   USER
   MODERATOR
   ADMIN
 }
+
+enum EscrowStatus {
+  PENDING_PAYMENT
+  PAYMENT_INITIALIZED
+  PAYMENT_VERIFIED
+  ESCROW_HELD
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  RELEASE_PENDING
+  RELEASED
+  DISPUTED
+  REFUNDED
+  FAILED
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PayoutMethod {
+  MTN_MOMO
+  TELECEL_CASH
+  AIRTELTIGO_MONEY
+  BANK_TRANSFER
+}
+
+// ─── Core models ──────────────────────────────────────────────────────────────
 
 model User {
   id            String   @id @default(cuid())
@@ -47,6 +82,10 @@ model User {
   conversationsAsA   Conversation[]        @relation("ConversationParticipantA")
   conversationsAsB   Conversation[]        @relation("ConversationParticipantB")
   subscription       Subscription?
+  wallet             Wallet?
+  transferRecipients TransferRecipient[]
+  payouts            Payout[]
+  sellerOrders       Order[]               @relation("SellerOrders")
 }
 
 model BusinessProfile {
@@ -68,26 +107,26 @@ model BusinessProfile {
 }
 
 model Product {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
   description String?
   price       Float
-  condition   String   @default("Good")
+  condition   String    @default("Good")
   location    String
   imageUrl    String?
-  imageStyle  String   @default("art-laptop")
-  featured    Boolean  @default(false)
-  boosted     Boolean  @default(false)
-  negotiable  Boolean  @default(false)
-  active      Boolean  @default(true)
+  imageStyle  String    @default("art-laptop")
+  featured    Boolean   @default(false)
+  boosted     Boolean   @default(false)
+  negotiable  Boolean   @default(false)
+  active      Boolean   @default(true)
   category    String?
-  listingType String   @default("product")
+  listingType String    @default("product")
   soldAt      DateTime?
-  tags        String   @default("")
-  views       Int      @default(0)
-  postedAt    DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  tags        String    @default("")
+  views       Int       @default(0)
+  postedAt    DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   sellerId      String
   seller        User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
@@ -106,28 +145,47 @@ model Product {
   @@index([postedAt])
 }
 
+// ─── Orders & Payments ────────────────────────────────────────────────────────
+
 model Order {
-  id               String   @id @default(cuid())
-  status           String   @default("Payment pending")
-  paymentStatus    String   @default("Unpaid")
-  escrowStatus     String   @default("Not funded")
-  price            Float
-  deliveryAddress  String?
-  deliveryPhone    String?
-  deliveryPersonId String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                  String       @id @default(cuid())
+  // Lifecycle status (delivery stage)
+  status              String       @default("Awaiting payment")
+  // Payment/escrow state machine
+  escrowStatus        EscrowStatus @default(PENDING_PAYMENT)
+  // Kept for backward-compat; always synced with escrowStatus
+  paymentStatus       String       @default("Unpaid")
+  // Financial fields
+  price               Float
+  totalAmount         Float        @default(0)
+  platformFee         Float        @default(0)
+  sellerAmount        Float        @default(0)
+  // Paystack reference for the primary payment
+  paymentReference    String?
+  // Delivery
+  deliveryAddress     String?
+  deliveryPhone       String?
+  deliveryPersonId    String?
+  deliveryConfirmedAt DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   buyerId        String
   buyer          User                 @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId       String?
+  seller         User?                @relation("SellerOrders", fields: [sellerId], references: [id], onDelete: SetNull)
   productId      String
   product        Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
   payments       PaymentTransaction[]
   tracking       DeliveryTracking?
   deliveryPerson User?                @relation("DeliveryPerson", fields: [deliveryPersonId], references: [id], onDelete: SetNull)
+  payouts        Payout[]
+  revenue        PlatformRevenue?
 
   @@index([buyerId])
+  @@index([sellerId])
   @@index([productId])
+  @@index([escrowStatus])
 }
 
 model PaymentTransaction {
@@ -140,6 +198,7 @@ model PaymentTransaction {
   authorizationUrl String?
   accessCode       String?
   paidAt           DateTime?
+  verifiedAt       DateTime?
   metadata         String    @default("")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -151,7 +210,105 @@ model PaymentTransaction {
 
   @@index([orderId])
   @@index([userId])
+  @@index([reference])
 }
+
+// ─── Seller Wallet ────────────────────────────────────────────────────────────
+
+model Wallet {
+  id               String   @id @default(cuid())
+  availableBalance Float    @default(0)
+  pendingBalance   Float    @default(0)
+  totalEarnings    Float    @default(0)
+  totalWithdrawn   Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Payouts ──────────────────────────────────────────────────────────────────
+
+model TransferRecipient {
+  id            String   @id @default(cuid())
+  recipientCode String   @unique
+  type          String   @default("mobile_money")
+  bankName      String?
+  accountNumber String?
+  momoPhone     String?
+  momoNetwork   String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId])
+}
+
+model Payout {
+  id                String       @id @default(cuid())
+  amount            Float
+  payoutMethod      PayoutMethod @default(MTN_MOMO)
+  transferReference String?
+  transferCode      String?
+  recipientCode     String?
+  status            PayoutStatus @default(PENDING)
+  failureReason     String?
+  approvedAt        DateTime?
+  processedAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orderId  String?
+  order    Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([sellerId])
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ─── Platform Revenue Ledger ──────────────────────────────────────────────────
+
+model PlatformRevenue {
+  id           String   @id @default(cuid())
+  feeAmount    Float
+  feePercent   Float    @default(0)
+  feeFixed     Float    @default(0)
+  totalAmount  Float
+  sellerAmount Float
+  recordedAt   DateTime @default(now())
+
+  orderId String  @unique
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([recordedAt])
+}
+
+// ─── Webhook Idempotency Log ──────────────────────────────────────────────────
+
+model WebhookLog {
+  id        String   @id @default(cuid())
+  provider  String   @default("paystack")
+  eventType String
+  reference String?
+  payload   String
+  verified  Boolean  @default(false)
+  processed Boolean  @default(false)
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([reference])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// ─── Messaging ────────────────────────────────────────────────────────────────
 
 model Conversation {
   id        String   @id @default(cuid())
@@ -187,6 +344,8 @@ model Message {
   @@index([senderId])
 }
 
+// ─── Reviews & Saved ─────────────────────────────────────────────────────────
+
 model Review {
   id        String   @id @default(cuid())
   rating    Float
@@ -216,6 +375,8 @@ model SavedItem {
   @@index([productId])
 }
 
+// ─── Events ───────────────────────────────────────────────────────────────────
+
 model CampusEvent {
   id          String   @id @default(cuid())
   title       String
@@ -230,6 +391,8 @@ model CampusEvent {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// ─── Notifications, Reports, Logs ─────────────────────────────────────────────
 
 model Notification {
   id        String   @id @default(cuid())
@@ -280,6 +443,8 @@ model AdminLog {
   @@index([entity])
 }
 
+// ─── Auth tokens ──────────────────────────────────────────────────────────────
+
 model PasswordResetToken {
   id        String   @id @default(cuid())
   token     String   @unique
@@ -323,6 +488,8 @@ model OtpVerification {
   @@index([userId])
   @@index([purpose])
 }
+
+// ─── Delivery & Contact ───────────────────────────────────────────────────────
 
 model DeliveryTracking {
   id        String   @id @default(cuid())

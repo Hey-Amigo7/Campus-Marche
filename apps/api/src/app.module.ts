@@ -35,6 +35,10 @@ import { OrderController } from './order.controller';
 import { OrderService } from './order.service';
 import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
+import { PayoutController } from './payout.controller';
+import { PayoutService } from './payout.service';
+import { WalletController } from './wallet.controller';
+import { WalletService } from './wallet.service';
 import { PrismaService } from './prisma.service';
 import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
@@ -82,7 +86,9 @@ import { UserController } from './user.controller';
     NotificationController,
     OrderController,
     PaymentController,
+    PayoutController,
     ProductController,
+    WalletController,
     ReportController,
     ReviewController,
     SavedItemsController,
@@ -105,7 +111,9 @@ import { UserController } from './user.controller';
     NotificationService,
     OrderService,
     PaymentService,
+    PayoutService,
     PrismaService,
+    WalletService,
     ProductService,
     Reflector,
     ReportService,

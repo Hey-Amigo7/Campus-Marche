@@ -261,10 +261,10 @@ export const categories: Category[] = [
 ];
 
 export const orders: Order[] = [
-  { id: "ord-101", product: products[0]!, status: "Awaiting pickup", meetupLocation: "HTU Main Gate", counterpart: "Daniel K.", role: "buyer", updatedAt: "10:40 AM" },
-  { id: "ord-102", product: products[4]!, status: "In progress", meetupLocation: "Auditorium", counterpart: "Amara B.", role: "buyer", updatedAt: "Yesterday" },
-  { id: "ord-103", product: products[5]!, status: "Completed", meetupLocation: "Computer Lab", counterpart: "Sarah T.", role: "seller", updatedAt: "Fri" },
-  { id: "ord-104", product: products[3]!, status: "Cancelled", meetupLocation: "Hostel B", counterpart: "Amara B.", role: "buyer", updatedAt: "Last week" },
+  { id: "ord-101", product: products[0]!, status: "Awaiting pickup", escrowStatus: "PENDING_PAYMENT", meetupLocation: "HTU Main Gate", counterpart: "Daniel K.", role: "buyer", updatedAt: "10:40 AM" },
+  { id: "ord-102", product: products[4]!, status: "In progress",     escrowStatus: "ESCROW_HELD",    meetupLocation: "Auditorium",    counterpart: "Amara B.",  role: "buyer",  updatedAt: "Yesterday" },
+  { id: "ord-103", product: products[5]!, status: "Completed",       escrowStatus: "RELEASED",        meetupLocation: "Computer Lab",  counterpart: "Sarah T.",  role: "seller", updatedAt: "Fri" },
+  { id: "ord-104", product: products[3]!, status: "Cancelled",       escrowStatus: "REFUNDED",        meetupLocation: "Hostel B",      counterpart: "Amara B.",  role: "buyer",  updatedAt: "Last week" },
 ];
 
 export const conversations: Conversation[] = [

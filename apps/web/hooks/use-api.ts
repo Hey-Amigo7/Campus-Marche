@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { api, type PaginatedProducts, type ProductFilters } from "@/lib/api";
-import type { ApiConversation, ApiMessage, Category, Notification, Product, Seller } from "@/types";
+import type { ApiConversation, ApiMessage, Category, Notification, Payout, Product, Seller, Wallet } from "@/types";
 
 export function useProduct(id: string | null) {
   return useSWR<Product | null>(
@@ -122,4 +122,12 @@ export function useSavedStatus(productId: string | undefined) {
     () => api.isSaved(productId!),
     { fallbackData: { saved: false, productId: productId ?? "" } },
   );
+}
+
+export function useWallet() {
+  return useSWR<Wallet | null>("wallet", api.getWallet, { fallbackData: null });
+}
+
+export function usePayouts() {
+  return useSWR<Payout[]>("payouts", api.getPayouts, { fallbackData: [] });
 }

@@ -23,6 +23,11 @@ export type ApiEnv = {
   UPLOAD_DIR?: string;
   ADMIN_EMAIL?: string;
   ADMIN_PASSWORD?: string;
+  // Marketplace commission
+  MARKETPLACE_FEE_PERCENT?: string;
+  MARKETPLACE_FEE_FLAT?: string;
+  // Payout
+  PAYOUT_AUTO_APPROVE?: string;
 };
 
 const DEFAULT_ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001';
@@ -74,6 +79,9 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     UPLOAD_DIR: config.UPLOAD_DIR,
     ADMIN_EMAIL: config.ADMIN_EMAIL,
     ADMIN_PASSWORD: config.ADMIN_PASSWORD,
+    MARKETPLACE_FEE_PERCENT: config.MARKETPLACE_FEE_PERCENT,
+    MARKETPLACE_FEE_FLAT: config.MARKETPLACE_FEE_FLAT,
+    PAYOUT_AUTO_APPROVE: config.PAYOUT_AUTO_APPROVE,
   };
 }
 

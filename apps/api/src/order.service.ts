@@ -1,27 +1,34 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EscrowStatus } from '@prisma/client';
+import { calculateCommission } from './commission.engine';
 import { PrismaService } from './prisma.service';
 import type { NotificationService } from './notification.service';
 
+// Buyer may cancel unpaid orders; delivery confirmation goes through PaymentService.releaseEscrow
 const ALLOWED_BUYER_TRANSITIONS: Record<string, string[]> = {
-  'Payment pending': [],
-  'In progress': ['Completed', 'Cancelled'],
+  'Awaiting payment': ['Cancelled'],
+  'In progress':      ['Cancelled'],
   'Out for delivery': [],
-  Completed: [],
-  Cancelled: [],
+  Completed:          [],
+  Cancelled:          [],
 };
 
+// Seller can mark shipping stages; payment/escrow transitions are handled by PaymentService
 const ALLOWED_SELLER_TRANSITIONS: Record<string, string[]> = {
-  'Payment pending': ['Cancelled'],
-  'In progress': ['Completed', 'Cancelled'],
-  'Out for delivery': ['Completed'],
-  Completed: [],
-  Cancelled: [],
+  'Awaiting payment': ['Cancelled'],
+  'In progress':      ['Out for delivery', 'Cancelled'],
+  'Out for delivery': ['Delivered'],
+  Delivered:          [],
+  Completed:          [],
+  Cancelled:          [],
 };
 
 @Injectable()
 export class OrderService {
   constructor(
     private prisma: PrismaService,
+    private config: ConfigService,
     @Optional() private notificationService?: NotificationService,
   ) {}
 
@@ -109,13 +116,28 @@ export class OrderService {
     if (!product) throw new NotFoundException('Product not found or no longer available');
     if (product.sellerId === data.buyerId) throw new BadRequestException('You cannot buy your own listing');
 
+    // Calculate commission at order-creation time so amounts are locked in
+    const feePercent = parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '1');
+    const feeFixed   = parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')    ?? '0');
+    const commission = calculateCommission(product.price, feePercent, feeFixed);
+
     const order = await this.prisma.order.create({
-      data: { buyerId: data.buyerId, productId: data.productId, price: product.price },
+      data: {
+        buyerId:      data.buyerId,
+        productId:    data.productId,
+        sellerId:     product.sellerId,
+        price:        product.price,
+        totalAmount:  commission.totalAmount,
+        platformFee:  commission.platformFee,
+        sellerAmount: commission.sellerAmount,
+        escrowStatus: EscrowStatus.PENDING_PAYMENT,
+        status:       'Awaiting payment',
+      },
       include: { product: { select: { title: true, sellerId: true } } },
     });
 
     this.notificationService
-      ?.notify(product.sellerId, 'order', 'New order received', `Someone placed an order for your listing.`)
+      ?.notify(product.sellerId, 'order', 'New order received', `Someone placed an order for your listing "${product.id}".`)
       .catch(() => undefined);
 
     return order;

@@ -6,8 +6,11 @@ import type {
   Category,
   Order,
   PaymentTransaction,
+  Payout,
+  PayoutMethod,
   Product,
   Seller,
+  Wallet,
 } from "@/types";
 import { getAuthToken, hasAuthToken } from "@/lib/auth";
 
@@ -457,6 +460,23 @@ export const api = {
       { revalidate: 300 },
     ),
 
+  // ── Wallet ─────────────────────────────────────────────────────────────────
+
+  getWallet: () =>
+    request<Wallet | null>("/wallet", null),
+
+  // ── Payouts ────────────────────────────────────────────────────────────────
+
+  getPayouts: () =>
+    request<Payout[]>("/payouts", []),
+
+  requestPayout: (payload: { amount: number; payoutMethod: PayoutMethod; momoPhone?: string }) =>
+    request<Payout>("/payouts", {} as Payout, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      strict: true,
+    }),
+
   submitContact: (payload: { name: string; email: string; subject: string; message: string }) =>
     request<{ id: string; message: string }>(
       "/contact",
@@ -592,6 +612,19 @@ export const api = {
     resolveContactMessage: (id: string) =>
       request<{ id: string }>(`/admin/contact-messages/${id}/resolve`, {} as never, {
         method: "PATCH", strict: true,
+      }),
+
+    getPendingPayouts: () =>
+      request<Payout[]>("/payouts/admin/pending", [], { strict: true }),
+
+    approvePayout: (id: string) =>
+      request<Payout>(`/payouts/admin/${id}/approve`, {} as Payout, {
+        method: "POST", strict: true,
+      }),
+
+    cancelPayout: (id: string) =>
+      request<Payout>(`/payouts/admin/${id}/cancel`, {} as Payout, {
+        method: "POST", strict: true,
       }),
   },
 };

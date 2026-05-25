@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, Menu, MessageSquare, Palette, Settings, Shield, ShoppingBag, UserRound, X } from "lucide-react";
+import { Bell, LogOut, Menu, MessageSquare, Palette, Settings, Shield, ShoppingBag, UserRound, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/format";
 import { clearAuthToken, hasAuthToken, isEnvAdminToken } from "@/lib/auth";
@@ -148,6 +148,15 @@ function AccountMenu({ onLogout }: { onLogout: () => void }) {
           >
             <Settings className="h-4 w-4" style={{ color: "#64748B" }} />
             Settings
+          </Link>
+          <Link
+            href="/wallet"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50"
+            style={{ color: "#1E293B" }}
+          >
+            <Wallet className="h-4 w-4" style={{ color: "#64748B" }} />
+            Wallet &amp; payouts
           </Link>
 
           {/* Theme switcher */}

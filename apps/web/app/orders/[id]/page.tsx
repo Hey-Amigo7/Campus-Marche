@@ -15,19 +15,28 @@ import {
   User,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { getMomoWarning } from "@/lib/momo-detect";
 import { useOrder } from "@/hooks/use-api";
+import { ESCROW_LABELS, PAID_ESCROW_STATES, type EscrowStatus } from "@/types";
 import { useToast } from "@/providers/toast-provider";
 import { AuthGate } from "@/components/auth-gate";
 import { OrderTimeline } from "@/components/order-timeline";
 import { ProductArt } from "@/components/product-card";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 
-const STATUS_COLORS: Record<string, string> = {
-  "Payment pending": "bg-amber-100 text-amber-800",
-  "In progress": "bg-blue-100 text-blue-800",
-  "Out for delivery": "bg-sky-100 text-sky-800",
-  Completed: "bg-green-100 text-green-800",
-  Cancelled: "bg-red-100 text-red-800",
+const ESCROW_COLORS: Partial<Record<EscrowStatus, string>> & Record<string, string> = {
+  PENDING_PAYMENT:     "bg-amber-100 text-amber-800",
+  PAYMENT_INITIALIZED: "bg-amber-100 text-amber-800",
+  PAYMENT_VERIFIED:    "bg-blue-100 text-blue-800",
+  ESCROW_HELD:         "bg-blue-100 text-blue-800",
+  PROCESSING:          "bg-sky-100 text-sky-800",
+  SHIPPED:             "bg-sky-100 text-sky-800",
+  DELIVERED:           "bg-emerald-100 text-emerald-800",
+  RELEASE_PENDING:     "bg-violet-100 text-violet-800",
+  RELEASED:            "bg-green-100 text-green-800",
+  DISPUTED:            "bg-orange-100 text-orange-800",
+  REFUNDED:            "bg-slate-100 text-slate-700",
+  FAILED:              "bg-red-100 text-red-800",
 };
 
 const MOMO_PROVIDERS = [
@@ -103,6 +112,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [momoRef, setMomoRef] = useState<string | null>(null);
   const [momoDisplayText, setMomoDisplayText] = useState("");
   const [momoState, setMomoState] = useState<"idle" | "sending" | "waiting" | "paid">("idle");
+  const [momoWarning, setMomoWarning] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Poll MoMo status
@@ -141,26 +151,26 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const role = order.role ?? "buyer";
-  const isPaid = order.paymentStatus === "Paid";
-  const escrowHeld = order.escrowStatus === "Held in escrow";
-  const isActive = !["Completed", "Cancelled"].includes(order.status);
-  const isOutForDelivery = order.status === "Out for delivery";
-  const isInProgress = order.status === "In progress";
+  const escrow = (order.escrowStatus ?? "PENDING_PAYMENT") as EscrowStatus;
+  const isPaid = PAID_ESCROW_STATES.includes(escrow);
+  const escrowHeld = escrow === "ESCROW_HELD";
+  const escrowReleasing = escrow === "RELEASE_PENDING";
+  const escrowReleased = escrow === "RELEASED";
+  const isActive = !["RELEASED", "REFUNDED", "FAILED", "CANCELLED"].includes(escrow) && order.status !== "Cancelled";
+  const isOutForDelivery = order.status === "Out for delivery" || escrow === "SHIPPED";
+  const isInProgress = escrow === "ESCROW_HELD" || escrow === "PROCESSING" || order.status === "In progress";
   const hasDeliveryDetails = !!(order.deliveryAddress && order.deliveryPhone);
-  const statusClass = STATUS_COLORS[order.status] ?? "bg-slate-100 text-slate-700";
+  const escrowLabel = ESCROW_LABELS[escrow] ?? order.status;
+  const statusClass = ESCROW_COLORS[escrow] ?? "bg-slate-100 text-slate-700";
 
-  // Allowed status transitions for the "Update status" button
-  const BUYER_TRANSITIONS: Record<string, string[]> = {
-    "In progress": ["Completed", "Cancelled"],
-    "Out for delivery": [],
-  };
+  // Seller can update delivery stage; buyer confirms delivery via releaseEscrow
   const SELLER_TRANSITIONS: Record<string, string[]> = {
-    "Payment pending": ["Cancelled"],
-    "In progress": ["Completed", "Cancelled"],
-    "Out for delivery": ["Completed"],
+    "Awaiting payment": ["Cancelled"],
+    "In progress":      ["Out for delivery", "Cancelled"],
+    "Out for delivery": ["Delivered"],
   };
   const allowedTransitions =
-    role === "buyer" ? (BUYER_TRANSITIONS[order.status] ?? []) : (SELLER_TRANSITIONS[order.status] ?? []);
+    role === "seller" ? (SELLER_TRANSITIONS[order.status] ?? []) : [];
 
   async function handleSaveDelivery(e: FormEvent) {
     e.preventDefault();
@@ -253,6 +263,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   async function handleMomoSend(e: FormEvent) {
     e.preventDefault();
+    // Soft-validate network before sending
+    const warning = getMomoWarning(momoPhone, momoProvider);
+    if (warning && !momoWarning) {
+      setMomoWarning(warning);
+      return; // first click shows warning; second click proceeds
+    }
+    setMomoWarning(null);
     setMomoState("sending");
     try {
       const result = await api.chargeMobileMoney(id, momoPhone, momoProvider);
@@ -290,7 +307,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         {/* Header */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-black text-slate-950">{order.product.title}</h1>
-          <span className={`rounded-full px-3 py-1 text-sm font-bold ${statusClass}`}>{order.status}</span>
+          <span className={`rounded-full px-3 py-1 text-sm font-bold ${statusClass}`}>{escrowLabel}</span>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600 capitalize">{role}</span>
         </div>
         <p className="mt-1 text-sm font-semibold text-slate-400">Order #{id.slice(0, 12).toUpperCase()}</p>
@@ -357,7 +374,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                             <label className="text-xs font-bold text-slate-700">Provider</label>
                             <select
                               value={momoProvider}
-                              onChange={(e) => setMomoProvider(e.target.value as typeof momoProvider)}
+                              onChange={(e) => { setMomoProvider(e.target.value as typeof momoProvider); setMomoWarning(null); }}
                               className="input-shell mt-1 text-sm"
                             >
                               {MOMO_PROVIDERS.map((p) => (
@@ -370,20 +387,26 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                             <input
                               type="tel"
                               value={momoPhone}
-                              onChange={(e) => setMomoPhone(e.target.value)}
+                              onChange={(e) => { setMomoPhone(e.target.value); setMomoWarning(null); }}
                               placeholder="0244 123 456"
                               required
                               className="input-shell mt-1 text-sm"
                             />
                           </div>
                         </div>
+                        {momoWarning ? (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                            ⚠️ {momoWarning}
+                            <p className="mt-1 text-xs font-normal text-amber-700">Tap "Send payment prompt" again to continue anyway.</p>
+                          </div>
+                        ) : null}
                         <button
                           type="submit"
                           disabled={momoState === "sending"}
                           className="btn-primary w-full justify-center disabled:opacity-50 text-sm"
                         >
                           {momoState === "sending" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          Send payment prompt
+                          {momoWarning ? "Continue anyway" : "Send payment prompt"}
                         </button>
                       </form>
                     )}
@@ -577,7 +600,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── ESCROW RELEASE ── */}
-            {role === "buyer" && isPaid && escrowHeld && (isOutForDelivery || isInProgress) ? (
+            {role === "buyer" && ["ESCROW_HELD", "PROCESSING", "SHIPPED", "DELIVERED"].includes(escrow) ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.30)" }}>
                 <h2 className="text-base font-black text-green-900">Confirm delivery</h2>
                 <p className="mt-1 text-sm text-green-700">
@@ -611,18 +634,34 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Order info</h3>
               <dl className="mt-3 space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <dt className="font-semibold text-slate-500">Total</dt>
-                  <dd className="font-black text-slate-950">{formatCurrency(order.price ?? order.product.price)}</dd>
+                  <dt className="font-semibold text-slate-500">Item price</dt>
+                  <dd className="font-black text-slate-950">{formatCurrency(order.product.price)}</dd>
                 </div>
+                {(order.totalAmount ?? 0) > 0 && order.totalAmount !== order.product.price ? (
+                  <div className="flex justify-between">
+                    <dt className="font-semibold text-slate-500">Total paid</dt>
+                    <dd className="font-black text-slate-950">{formatCurrency(order.totalAmount!)}</dd>
+                  </div>
+                ) : null}
+                {role === "seller" && (order.platformFee ?? 0) > 0 ? (
+                  <>
+                    <div className="flex justify-between">
+                      <dt className="font-semibold text-slate-500">Platform fee</dt>
+                      <dd className="font-semibold text-red-500">−{formatCurrency(order.platformFee!)}</dd>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-100 pt-3">
+                      <dt className="font-semibold text-slate-500">You receive</dt>
+                      <dd className="font-black text-green-700">{formatCurrency(order.sellerAmount ?? 0)}</dd>
+                    </div>
+                  </>
+                ) : null}
                 <div className="flex justify-between">
-                  <dt className="font-semibold text-slate-500">Payment</dt>
-                  <dd className={`font-bold ${order.paymentStatus === "Paid" ? "text-green-600" : "text-amber-600"}`}>
-                    {order.paymentStatus ?? "Unpaid"}
+                  <dt className="font-semibold text-slate-500">Status</dt>
+                  <dd>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${statusClass}`}>
+                      {escrowLabel}
+                    </span>
                   </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="font-semibold text-slate-500">Escrow</dt>
-                  <dd className="font-bold text-slate-700">{order.escrowStatus ?? "—"}</dd>
                 </div>
                 {order.counterpart ? (
                   <div className="flex justify-between">
