@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
 import { SubscriptionService } from './subscription.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
@@ -44,12 +45,67 @@ type ProductWithSeller = {
   [key: string]: unknown;
 };
 
+type UnsplashSearchResponse = {
+  results: Array<{ urls: { regular: string; small: string } }>;
+};
+
 @Injectable()
 export class ProductService {
+  private readonly logger = new Logger(ProductService.name);
+
   constructor(
     private prisma: PrismaService,
     private subscriptionService: SubscriptionService,
+    private config: ConfigService,
   ) {}
+
+  /**
+   * Searches Unsplash for an image that matches the product title and category.
+   * Returns the CDN URL (stored permanently in the DB) or null if unavailable.
+   */
+  private async fetchRelevantImage(title: string, category: string): Promise<string | null> {
+    const key = this.config.get<string>('UNSPLASH_ACCESS_KEY');
+    if (!key) return null;
+
+    // Build a precise query: title keywords + category context
+    const titleWords = title
+      .replace(/[^a-zA-Z0-9 ]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
+      .slice(0, 5)
+      .join(' ');
+    const query = encodeURIComponent(`${titleWords} ${category}`.trim());
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+
+      const res = await fetch(
+        `https://api.unsplash.com/search/photos?query=${query}&per_page=3&orientation=landscape&content_filter=high`,
+        {
+          headers: { Authorization: `Client-ID ${key}` },
+          signal: controller.signal,
+        },
+      );
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        this.logger.warn(`Unsplash search failed (${res.status}) for: ${titleWords}`);
+        return null;
+      }
+
+      const data = (await res.json()) as UnsplashSearchResponse;
+      // Pick the best result — prefer first which Unsplash ranks most relevant
+      const url = data.results[0]?.urls.regular ?? null;
+      if (url) this.logger.log(`Unsplash image resolved for "${titleWords}"`);
+      return url;
+    } catch (err) {
+      if ((err as { name?: string }).name !== 'AbortError') {
+        this.logger.warn(`Unsplash fetch error: ${String(err)}`);
+      }
+      return null;
+    }
+  }
 
   private normalizeTags(tags: string | null | undefined): string[] {
     if (!tags) return [];
@@ -131,9 +187,13 @@ export class ProductService {
       );
     }
 
+    // If no image was uploaded, fetch a precise one from Unsplash based on the title
+    const imageUrl = data.imageUrl ?? await this.fetchRelevantImage(data.title, data.category ?? '');
+
     const product = await this.prisma.product.create({
       data: {
         ...data,
+        imageUrl: imageUrl ?? undefined,
         tags: Array.isArray(data.tags) ? data.tags.join(',') : (data.tags ?? ''),
         sellerId,
       },
@@ -144,14 +204,26 @@ export class ProductService {
   }
 
   async update(id: string, sellerId: string, data: UpdateProductDto) {
-    const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true } });
+    const existing = await this.prisma.product.findUnique({
+      where: { id },
+      select: { sellerId: true, imageUrl: true, title: true, category: true },
+    });
     if (!existing) throw new NotFoundException('Product not found');
     if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only update your own products');
+
+    // Fetch a smart image only if the listing currently has no real image and none was provided
+    let resolvedImageUrl = data.imageUrl;
+    if (!resolvedImageUrl && !existing.imageUrl) {
+      const title = data.title ?? existing.title;
+      const category = data.category ?? existing.category ?? '';
+      resolvedImageUrl = (await this.fetchRelevantImage(title, category)) ?? undefined;
+    }
 
     const updated = await this.prisma.product.update({
       where: { id },
       data: {
         ...data,
+        ...(resolvedImageUrl !== undefined && { imageUrl: resolvedImageUrl }),
         tags: Array.isArray(data.tags) ? data.tags.join(',') : data.tags,
       },
       include: { seller: { select: SELLER_SELECT } },
