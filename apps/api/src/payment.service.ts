@@ -422,6 +422,8 @@ export class PaymentService {
         const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
         const reason = (data as unknown as { reason?: string }).reason;
         await this.payoutService.handleTransferFailed(transferCode, reference, reason);
+      } else if (eventType === 'refund.processed' || eventType === 'refund.failed') {
+        await this.handleRefund(data);
       }
 
       await this.prisma.webhookLog.update({ where: { id: log.id }, data: { processed: true } });
@@ -481,6 +483,49 @@ export class PaymentService {
 
     const sellerId = order.sellerId ?? order.product.sellerId;
     await this.fundEscrow(reference, paid_at ?? new Date().toISOString(), sellerId);
+  }
+
+  // ─── Private: handle Paystack refund ────────────────────────────────────────
+
+  private async handleRefund(data: PaystackWebhookEvent['data']) {
+    // Paystack puts the original charge reference in transaction_reference
+    const originalRef = (data as unknown as { transaction_reference?: string }).transaction_reference
+      ?? data.reference;
+
+    const order = await this.prisma.order.findFirst({
+      where: { paymentReference: originalRef },
+    });
+
+    if (!order) {
+      this.logger.warn(`refund webhook: no order found for reference ${originalRef}`);
+      return;
+    }
+
+    // Already in a terminal refund/failed state — skip
+    if (['REFUNDED', 'FAILED'].includes(order.escrowStatus)) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          escrowStatus:  EscrowStatus.REFUNDED,
+          paymentStatus: 'Refunded',
+          status:        'Refunded',
+        },
+      });
+
+      // Reverse wallet balance — pending if funds not yet released, available if buyer already confirmed
+      if (order.sellerId && order.sellerAmount) {
+        const inAvailable = ['RELEASE_PENDING', 'DELIVERED'].includes(order.escrowStatus);
+        if (inAvailable) {
+          await this.walletService.refundAvailable(order.sellerId, order.sellerAmount, tx);
+        } else {
+          await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx);
+        }
+      }
+    });
+
+    this.logger.log(`Refund processed: order ${order.id} → REFUNDED`);
   }
 
   /**

@@ -70,6 +70,15 @@ export class WalletService {
     });
   }
 
+  /** Reverse a pending balance credit (called when a charge is refunded before delivery). */
+  async reversePending(userId: string, amount: number, tx?: Prisma.TransactionClient) {
+    const client = tx ?? this.prisma;
+    await client.wallet.updateMany({
+      where: { userId },
+      data: { pendingBalance: { decrement: amount } },
+    });
+  }
+
   /**
    * Finalize a completed withdrawal (called on transfer.success webhook).
    */
