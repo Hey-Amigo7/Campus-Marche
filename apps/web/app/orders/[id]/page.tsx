@@ -513,7 +513,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                       </button>
                     </form>
                   )
-                ) : role === "seller" && isInProgress ? (
+                ) : role === "seller" && isPaid ? (
                   <div className="mt-3 space-y-3">
                     {hasDeliveryDetails ? (
                       <div className="rounded-xl bg-slate-50 p-4 text-sm">
@@ -671,7 +671,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             {/* Order timeline */}
             <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
               <h3 className="mb-4 text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Order progress</h3>
-              <OrderTimeline status={order.status} />
+              <OrderTimeline status={order.status} escrowStatus={order.escrowStatus} />
             </div>
 
             {/* Order meta */}

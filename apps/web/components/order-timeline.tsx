@@ -1,35 +1,82 @@
+"use client";
+
 import { CheckCircle2, Circle, XCircle } from "lucide-react";
+import type { EscrowStatus } from "@/types";
 
-type Status = string;
-
-const STEPS = [
-  { key: "Payment pending", label: "Order placed", description: "Waiting for payment" },
-  { key: "In progress", label: "Payment confirmed", description: "Funds held in escrow" },
-  { key: "Out for delivery", label: "Out for delivery", description: "On the way to you" },
-  { key: "Completed", label: "Completed", description: "Item received, funds released" },
+const STEPS: { states: EscrowStatus[]; label: string; description: string }[] = [
+  {
+    states: ["PENDING_PAYMENT", "PAYMENT_INITIALIZED", "PAYMENT_VERIFIED"],
+    label: "Order placed",
+    description: "Waiting for payment",
+  },
+  {
+    states: ["ESCROW_HELD", "PROCESSING"],
+    label: "Payment confirmed",
+    description: "Funds held in escrow",
+  },
+  {
+    states: ["SHIPPED", "DELIVERED"],
+    label: "Out for delivery",
+    description: "On the way to you",
+  },
+  {
+    states: ["RELEASE_PENDING", "RELEASED"],
+    label: "Completed",
+    description: "Item received, funds released",
+  },
 ];
 
-function stepIndex(status: Status) {
-  if (status === "Cancelled") return -1;
-  const idx = STEPS.findIndex((s) => s.key === status);
-  return idx === -1 ? 0 : idx;
+function stepIndex(escrow: EscrowStatus): number {
+  for (let i = STEPS.length - 1; i >= 0; i--) {
+    if (STEPS[i]!.states.includes(escrow)) return i;
+  }
+  return 0;
 }
 
-export function OrderTimeline({ status }: { status: Status }) {
-  const cancelled = status === "Cancelled";
-  const current = stepIndex(status);
+export function OrderTimeline({ status, escrowStatus }: { status: string; escrowStatus?: string }) {
+  const escrow = (escrowStatus ?? "PENDING_PAYMENT") as EscrowStatus;
 
-  if (cancelled) {
+  if (status === "Cancelled" || escrow === "REFUNDED" || escrow === "FAILED") {
+    const isRefunded = escrow === "REFUNDED";
     return (
-      <div className="flex items-center gap-3 rounded-2xl p-4" style={{ background: "rgba(254,242,242,0.70)", border: "1px solid rgba(220,38,38,0.20)" }}>
-        <XCircle className="h-5 w-5 shrink-0 text-red-500" />
+      <div
+        className="flex items-center gap-3 rounded-2xl p-4"
+        style={{
+          background: isRefunded ? "rgba(241,245,249,0.70)" : "rgba(254,242,242,0.70)",
+          border: `1px solid ${isRefunded ? "rgba(148,163,184,0.30)" : "rgba(220,38,38,0.20)"}`,
+        }}
+      >
+        <XCircle className={`h-5 w-5 shrink-0 ${isRefunded ? "text-slate-400" : "text-red-500"}`} />
         <div>
-          <p className="font-black text-red-700">Order cancelled</p>
-          <p className="text-xs text-red-500">This order was cancelled and no funds were transferred.</p>
+          <p className={`font-black ${isRefunded ? "text-slate-600" : "text-red-700"}`}>
+            {isRefunded ? "Order refunded" : "Order cancelled"}
+          </p>
+          <p className={`text-xs ${isRefunded ? "text-slate-400" : "text-red-500"}`}>
+            {isRefunded
+              ? "Payment was refunded to the buyer."
+              : "This order was cancelled and no funds were transferred."}
+          </p>
         </div>
       </div>
     );
   }
+
+  if (escrow === "DISPUTED") {
+    return (
+      <div
+        className="flex items-center gap-3 rounded-2xl p-4"
+        style={{ background: "rgba(255,247,237,0.80)", border: "1px solid rgba(251,146,60,0.30)" }}
+      >
+        <XCircle className="h-5 w-5 shrink-0 text-orange-500" />
+        <div>
+          <p className="font-black text-orange-700">Under dispute</p>
+          <p className="text-xs text-orange-500">This order is being reviewed. Please contact support.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const current = stepIndex(escrow);
 
   return (
     <div className="space-y-0">
@@ -39,8 +86,7 @@ export function OrderTimeline({ status }: { status: Status }) {
         const upcoming = i > current;
 
         return (
-          <div key={step.key} className="flex gap-4">
-            {/* Icon + line */}
+          <div key={step.label} className="flex gap-4">
             <div className="flex flex-col items-center">
               <span
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
@@ -61,15 +107,11 @@ export function OrderTimeline({ status }: { status: Status }) {
               {i < STEPS.length - 1 ? (
                 <div
                   className="my-1 w-0.5 flex-1"
-                  style={{
-                    background: done ? "#5A9460" : "rgba(226,232,240,0.80)",
-                    minHeight: "24px",
-                  }}
+                  style={{ background: done ? "#5A9460" : "rgba(226,232,240,0.80)", minHeight: "24px" }}
                 />
               ) : null}
             </div>
 
-            {/* Label */}
             <div className={`pb-5 pt-0.5 ${upcoming ? "opacity-40" : ""}`}>
               <p
                 className="text-sm font-black"

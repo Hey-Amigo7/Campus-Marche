@@ -1,7 +1,6 @@
 "use client";
 
 import { ImagePlus, Loader2, Save, Tag, UploadCloud, X, ArrowLeft } from "lucide-react";
-import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -278,7 +277,8 @@ function EditListingContent() {
             />
             {currentImage ? (
               <div className="relative mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                <Image src={currentImage} alt="Product preview" width={640} height={320} className="h-52 w-full object-cover" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={currentImage} alt="Product preview" className="h-52 w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => setUploadedImageUrl(null)}

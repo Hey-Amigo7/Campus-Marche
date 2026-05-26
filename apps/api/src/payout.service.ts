@@ -69,8 +69,12 @@ export class PayoutService {
       try {
         await this.processPayout(payout.id, momoPhone);
       } catch (err) {
-        this.logger.error(`Auto-process payout ${payout.id} failed: ${String(err)}`);
-        // Payout remains PENDING — admin can retry
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Auto-process payout ${payout.id} failed: ${msg}`);
+        await this.prisma.payout.update({
+          where: { id: payout.id },
+          data: { failureReason: msg },
+        });
       }
     }
 

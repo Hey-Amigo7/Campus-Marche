@@ -7,6 +7,13 @@ const nextConfig = {
   turbopack: {
     root: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "**.cloudinary.com" },
+      { protocol: "http", hostname: "localhost" },
+    ],
+  },
 };
 
 export default nextConfig;
