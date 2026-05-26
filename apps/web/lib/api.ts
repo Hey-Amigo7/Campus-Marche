@@ -311,6 +311,13 @@ export const api = {
       { method: "POST", body: JSON.stringify({ phone, provider }), strict: true },
     ),
 
+  submitMomoOtp: (reference: string, otp: string) =>
+    request<{ reference: string; status: string; displayText?: string }>(
+      `/payments/mobile-money/${encodeURIComponent(reference)}/submit-otp`,
+      {} as never,
+      { method: "POST", body: JSON.stringify({ otp }), strict: true },
+    ),
+
   checkMomoStatus: (reference: string) =>
     request<{ status: string; paid: boolean }>(
       `/payments/mobile-money/${encodeURIComponent(reference)}/status`,

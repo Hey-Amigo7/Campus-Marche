@@ -259,6 +259,30 @@ export class PaymentService {
     };
   }
 
+  // ─── Submit MoMo OTP ─────────────────────────────────────────────────────
+
+  async submitMomoOtp(reference: string, otp: string) {
+    const secret = this.getSecret();
+    if (!secret) throw new BadRequestException('Paystack not configured');
+
+    const res = await fetch('https://api.paystack.co/charge/submit_otp', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otp, reference }),
+    });
+
+    const result = (await res.json()) as { status: boolean; message: string; data?: { reference: string; status: string; display_text?: string } };
+    if (!res.ok || !result.data) {
+      throw new BadRequestException(result.message || 'OTP submission failed');
+    }
+
+    return {
+      reference: result.data.reference,
+      status: result.data.status,
+      displayText: result.data.display_text,
+    };
+  }
+
   // ─── Poll MoMo status ─────────────────────────────────────────────────────
 
   async checkMomoStatus(reference: string, userId: string) {

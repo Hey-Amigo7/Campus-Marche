@@ -111,8 +111,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [momoProvider, setMomoProvider] = useState<"mtn" | "vod" | "tgo">("mtn");
   const [momoRef, setMomoRef] = useState<string | null>(null);
   const [momoDisplayText, setMomoDisplayText] = useState("");
-  const [momoState, setMomoState] = useState<"idle" | "sending" | "waiting" | "paid">("idle");
+  const [momoState, setMomoState] = useState<"idle" | "sending" | "otp" | "submitting_otp" | "waiting" | "paid">("idle");
   const [momoWarning, setMomoWarning] = useState<string | null>(null);
+  const [momoOtp, setMomoOtp] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Poll MoMo status
@@ -263,11 +264,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   async function handleMomoSend(e: FormEvent) {
     e.preventDefault();
-    // Soft-validate network before sending
     const warning = getMomoWarning(momoPhone, momoProvider);
     if (warning && !momoWarning) {
       setMomoWarning(warning);
-      return; // first click shows warning; second click proceeds
+      return;
     }
     setMomoWarning(null);
     setMomoState("sending");
@@ -275,10 +275,26 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       const result = await api.chargeMobileMoney(id, momoPhone, momoProvider);
       setMomoRef(result.reference);
       setMomoDisplayText(result.displayText);
-      setMomoState("waiting");
+      // Paystack may require the user to enter an OTP they received
+      setMomoState(result.status === "send_otp" ? "otp" : "waiting");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not initiate mobile money payment.");
       setMomoState("idle");
+    }
+  }
+
+  async function handleMomoOtp(e: FormEvent) {
+    e.preventDefault();
+    if (!momoRef) return;
+    setMomoState("submitting_otp");
+    try {
+      const result = await api.submitMomoOtp(momoRef, momoOtp);
+      setMomoOtp("");
+      setMomoState(result.status === "success" ? "paid" : "waiting");
+      if (result.status === "success") await mutate();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "OTP verification failed.");
+      setMomoState("otp");
     }
   }
 
@@ -359,6 +375,35 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         <CheckCircle2 className="h-5 w-5" />
                         <span className="font-bold">Payment confirmed!</span>
                       </div>
+                    ) : momoState === "otp" || momoState === "submitting_otp" ? (
+                      <form onSubmit={handleMomoOtp} className="mt-3 space-y-3">
+                        <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 font-semibold">
+                          Enter the OTP sent to your phone to complete payment.
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-700">One-time passcode (OTP)</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={6}
+                            value={momoOtp}
+                            onChange={(e) => setMomoOtp(e.target.value.replace(/\D/g, ""))}
+                            placeholder="123456"
+                            required
+                            autoFocus
+                            className="input-shell mt-1 text-sm tracking-widest"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={momoState === "submitting_otp" || momoOtp.length < 4}
+                          className="btn-primary w-full justify-center disabled:opacity-50 text-sm"
+                        >
+                          {momoState === "submitting_otp" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                          Verify OTP
+                        </button>
+                      </form>
                     ) : momoState === "waiting" ? (
                       <div className="mt-3 space-y-2">
                         <div className="flex items-center gap-2">

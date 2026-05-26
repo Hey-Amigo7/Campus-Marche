@@ -4,7 +4,7 @@ import { IsEnum, IsNumber, IsOptional, IsString, Matches, Min } from 'class-vali
 export class RequestPayoutDto {
   @ApiProperty({ description: 'Amount in GHS to withdraw (must not exceed available balance)' })
   @IsNumber()
-  @Min(1)
+  @Min(0)
   amount!: number;
 
   @ApiProperty({ enum: ['MTN_MOMO', 'TELECEL_CASH', 'AIRTELTIGO_MONEY', 'BANK_TRANSFER'] })

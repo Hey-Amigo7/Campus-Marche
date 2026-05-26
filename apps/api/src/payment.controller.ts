@@ -3,9 +3,17 @@ import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestj
 import { SkipThrottle } from '@nestjs/throttler';
 import { IsEnum, IsString, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty } from 'class-validator';
 import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { PaymentService } from './payment.service';
+
+class SubmitOtpDto {
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  @IsNotEmpty()
+  otp!: string;
+}
 
 class ChargeMomoDto {
   @ApiProperty({ example: '0244123456' })
@@ -67,6 +75,14 @@ export class PaymentController {
     @AuthUser() user: { id: string },
   ) {
     return this.paymentService.chargeMobileMoney(orderId, user.id, body.phone, body.provider);
+  }
+
+  @Post('mobile-money/:reference/submit-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Submit OTP for mobile money charge when Paystack requires it' })
+  submitMomoOtp(@Param('reference') reference: string, @Body() body: SubmitOtpDto) {
+    return this.paymentService.submitMomoOtp(reference, body.otp);
   }
 
   @Get('mobile-money/:reference/status')

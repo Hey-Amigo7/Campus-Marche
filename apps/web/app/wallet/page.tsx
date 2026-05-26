@@ -246,7 +246,7 @@ export default function WalletPage() {
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: "#94A3B8" }}>GH₵</span>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max={available}
                         step="0.01"
                         value={amount}
