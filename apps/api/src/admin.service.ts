@@ -354,4 +354,13 @@ export class AdminService {
       data: { status: 'resolved' },
     });
   }
+
+  async broadcastMessage(adminId: string, title: string, body: string, type = 'system') {
+    const users = await this.prisma.user.findMany({ select: { id: true } });
+    await Promise.all(
+      users.map((u) => this.notificationService.notify(u.id, type, title, body)),
+    );
+    await this.log(adminId, 'BROADCAST', 'Notification', 'all', `${title}: ${body.slice(0, 100)}`);
+    return { sent: users.length };
+  }
 }

@@ -9,10 +9,14 @@ import { SectionHeading } from "@/components/ui";
 import { useNotifications } from "@/hooks/use-api";
 
 const iconByType: Record<string, string> = {
-  order:   "🛒",
-  message: "💬",
-  review:  "⭐",
-  system:  "📢",
+  order:         "🛒",
+  order_status:  "📦",
+  message:       "💬",
+  review:        "⭐",
+  payment:       "💳",
+  payout:        "💰",
+  admin_warning: "⚠️",
+  system:        "📢",
 };
 
 export default function NotificationsPage() {

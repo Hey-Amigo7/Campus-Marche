@@ -34,7 +34,7 @@ import { formatCurrency, formatRelativeDate } from "@/lib/format";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "users" | "listings" | "reports" | "events" | "messages" | "payouts";
+type Tab = "overview" | "users" | "listings" | "reports" | "events" | "messages" | "payouts" | "broadcast";
 
 type AdminStats = {
   users: number;
@@ -923,8 +923,8 @@ const PAYOUT_STATUS_COLORS: Record<string, string> = {
 
 function PayoutsTab() {
   const { data: payouts, isLoading, mutate } = useSWR<Payout[]>(
-    "admin-pending-payouts",
-    api.admin.getPendingPayouts,
+    "admin-all-payouts",
+    api.admin.getAllPayouts,
     { fallbackData: [] },
   );
   const [acting, setActing] = useState<string | null>(null);
@@ -963,9 +963,9 @@ function PayoutsTab() {
     return (
       <div className="rounded-2xl p-10 text-center" style={CARD}>
         <ArrowDownCircle className="mx-auto h-10 w-10" style={{ color: "#E2E8F0" }} />
-        <p className="mt-3 text-sm font-black" style={{ color: "#1E293B" }}>No pending payouts</p>
+        <p className="mt-3 text-sm font-black" style={{ color: "#1E293B" }}>No payouts yet</p>
         <p className="mt-1 text-xs" style={{ color: "#94A3B8" }}>
-          Payout requests from sellers will appear here for approval.
+          All seller payout requests will appear here.
         </p>
       </div>
     );
@@ -995,6 +995,11 @@ function PayoutsTab() {
                   {payout.orderId ? ` · Order ${payout.orderId.slice(0, 8).toUpperCase()}` : ""}
                   {" · "}{formatRelativeDate(payout.createdAt)}
                 </p>
+                {(payout as Payout & { failureReason?: string }).failureReason ? (
+                  <p className="mt-1 text-xs font-semibold text-red-500">
+                    ✗ {(payout as Payout & { failureReason?: string }).failureReason}
+                  </p>
+                ) : null}
               </div>
               {payout.status === "PENDING" ? (
                 <div className="flex gap-2">
@@ -1021,6 +1026,80 @@ function PayoutsTab() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── Broadcast tab ────────────────────────────────────────────────────────────
+
+function BroadcastTab() {
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ sent: number } | null>(null);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    setSending(true);
+    setResult(null);
+    try {
+      const res = await api.admin.broadcast(title.trim(), message.trim());
+      setResult(res);
+      setTitle("");
+      setMessage("");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl p-5" style={CARD}>
+        <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>
+          Broadcast notification
+        </h3>
+        <p className="mt-1 text-xs" style={{ color: "#94A3B8" }}>
+          Sends an in-app notification to every registered user immediately.
+        </p>
+        <form onSubmit={handleSend} className="mt-4 space-y-3">
+          <div>
+            <label className="text-xs font-bold text-slate-700">Title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              placeholder="e.g. Platform maintenance tonight at 11 PM"
+              className="input-shell mt-1 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-700">Message</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              required
+              rows={4}
+              placeholder="Details of the announcement…"
+              className="input-shell mt-1 resize-none text-sm"
+            />
+          </div>
+          {result ? (
+            <div className="rounded-xl px-4 py-3 text-sm font-bold text-green-700"
+              style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.25)" }}>
+              ✓ Sent to {result.sent} users
+            </div>
+          ) : null}
+          <button
+            type="submit"
+            disabled={sending}
+            className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black text-white disabled:opacity-50"
+            style={{ background: "#0F172A" }}
+          >
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
+            {sending ? "Sending…" : "Send broadcast"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -1057,7 +1136,8 @@ const NAV_ITEMS: { tab: Tab; icon: React.ReactNode; label: string }[] = [
   { tab: "reports", icon: <AlertTriangle className="h-4 w-4" />, label: "Reports" },
   { tab: "events", icon: <CalendarDays className="h-4 w-4" />, label: "Events" },
   { tab: "messages", icon: <Inbox className="h-4 w-4" />, label: "Messages" },
-  { tab: "payouts", icon: <ArrowDownCircle className="h-4 w-4" />, label: "Payouts" },
+  { tab: "payouts",    icon: <ArrowDownCircle className="h-4 w-4" />, label: "Payouts" },
+  { tab: "broadcast",  icon: <Megaphone className="h-4 w-4" />,       label: "Broadcast" },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -1106,6 +1186,7 @@ export default function AdminPage() {
               {tab === "events" && <EventsTab />}
               {tab === "messages" && <MessagesTab />}
               {tab === "payouts" && <PayoutsTab />}
+              {tab === "broadcast" && <BroadcastTab />}
             </main>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PayoutStatus } from '@prisma/client';
 import { AuthUser } from './auth/auth-user.decorator';
@@ -28,9 +28,13 @@ export class PayoutController {
   // ── Admin endpoints (lightweight — full admin UI uses admin.controller.ts) ─
 
   @Get('admin/pending')
-  @ApiOperation({ summary: '[Admin] List all PENDING payouts awaiting approval' })
-  adminListPending() {
-    return this.payoutService.listPayouts(PayoutStatus.PENDING);
+  @ApiOperation({ summary: '[Admin] List all payouts (optionally filtered by status)' })
+  adminListPending(@Query('status') status?: string) {
+    return this.payoutService.listPayouts(
+      status ? (status as PayoutStatus) : undefined,
+      0,
+      100,
+    );
   }
 
   @Post('admin/:id/approve')

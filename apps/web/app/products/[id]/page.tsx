@@ -333,7 +333,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           </dl>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <BuyNowButton productId={product.id} price={product.price} />
+            <BuyNowButton productId={product.id} price={product.price} listingType={product.listingType} />
             <SaveButton productId={product.id} />
             <button className="btn-secondary sm:col-span-2">
               <Share2 className="h-5 w-5" />

@@ -621,7 +621,7 @@ export const api = {
         method: "PATCH", strict: true,
       }),
 
-    getPendingPayouts: () =>
+    getAllPayouts: () =>
       request<Payout[]>("/payouts/admin/pending", [], { strict: true }),
 
     approvePayout: (id: string) =>
@@ -632,6 +632,11 @@ export const api = {
     cancelPayout: (id: string) =>
       request<Payout>(`/payouts/admin/${id}/cancel`, {} as Payout, {
         method: "POST", strict: true,
+      }),
+
+    broadcast: (title: string, message: string) =>
+      request<{ sent: number }>("/admin/broadcast", { sent: 0 }, {
+        method: "POST", body: JSON.stringify({ title, message }), strict: true,
       }),
   },
 };

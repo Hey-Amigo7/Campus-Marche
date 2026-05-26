@@ -1,7 +1,6 @@
 "use client";
 
-import { ImagePlus, Loader2, Plus, Tag, UploadCloud, X } from "lucide-react";
-import Image from "next/image";
+import { CalendarCheck, ImagePlus, Loader2, Package, Plus, Tag, UploadCloud, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -100,6 +99,7 @@ export default function SellPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [boostOpen, setBoostOpen] = useState(false);
+  const [listingType, setListingType] = useState<"product" | "service">("product");
   const [negotiable, setNegotiable] = useState(true);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -191,9 +191,10 @@ export default function SellPage() {
         category: String(form.get("category")) as never,
         location: String(form.get("location")),
         description: String(form.get("description")),
-        condition: String(form.get("condition")) as never,
+        condition: listingType === "product" ? String(form.get("condition")) as never : undefined,
         tags: String(form.get("tags")).split(",").map((tag) => tag.trim()).filter(Boolean),
         negotiable,
+        listingType,
         imageUrl: uploadedImageUrl ?? (String(form.get("imageUrl") || "") || undefined),
         imageStyle: String(form.get("category") || "Other").toLowerCase(),
       });
@@ -272,6 +273,23 @@ export default function SellPage() {
       ) : (
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <form onSubmit={handleSubmit} className="rounded-2xl p-5 md:p-6" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+          {/* Listing type toggle */}
+          <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 p-1.5">
+            {(["product", "service"] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setListingType(type)}
+                className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black transition-all"
+                style={listingType === type
+                  ? { background: "#0F172A", color: "#fff" }
+                  : { color: "#64748B" }}
+              >
+                {type === "product" ? <Package className="h-4 w-4" /> : <CalendarCheck className="h-4 w-4" />}
+                {type === "product" ? "Physical product" : "Service / booking"}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-5 md:grid-cols-2">
             <label className="md:col-span-2">
               <span className="text-sm font-black text-slate-950">Title</span>
@@ -294,15 +312,17 @@ export default function SellPage() {
               <span className="text-sm font-black text-slate-950">Location</span>
               <input name="location" required placeholder="e.g. SRC Cafeteria" className="input-shell mt-2" />
             </label>
-            <label>
-              <span className="text-sm font-black text-slate-950">Condition</span>
-              <select name="condition" required className="input-shell mt-2">
-                <option>New</option>
-                <option>Like new</option>
-                <option>Good</option>
-                <option>Fair</option>
-              </select>
-            </label>
+            {listingType === "product" && (
+              <label>
+                <span className="text-sm font-black text-slate-950">Condition</span>
+                <select name="condition" required className="input-shell mt-2">
+                  <option>New</option>
+                  <option>Like new</option>
+                  <option>Good</option>
+                  <option>Fair</option>
+                </select>
+              </label>
+            )}
             <label className="md:col-span-2">
               <span className="text-sm font-black text-slate-950">Description</span>
               <textarea name="description" required rows={5} placeholder="Mention condition, pickup or service details, availability, included items, and any known issues." className="input-shell mt-2 resize-none" />
@@ -329,7 +349,8 @@ export default function SellPage() {
               />
               {uploadedImageUrl ? (
                 <div className="relative mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                  <Image src={uploadedImageUrl} alt="Product preview" width={640} height={320} className="h-52 w-full object-cover" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={uploadedImageUrl} alt="Product preview" className="h-52 w-full object-cover" />
                   <button
                     type="button"
                     onClick={() => setUploadedImageUrl(null)}

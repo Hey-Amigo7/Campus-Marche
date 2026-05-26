@@ -79,6 +79,7 @@ export type Product = {
   boosted: boolean;
   negotiable: boolean;
   active?: boolean;
+  listingType?: string;
   tags: string[];
   imageStyle: string;
   imageUrl?: string;

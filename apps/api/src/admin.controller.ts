@@ -194,6 +194,15 @@ export class AdminController {
     return this.adminService.deleteEvent(id);
   }
 
+  @Post('broadcast')
+  @ApiOperation({ summary: 'Broadcast a notification to all users' })
+  broadcast(
+    @Body() body: { title: string; message: string; type?: string },
+    @AuthUser() admin: { id: string },
+  ) {
+    return this.adminService.broadcastMessage(admin.id, body.title, body.message, body.type ?? 'system');
+  }
+
   @Get('logs')
   @ApiOperation({ summary: 'View admin action log' })
   @ApiQuery({ name: 'page', required: false })

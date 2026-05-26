@@ -1,18 +1,27 @@
 "use client";
 
-import { Loader2, ShoppingBag } from "lucide-react";
+import { CalendarCheck, Loader2, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { hasAuthToken } from "@/lib/auth";
 import { useToast } from "@/providers/toast-provider";
 
-export function BuyNowButton({ productId, price: _ }: { productId: string; price: number }) {
+export function BuyNowButton({
+  productId,
+  price: _,
+  listingType,
+}: {
+  productId: string;
+  price: number;
+  listingType?: string;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const isService = listingType === "service";
 
-  async function buyNow() {
+  async function handleClick() {
     if (!hasAuthToken()) {
       router.push(`/login?next=/products/${productId}`);
       return;
@@ -29,9 +38,15 @@ export function BuyNowButton({ productId, price: _ }: { productId: string; price
   }
 
   return (
-    <button onClick={buyNow} disabled={loading} className="btn-primary">
-      {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingBag className="h-5 w-5" />}
-      Buy now
+    <button onClick={handleClick} disabled={loading} className="btn-primary">
+      {loading ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : isService ? (
+        <CalendarCheck className="h-5 w-5" />
+      ) : (
+        <ShoppingBag className="h-5 w-5" />
+      )}
+      {isService ? "Book now" : "Buy now"}
     </button>
   );
 }
