@@ -289,9 +289,26 @@ export type Notification = {
   createdAt: string;
 };
 
+export type MessageType =
+  | "TEXT" | "IMAGE" | "FILE" | "AUDIO"
+  | "LOCATION" | "LIVE_LOCATION" | "VIDEO_CALL";
+
 export type ApiMessage = {
   id: string;
-  content: string;
+  content: string | null;
+  type: MessageType;
+  mediaUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationName?: string | null;
+  liveUntil?: string | null;
+  viewOnce: boolean;
+  viewedBy: string[];
+  duration?: number | null;
+  callStatus?: string | null;
   senderId: string;
   conversationId: string;
   read: boolean;
@@ -304,7 +321,7 @@ export type ApiConversation = {
   id: string;
   user: { id: string; name: string; avatar: string | null; verified: boolean };
   product: { id: string; title: string; imageUrl: string | null; price: number } | null;
-  lastMessage: { content: string; createdAt: string } | null;
+  lastMessage: { content: string | null; type: MessageType; createdAt: string } | null;
   unread: number;
   updatedAt: string;
 };

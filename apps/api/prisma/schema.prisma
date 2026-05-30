@@ -325,6 +325,16 @@ model WebhookLog {
 
 // ─── Messaging ────────────────────────────────────────────────────────────────
 
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  AUDIO
+  LOCATION
+  LIVE_LOCATION
+  VIDEO_CALL
+}
+
 model Conversation {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -345,10 +355,23 @@ model Conversation {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  content   String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String      @id @default(cuid())
+  content      String?
+  type         MessageType @default(TEXT)
+  mediaUrl     String?
+  fileName     String?
+  fileSize     Int?
+  mimeType     String?
+  latitude     Float?
+  longitude    Float?
+  locationName String?
+  liveUntil    DateTime?
+  viewOnce     Boolean     @default(false)
+  viewedBy     String[]
+  duration     Int?
+  callStatus   String?
+  read         Boolean     @default(false)
+  createdAt    DateTime    @default(now())
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)

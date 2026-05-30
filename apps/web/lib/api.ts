@@ -1,6 +1,7 @@
 import type {
   ApiConversation,
   ApiMessage,
+  MessageType,
   BusinessProfile,
   CampusEvent,
   Category,
@@ -368,6 +369,62 @@ export const api = {
       {} as ApiMessage,
       { method: "POST", body: JSON.stringify({ content }), strict: true },
     ),
+
+  sendRichMessage: (
+    conversationId: string,
+    data: {
+      type: MessageType;
+      content?: string;
+      mediaUrl?: string;
+      fileName?: string;
+      fileSize?: number;
+      mimeType?: string;
+      latitude?: number;
+      longitude?: number;
+      locationName?: string;
+      liveUntil?: string;
+      viewOnce?: boolean;
+      duration?: number;
+      callStatus?: string;
+    },
+  ) =>
+    request<ApiMessage>(
+      `/conversations/${conversationId}/messages/rich`,
+      {} as ApiMessage,
+      { method: "POST", body: JSON.stringify(data), strict: true },
+    ),
+
+  markMessageViewed: (conversationId: string, messageId: string) =>
+    request<{ ok: boolean }>(
+      `/conversations/${conversationId}/messages/${messageId}/viewed`,
+      { ok: false },
+      { method: "PATCH", strict: true },
+    ),
+
+  updateLiveLocation: (conversationId: string, latitude: number, longitude: number) =>
+    request<{ ok: boolean }>(
+      `/conversations/${conversationId}/live-location`,
+      { ok: false },
+      { method: "POST", body: JSON.stringify({ latitude, longitude }), strict: true },
+    ),
+
+  uploadMessageMedia: async (file: File): Promise<{ url: string; fileName: string; fileSize: number; mimeType: string }> => {
+    const token = (await import("@/lib/auth")).getAuthToken();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${apiBase}/uploads/message-media`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(err.message ?? "Upload failed");
+    }
+    return res.json() as Promise<{ url: string; fileName: string; fileSize: number; mimeType: string }>;
+  },
 
   getSeller: (id: string) =>
     request<Seller | null>(`/sellers/${id}`, null, { revalidate: 60 }),

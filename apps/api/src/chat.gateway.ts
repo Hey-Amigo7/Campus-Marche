@@ -30,12 +30,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const token = (socket.handshake.auth as Record<string, string>).token
         ?? socket.handshake.headers.authorization?.replace('Bearer ', '');
-
       if (!token) throw new UnauthorizedException('No token');
-
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
       socket.data.userId = payload.sub;
-
       await socket.join(`user:${payload.sub}`);
       this.logger.log(`Socket connected: ${payload.sub}`);
     } catch {
@@ -51,34 +48,93 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('join:conversation')
-  async handleJoinConversation(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() conversationId: string,
-  ) {
+  async handleJoinConversation(@ConnectedSocket() socket: Socket, @MessageBody() conversationId: string) {
     await socket.join(`conv:${conversationId}`);
     return { ok: true };
   }
 
   @SubscribeMessage('leave:conversation')
-  async handleLeaveConversation(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() conversationId: string,
-  ) {
+  async handleLeaveConversation(@ConnectedSocket() socket: Socket, @MessageBody() conversationId: string) {
     await socket.leave(`conv:${conversationId}`);
     return { ok: true };
   }
 
-  /** Called by MessageService after a message is persisted */
+  // ── WebRTC Signaling ──────────────────────────────────────────────────────
+
+  @SubscribeMessage('call:offer')
+  handleCallOffer(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { to: string; conversationId: string; offer: unknown },
+  ) {
+    this.server.to(`user:${data.to}`).emit('call:offer', {
+      from: socket.data.userId as string,
+      conversationId: data.conversationId,
+      offer: data.offer,
+    });
+  }
+
+  @SubscribeMessage('call:answer')
+  handleCallAnswer(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { to: string; answer: unknown },
+  ) {
+    this.server.to(`user:${data.to}`).emit('call:answer', {
+      from: socket.data.userId as string,
+      answer: data.answer,
+    });
+  }
+
+  @SubscribeMessage('call:ice')
+  handleIceCandidate(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { to: string; candidate: unknown },
+  ) {
+    this.server.to(`user:${data.to}`).emit('call:ice', {
+      from: socket.data.userId as string,
+      candidate: data.candidate,
+    });
+  }
+
+  @SubscribeMessage('call:end')
+  handleCallEnd(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { to: string; conversationId: string },
+  ) {
+    this.server.to(`user:${data.to}`).emit('call:end', {
+      from: socket.data.userId as string,
+    });
+    this.server.to(`conv:${data.conversationId}`).emit('call:end', {
+      from: socket.data.userId as string,
+    });
+  }
+
+  @SubscribeMessage('call:reject')
+  handleCallReject(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { to: string },
+  ) {
+    this.server.to(`user:${data.to}`).emit('call:reject', {
+      from: socket.data.userId as string,
+    });
+  }
+
+  // ── Called by services ────────────────────────────────────────────────────
+
   emitNewMessage(conversationId: string, message: unknown, recipientUserId: string) {
-    // Emit to conversation room (recipient is inside the chat view)
     this.server.to(`conv:${conversationId}`).emit('message:new', message);
-    // Also emit to recipient's personal room in case they haven't joined the conv room yet
     this.server.to(`user:${recipientUserId}`).emit('message:new', message);
     this.server.to(`user:${recipientUserId}`).emit('conversations:update', { conversationId });
   }
 
-  /** Called by NotificationService after a notification is created */
   emitNotification(userId: string, notification: unknown) {
     this.server.to(`user:${userId}`).emit('notification:new', notification);
+  }
+
+  emitViewOnce(conversationId: string, messageId: string, viewedByUserId: string) {
+    this.server.to(`conv:${conversationId}`).emit('message:viewed', { messageId, viewedByUserId });
+  }
+
+  emitLocationUpdate(conversationId: string, userId: string, lat: number, lng: number) {
+    this.server.to(`conv:${conversationId}`).emit('location:update', { userId, lat, lng });
   }
 }
