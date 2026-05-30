@@ -294,8 +294,8 @@ function Bubble({ message, isFirst, isLast, conversationId, myId }: {
           </span>
           {mine && (
             message.read
-              ? <CheckCheck size={12} style={{ color: isMedia ? "rgba(255,255,255,0.80)" : "#7FB685" }} />
-              : <Check size={12} style={{ color: "rgba(255,255,255,0.55)" }} />
+              ? <CheckCheck size={12} style={{ color: isMedia ? "rgba(255,255,255,0.90)" : "var(--green)" }} />
+              : <Check size={12} style={{ color: "rgba(255,255,255,0.50)" }} />
           )}
         </div>
       </div>
@@ -802,6 +802,15 @@ function MessagesContent() {
     joinConversation(socketRef.current, activeId);
     return () => leaveConversation(socketRef.current, activeId);
   }, [activeId, socketRef, connected]);
+
+  // Mark as read only when a conversation is explicitly clicked open
+  useEffect(() => {
+    if (!activeId) return;
+    api.markConversationRead(activeId)
+      .then(() => mutate("conversations"))
+      .catch(() => null);
+  }, [activeId]); // eslint-disable-line
+
   useEffect(() => { if (active) setTimeout(() => inputRef.current?.focus(), 100); }, [active?.id]);
 
   // Socket: incoming call + view-once events

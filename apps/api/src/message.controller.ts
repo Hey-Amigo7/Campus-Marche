@@ -167,6 +167,12 @@ export class MessageController {
     return this.messageService.sendMessage(id, user.id, body.content);
   }
 
+  @Post('conversations/:id/read')
+  @ApiOperation({ summary: 'Mark all unread messages in a conversation as read' })
+  markConversationRead(@Param('id') id: string, @AuthUser() user: { id: string }) {
+    return this.messageService.markConversationRead(id, user.id);
+  }
+
   @Post('conversations/:id/messages/rich')
   @ApiOperation({ summary: 'Send a rich message (image, file, audio, location, video call)' })
   sendRichMessage(

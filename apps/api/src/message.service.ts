@@ -92,11 +92,6 @@ export class MessageService {
       throw new ForbiddenException('Access denied');
     }
 
-    await this.prisma.message.updateMany({
-      where: { conversationId, senderId: { not: userId }, read: false },
-      data: { read: true },
-    });
-
     const take = Math.min(opts.take ?? 50, 100);
     const skip = opts.skip ?? 0;
 
@@ -173,6 +168,19 @@ export class MessageService {
     }
 
     return result;
+  }
+
+  async markConversationRead(conversationId: string, userId: string) {
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.participantAId !== userId && conversation.participantBId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    await this.prisma.message.updateMany({
+      where: { conversationId, senderId: { not: userId }, read: false },
+      data: { read: true },
+    });
+    return { ok: true };
   }
 
   async markMessageViewed(messageId: string, userId: string) {

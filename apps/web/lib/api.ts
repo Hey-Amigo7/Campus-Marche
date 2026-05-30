@@ -363,6 +363,13 @@ export const api = {
   getMessages: (conversationId: string) =>
     request<ApiMessage[]>(`/conversations/${conversationId}/messages`, []),
 
+  markConversationRead: (conversationId: string) =>
+    request<{ ok: boolean }>(
+      `/conversations/${conversationId}/read`,
+      { ok: false },
+      { method: "POST", strict: true },
+    ),
+
   sendMessage: (conversationId: string, content: string) =>
     request<ApiMessage>(
       `/conversations/${conversationId}/messages`,
