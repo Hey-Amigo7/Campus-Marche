@@ -48,7 +48,7 @@ export function BuyNowButton({
       ) : (
         <ShoppingBag className="h-5 w-5" />
       )}
-      {isService ? "Book now" : "Buy now"}
+      {isService ? "Book this service" : "Buy now"}
     </button>
   );
 }

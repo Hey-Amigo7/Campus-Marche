@@ -24,6 +24,7 @@ const spring = { type: "spring", stiffness: 340, damping: 26 } as const;
 const NAV_LINKS = [
   { href: "/products",   label: "Shop"       },
   { href: "/categories", label: "Categories" },
+  { href: "/events",     label: "Events"     },
   { href: "/sell",       label: "Sell"        },
 ];
 

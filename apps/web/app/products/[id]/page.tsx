@@ -466,12 +466,23 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
             {/* Meta */}
             <div className="flex flex-wrap items-center gap-3 text-sm font-semibold" style={{ color: "rgba(255,255,255,0.40)" }}>
+              {/* Product vs service badge */}
+              {product.listingType === "service" || product.category === "Services" ? (
+                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black"
+                  style={{ background: "rgba(198,139,89,0.20)", color: "#C68B59" }}>
+                  Service listing
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black"
+                  style={{ background: "rgba(114,204,35,0.15)", color: "#7FB685" }}>
+                  {product.condition ?? "Physical product"}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" style={{ color: "#7FB685" }} />
                 {product.location}
               </span>
               <span>{formatRelativeDate(product.postedAt)}</span>
-              <span>{product.condition}</span>
             </div>
 
             {/* Description */}
@@ -479,20 +490,33 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               {product.description}
             </p>
 
-            {/* Details grid */}
-            <dl className="grid grid-cols-2 gap-2.5 text-sm">
-              {[
-                ["Category",    product.category],
-                ["Condition",   product.condition],
-                ["Negotiation", product.negotiable ? "Open to offers" : "Fixed price"],
-                ["Views",       product.views.toLocaleString()],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <dt className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.30)" }}>{label}</dt>
-                  <dd className="mt-1 font-black text-white">{value}</dd>
-                </div>
-              ))}
-            </dl>
+            {/* Details grid — adapts to product vs service */}
+            {(() => {
+              const isService = product.listingType === "service" || product.category === "Services";
+              const fields: [string, string][] = isService
+                ? [
+                    ["Category",     product.category ?? "Service"],
+                    ["Type",         "Service / booking"],
+                    ["Pricing",      product.negotiable ? "Open to negotiation" : "Fixed rate"],
+                    ["Views",        product.views.toLocaleString()],
+                  ]
+                : [
+                    ["Category",     product.category ?? "—"],
+                    ["Condition",    product.condition ?? "—"],
+                    ["Negotiation",  product.negotiable ? "Open to offers" : "Fixed price"],
+                    ["Views",        product.views.toLocaleString()],
+                  ];
+              return (
+                <dl className="grid grid-cols-2 gap-2.5 text-sm">
+                  {fields.map(([label, value]) => (
+                    <div key={label} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <dt className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.30)" }}>{label}</dt>
+                      <dd className="mt-1 font-black text-white">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              );
+            })()}
 
             {/* CTA buttons */}
             <div className="grid gap-2.5 sm:grid-cols-2">
