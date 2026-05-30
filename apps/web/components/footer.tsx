@@ -1,99 +1,84 @@
-"use client";
-
 import Link from "next/link";
-import { Logo } from "@/components/ui";
+import { LogoMark } from "@/components/logo";
+import { ScrollDrawLine } from "@/components/motion-primitives";
 
-const COLS = [
-  {
-    heading: "Marketplace",
-    color:   "#A8D4AE",
-    links: [
-      { href: "/products",  label: "Browse products"  },
-      { href: "/sell",      label: "Sell an item"     },
-      { href: "/events",    label: "Campus events"    },
-      { href: "/trust",     label: "Campus safety"    },
-      { href: "/deals",     label: "Student deals"    },
-    ],
-  },
-  {
-    heading: "Company",
-    color:   "#A8D4AE",
-    links: [
-      { href: "/about",    label: "About"   },
-      { href: "/contact",  label: "Contact" },
-      { href: "/careers",  label: "Careers" },
-      { href: "/press",    label: "Press"   },
-    ],
-  },
-  {
-    heading: "Support",
-    color:   "#A8D4AE",
-    links: [
-      { href: "/help",    label: "Help center"   },
-      { href: "/trust",   label: "Trust & safety"},
-      { href: "/terms",   label: "Terms"         },
-      { href: "/privacy", label: "Privacy"       },
-    ],
-  },
-];
+const LINKS = {
+  Marketplace: [
+    { label: "Browse Products", href: "/products"   },
+    { label: "Categories",      href: "/categories" },
+    { label: "Events",          href: "/events"     },
+    { label: "Deals",           href: "/deals"      },
+  ],
+  Selling: [
+    { label: "Start Selling", href: "/sell"  },
+    { label: "Seller Guide",  href: "/help"  },
+    { label: "Pricing",       href: "/help"  },
+  ],
+  Company: [
+    { label: "About",   href: "/about"   },
+    { label: "Contact", href: "/contact" },
+    { label: "Privacy", href: "/privacy" },
+    { label: "Terms",   href: "/terms"   },
+  ],
+};
 
 export function Footer() {
   return (
-    <footer style={{ background: "#0F172A" }} className="text-slate-100">
-      <div className="container-shell grid gap-12 py-16 lg:grid-cols-[minmax(0,320px)_1fr] lg:items-start">
-        {/* Brand column */}
-        <div className="space-y-6">
-          <Logo />
-          <p className="max-w-xs text-sm leading-7 text-slate-400">
-            A calmer, safer marketplace for HTU students to buy what they need
-            and sell what they don't.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/products"
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-[#0F172A] transition-all hover:-translate-y-0.5 hover:shadow-lg"
-              style={{ background: "#7FB685", boxShadow: "0 4px 14px rgba(127,182,133,0.35)" }}
-            >
-              Browse Marketplace
-            </Link>
-            <Link
-              href="/sell"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-5 py-2.5 text-sm font-bold text-slate-200 transition-all hover:border-white/30 hover:bg-white/8"
-              style={{ background: "rgba(255,255,255,0.05)" }}
-            >
-              Sell an Item
-            </Link>
-          </div>
-        </div>
+    <footer
+      className="mt-24 border-t"
+      style={{ borderColor: "var(--border)", background: "var(--background-alt)" }}
+    >
+      <ScrollDrawLine className="opacity-60" />
 
-        {/* Link columns */}
-        <div className="grid gap-8 sm:grid-cols-3">
-          {COLS.map((col) => (
-            <div key={col.heading}>
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
-                {col.heading}
-              </p>
-              <div className="mt-5 space-y-3">
-                {col.links.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="block text-sm text-slate-400 transition-colors hover:text-[#A8D4AE]"
-                  >
-                    {link.label}
-                  </Link>
+      <div className="container-shell py-12">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Brand */}
+          <div>
+            <Link href="/" className="mb-4 flex items-center gap-2.5">
+              <LogoMark size={36} />
+              <span className="font-extrabold tracking-tight" style={{ fontSize: "1.05rem", color: "var(--on-surface)" }}>
+                Campus<span style={{ color: "#72CC23" }}>Marche</span>
+              </span>
+            </Link>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+              HTU&apos;s trusted student marketplace. Buy, sell, and connect safely
+              within the campus community.
+            </p>
+          </div>
+
+          {/* Link groups */}
+          {Object.entries(LINKS).map(([group, items]) => (
+            <div key={group}>
+              <h3
+                className="mb-4 text-xs font-semibold uppercase tracking-widest"
+                style={{ color: "var(--subtle)" }}
+              >
+                {group}
+              </h3>
+              <ul className="space-y-2.5">
+                {items.map((item) => (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className="text-sm transition-colors hover:text-[#72CC23]"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           ))}
         </div>
-      </div>
 
-      {/* Bottom bar */}
-      <div className="border-t py-6" style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)" }}>
-        <div className="container-shell flex flex-col items-center justify-between gap-3 text-xs text-slate-500 sm:flex-row">
-          <p>© 2026 Campus Marche · Built for HTU students</p>
-          <p>Secure meetups · Local listings · Real community</p>
+        {/* Bottom bar */}
+        <div
+          className="mt-10 flex flex-col items-center justify-between gap-3 border-t pt-6 text-xs sm:flex-row"
+          style={{ borderColor: "var(--border)", color: "var(--subtle)" }}
+        >
+          <span>© {new Date().getFullYear()} Campus Marche. All rights reserved.</span>
+          <span>Built for HTU students, by HTU students. 🇬🇭</span>
         </div>
       </div>
     </footer>

@@ -159,6 +159,13 @@ export const api = {
   getProduct: (id: string) =>
     request<Product | null>(`/products/${id}`, null, { revalidate: 60, strict: true }),
 
+  recordView: (productId: string, viewerKey: string) =>
+    request<{ ok: boolean }>(
+      `/products/${productId}/view`,
+      { ok: false },
+      { method: "POST", headers: { "x-viewer-id": viewerKey } },
+    ),
+
   searchProducts: (q: string, opts?: { skip?: number; take?: number }) => {
     const params = new URLSearchParams({ q });
     if (opts?.skip) params.set("skip", String(opts.skip));
@@ -229,7 +236,7 @@ export const api = {
       ),
 
     sendPhoneOtp: (phone: string) =>
-      request<{ message: string }>(
+      request<{ message: string; devCode?: string }>(
         "/auth/send-phone-otp",
         { message: "" },
         { method: "POST", body: JSON.stringify({ phone }), strict: true },
@@ -365,6 +372,12 @@ export const api = {
   getSeller: (id: string) =>
     request<Seller | null>(`/sellers/${id}`, null, { revalidate: 60 }),
 
+  searchUsers: (q: string) =>
+    request<Array<{ id: string; name: string; avatar: string | null; verified: boolean }>>(
+      `/users/search?q=${encodeURIComponent(q)}`,
+      [],
+    ),
+
   getProfile: () => request<Seller | null>("/users/profile", null),
 
   updateProfile: (payload: { name?: string; avatar?: string; bio?: string }) =>
@@ -497,7 +510,7 @@ export const api = {
       { plan: "free", status: "active", expiresAt: null, features: {} },
     ),
 
-  upgradeSubscription: (plan: "pro" | "featured") =>
+  upgradeSubscription: (plan: "daily" | "pro" | "featured") =>
     request<{ authorizationUrl: string; reference: string }>(
       "/subscription/upgrade",
       { authorizationUrl: "", reference: "" },

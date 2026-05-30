@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
 import { SubscriptionService } from './subscription.service';
@@ -39,6 +39,7 @@ type SellerWithBusiness = {
 type ProductWithSeller = {
   seller: SellerWithBusiness;
   imageUrl: string | null;
+  imageUrls: string[];
   imageStyle: string;
   category: string | null;
   tags: string;
@@ -50,7 +51,7 @@ type UnsplashSearchResponse = {
 };
 
 @Injectable()
-export class ProductService {
+export class ProductService implements OnModuleInit {
   private readonly logger = new Logger(ProductService.name);
 
   constructor(
@@ -59,22 +60,62 @@ export class ProductService {
     private config: ConfigService,
   ) {}
 
+  onModuleInit() {
+    // Run after the module boots so the DB connection is ready
+    setImmediate(() => this.runImageBackfill());
+  }
+
+  private async runImageBackfill(): Promise<void> {
+    const key = this.config.get<string>('UNSPLASH_ACCESS_KEY');
+    if (!key) return;
+
+    const missing = await this.prisma.product.findMany({
+      where: { imageUrl: null, active: true },
+      select: { id: true, title: true, category: true },
+      orderBy: { postedAt: 'desc' },
+    });
+
+    if (missing.length === 0) return;
+    this.logger.log(`[Backfill] Fetching Unsplash images for ${missing.length} listing(s)…`);
+
+    let updated = 0;
+    for (const p of missing) {
+      const url = await this.fetchRelevantImage(p.title, p.category ?? '');
+      if (url) {
+        await this.prisma.product.update({ where: { id: p.id }, data: { imageUrl: url } }).catch(() => null);
+        updated++;
+      }
+    }
+    this.logger.log(`[Backfill] Done — ${updated}/${missing.length} listing(s) updated.`);
+  }
+
   /**
    * Searches Unsplash for an image that matches the product title and category.
    * Returns the CDN URL (stored permanently in the DB) or null if unavailable.
    */
+  private static readonly STOP_WORDS = new Set([
+    'for', 'sale', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'a', 'an',
+    'is', 'it', 'its', 'of', 'with', 'from', 'by', 'my', 'our', 'your',
+    'good', 'bad', 'excellent', 'perfect', 'great', 'nice', 'best', 'top',
+    'used', 'new', 'old', 'brand', 'quality', 'cheap', 'affordable', 'price',
+    'condition', 'available', 'call', 'contact', 'offer', 'price', 'reduced',
+  ]);
+
   private async fetchRelevantImage(title: string, category: string): Promise<string | null> {
     const key = this.config.get<string>('UNSPLASH_ACCESS_KEY');
     if (!key) return null;
 
-    // Build a precise query: title keywords + category context
+    // Extract meaningful keywords — drop stop words and very short tokens
     const titleWords = title
       .replace(/[^a-zA-Z0-9 ]/g, ' ')
       .split(/\s+/)
-      .filter((w) => w.length > 2)
-      .slice(0, 5)
+      .filter((w) => w.length > 2 && !ProductService.STOP_WORDS.has(w.toLowerCase()))
+      .slice(0, 4)
       .join(' ');
-    const query = encodeURIComponent(`${titleWords} ${category}`.trim());
+
+    // Use title keywords as primary signal; fall back to category alone if title is generic
+    const searchQuery = titleWords.length > 2 ? titleWords : category;
+    const query = encodeURIComponent(searchQuery.trim());
 
     try {
       const controller = new AbortController();
@@ -105,6 +146,17 @@ export class ProductService {
       }
       return null;
     }
+  }
+
+  /** Fire-and-forget: fetch + persist a relevant Unsplash image for a listing that has none. */
+  private backfillProductImage(id: string, title: string, category: string): void {
+    this.fetchRelevantImage(title, category)
+      .then((url) => {
+        if (url) {
+          return this.prisma.product.update({ where: { id }, data: { imageUrl: url } });
+        }
+      })
+      .catch(() => null);
   }
 
   private normalizeTags(tags: string | null | undefined): string[] {
@@ -146,6 +198,12 @@ export class ProductService {
       this.prisma.product.count({ where: { active: true } }),
     ]);
 
+    // Backfill images for listings missing one — max 4 per request, fire-and-forget
+    products
+      .filter((p) => !p.imageUrl)
+      .slice(0, 4)
+      .forEach((p) => this.backfillProductImage(p.id, p.title, p.category ?? ''));
+
     return {
       data: products.map((p) => this.withDefaults(p as ProductWithSeller)),
       total,
@@ -165,9 +223,34 @@ export class ProductService {
 
     if (!product) return null;
 
-    await this.prisma.product.update({ where: { id }, data: { views: { increment: 1 } } }).catch(() => null);
+    // Backfill image if missing
+    if (!product.imageUrl) {
+      this.backfillProductImage(product.id, product.title, product.category ?? '');
+    }
 
     return this.withDefaults(product as ProductWithSeller);
+  }
+
+  /**
+   * Record a unique view for a product. Uses the viewerKey (userId or anonymous
+   * session ID) to deduplicate — a second call with the same key is a no-op and
+   * does NOT increment the counter.
+   */
+  async recordView(productId: string, viewerKey: string): Promise<void> {
+    try {
+      const created = await this.prisma.productView.create({
+        data: { productId, viewerKey },
+      });
+      // Only increment the counter when a new unique view was recorded
+      if (created) {
+        await this.prisma.product.update({
+          where: { id: productId },
+          data: { views: { increment: 1 } },
+        }).catch(() => null);
+      }
+    } catch {
+      // Unique constraint violation = already viewed — do nothing
+    }
   }
 
   async create(sellerId: string, data: CreateProductDto) {
@@ -187,13 +270,17 @@ export class ProductService {
       );
     }
 
-    // If no image was uploaded, fetch a precise one from Unsplash based on the title
-    const imageUrl = data.imageUrl ?? await this.fetchRelevantImage(data.title, data.category ?? '');
+    // Primary image: first of imageUrls array, then imageUrl, then Unsplash fallback
+    const { imageUrls, ...restData } = data;
+    const primaryFromArray = imageUrls?.[0];
+    const resolvedPrimary =
+      primaryFromArray ?? data.imageUrl ?? (await this.fetchRelevantImage(data.title, data.category ?? ''));
 
     const product = await this.prisma.product.create({
       data: {
-        ...data,
-        imageUrl: imageUrl ?? undefined,
+        ...restData,
+        imageUrl: resolvedPrimary ?? undefined,
+        imageUrls: imageUrls ?? [],
         tags: Array.isArray(data.tags) ? data.tags.join(',') : (data.tags ?? ''),
         sellerId,
       },
@@ -211,8 +298,11 @@ export class ProductService {
     if (!existing) throw new NotFoundException('Product not found');
     if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only update your own products');
 
+    const { imageUrls, ...restUpdateData } = data;
+    const primaryFromArray = imageUrls?.[0];
+
     // Fetch a smart image only if the listing currently has no real image and none was provided
-    let resolvedImageUrl = data.imageUrl;
+    let resolvedImageUrl = primaryFromArray ?? data.imageUrl;
     if (!resolvedImageUrl && !existing.imageUrl) {
       const title = data.title ?? existing.title;
       const category = data.category ?? existing.category ?? '';
@@ -222,8 +312,9 @@ export class ProductService {
     const updated = await this.prisma.product.update({
       where: { id },
       data: {
-        ...data,
+        ...restUpdateData,
         ...(resolvedImageUrl !== undefined && { imageUrl: resolvedImageUrl }),
+        ...(imageUrls !== undefined && { imageUrls }),
         tags: Array.isArray(data.tags) ? data.tags.join(',') : data.tags,
       },
       include: { seller: { select: SELLER_SELECT } },

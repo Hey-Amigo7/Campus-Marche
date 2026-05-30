@@ -28,6 +28,10 @@ export type ApiEnv = {
   MARKETPLACE_FEE_FLAT?: string;
   // Payout
   PAYOUT_AUTO_APPROVE?: string;
+  // Admin bootstrap secret (required to call POST /auth/bootstrap-admin)
+  ADMIN_SETUP_KEY?: string;
+  // Unsplash
+  UNSPLASH_ACCESS_KEY?: string;
 };
 
 const DEFAULT_ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001';
@@ -82,6 +86,8 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     MARKETPLACE_FEE_PERCENT: config.MARKETPLACE_FEE_PERCENT,
     MARKETPLACE_FEE_FLAT: config.MARKETPLACE_FEE_FLAT,
     PAYOUT_AUTO_APPROVE: config.PAYOUT_AUTO_APPROVE,
+    ADMIN_SETUP_KEY: config.ADMIN_SETUP_KEY,
+    UNSPLASH_ACCESS_KEY: config.UNSPLASH_ACCESS_KEY,
   };
 }
 

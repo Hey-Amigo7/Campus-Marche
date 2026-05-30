@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { Reflector } from '@nestjs/core';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD, Reflector } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AdminAuthController, AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AdminAuthGuard } from './auth/admin-auth.guard';
+import { EventsAuthGuard } from './auth/events-auth.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthController } from './auth.controller';
@@ -98,7 +99,11 @@ import { UserController } from './user.controller';
     UserController,
   ],
   providers: [
+    // Apply ThrottlerGuard globally — every endpoint inherits the default limit.
+    // Individual endpoints can override with @Throttle() or opt-out with @SkipThrottle().
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     AdminAuthGuard,
+    EventsAuthGuard,
     AdminService,
     AppService,
     AuthService,

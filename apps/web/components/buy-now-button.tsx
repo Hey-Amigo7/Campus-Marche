@@ -11,15 +11,17 @@ export function BuyNowButton({
   productId,
   price: _,
   listingType,
+  category,
 }: {
   productId: string;
   price: number;
   listingType?: string;
+  category?: string;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const isService = listingType === "service";
+  const isService = listingType === "service" || category === "Services";
 
   async function handleClick() {
     if (!hasAuthToken()) {
@@ -38,7 +40,7 @@ export function BuyNowButton({
   }
 
   return (
-    <button onClick={handleClick} disabled={loading} className="btn-primary">
+    <button type="button" onClick={handleClick} disabled={loading} className="btn-primary">
       {loading ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : isService ? (

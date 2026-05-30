@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { AnimatedX } from "@/components/animated-icons";
 import { PremiumUpsellCard } from "@/components/premium";
 
 export function BoostProductModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -28,7 +28,7 @@ export function BoostProductModal({ open, onClose }: { open: boolean; onClose: (
             aria-label="Close modal"
             style={{ color: "#64748B" }}
           >
-            <X className="h-5 w-5" />
+            <AnimatedX size={20} />
           </button>
         </div>
         <div className="mt-5">

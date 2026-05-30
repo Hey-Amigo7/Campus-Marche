@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { AuthService } from './auth.service';
 import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -15,6 +16,12 @@ import {
   SendPhoneOtpDto,
 } from './dto/auth.dto';
 
+class BootstrapAdminDto {
+  @IsString()
+  @IsNotEmpty()
+  setupKey!: string;
+}
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -23,26 +30,17 @@ export class AuthController {
     private config: ConfigService,
   ) {}
 
-  private get authThrottle() {
-    return {
-      default: {
-        limit: this.config.getOrThrow<number>('AUTH_THROTTLE_LIMIT'),
-        ttl: this.config.getOrThrow<number>('AUTH_THROTTLE_TTL'),
-      },
-    };
-  }
-
   @Post('register')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @ApiOperation({ summary: 'Register a new user' })
   async register(@Body() body: RegisterDto) {
     return this.authService.register(body.email, body.name, body.password);
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Login a user (accepts email, phone number, or @handle)' })
   async login(@Body() body: LoginDto) {
-    const throttle = this.authThrottle;
-    void throttle;
     return this.authService.login(body.identifier, body.password);
   }
 
@@ -114,8 +112,13 @@ export class AuthController {
   }
 
   @Post('bootstrap-admin')
-  @ApiOperation({ summary: 'Create default admin account if none exists (first-time setup only)' })
-  async bootstrapAdmin() {
+  @Throttle({ default: { limit: 2, ttl: 3_600_000 } })
+  @ApiOperation({ summary: 'Create default admin account if none exists (requires ADMIN_SETUP_KEY)' })
+  async bootstrapAdmin(@Body() body: BootstrapAdminDto) {
+    const expected = this.config.get<string>('ADMIN_SETUP_KEY');
+    if (!expected || body.setupKey !== expected) {
+      throw new ForbiddenException('Invalid setup key');
+    }
     return this.authService.bootstrapAdmin();
   }
 }

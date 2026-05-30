@@ -114,6 +114,7 @@ model Product {
   condition   String    @default("Good")
   location    String
   imageUrl    String?
+  imageUrls   String[]
   imageStyle  String    @default("art-laptop")
   featured    Boolean   @default(false)
   boosted     Boolean   @default(false)
@@ -136,6 +137,8 @@ model Product {
   conversations Conversation[]
   reports       Report[]
 
+  viewLogs      ProductView[]
+
   @@index([sellerId])
   @@index([category])
   @@index([title])
@@ -143,6 +146,18 @@ model Product {
   @@index([boosted])
   @@index([active])
   @@index([postedAt])
+}
+
+model ProductView {
+  id        String   @id @default(cuid())
+  productId String
+  viewerKey String
+  viewedAt  DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, viewerKey])
+  @@index([productId])
 }
 
 // ─── Orders & Payments ────────────────────────────────────────────────────────
@@ -383,9 +398,10 @@ model CampusEvent {
   description String
   location    String
   eventDate   DateTime
-  category    String   @default("Campus update")
-  opportunity String?
-  imageUrl    String?
+  category         String   @default("Campus update")
+  opportunity      String?
+  registrationLink String?
+  imageUrl         String?
   featured    Boolean  @default(false)
   publishedAt DateTime @default(now())
   createdAt   DateTime @default(now())

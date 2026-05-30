@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, MessageCircle, XCircle } from "lucide-react";
+import { XCircle } from "lucide-react";
+import { AnimatedMapPin, AnimatedMessage } from "@/components/animated-icons";
 import type { Order } from "@/types";
 import { api } from "@/lib/api";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
@@ -74,7 +75,7 @@ export function OrderCard({ order, onStatusChange }: { order: Order; onStatusCha
         <p className="mt-1 text-base font-black text-brand-navy">{formatCurrency(order.product.price)}</p>
         {order.meetupLocation ? (
           <p className="mt-2 flex items-center gap-1 text-sm font-semibold text-slate-500">
-            <MapPin className="h-4 w-4" />
+            <AnimatedMapPin size={16} />
             {order.meetupLocation}{order.counterpart ? ` · ${order.counterpart}` : ""}
           </p>
         ) : null}
@@ -114,7 +115,7 @@ export function OrderCard({ order, onStatusChange }: { order: Order; onStatusCha
             disabled={chatLoading}
             className="btn-secondary min-h-10 flex-1 rounded-xl px-3 py-2 text-xs"
           >
-            <MessageCircle className="h-4 w-4" />
+            <AnimatedMessage size={16} circle />
             {chatLoading ? "…" : "Chat"}
           </button>
         ) : null}

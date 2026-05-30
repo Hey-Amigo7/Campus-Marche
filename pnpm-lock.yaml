@@ -235,12 +235,21 @@ importers:
 
   apps/web:
     dependencies:
+      '@number-flow/react':
+        specifier: ^0.6.0
+        version: 0.6.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       framer-motion:
         specifier: ^12.39.0
         version: 12.39.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      gsap:
+        specifier: ^3.15.0
+        version: 3.15.0
+      lenis:
+        specifier: ^1.3.23
+        version: 1.3.23(react@19.2.0)
       lucide-react:
         specifier: ^1.16.0
         version: 1.16.0(react@19.2.0)
@@ -256,6 +265,9 @@ importers:
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
+      swiper:
+        specifier: ^12.1.4
+        version: 12.1.4
       swr:
         specifier: ^2.4.1
         version: 2.4.1(react@19.2.0)
@@ -1243,6 +1255,12 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@number-flow/react@0.6.0':
+    resolution: {integrity: sha512-77Yfc9+zkV2UDSP8phhZzxJGuwxi/Tt1TikmipL+1r3e9GFKEYDZ1XwInj67NoSt3OnOB0KLvvcl3lfPZgBHVQ==}
+    peerDependencies:
+      react: ^18 || ^19
+      react-dom: ^18 || ^19
 
   '@nuxt/opencollective@0.4.1':
     resolution: {integrity: sha512-GXD3wy50qYbxCJ652bDrDzgMr3NFEkIS374+IgFQKkCvk9yiYcLvX2XDYr7UyQxf4wK0e+yqDYRubZ0DtOxnmQ==}
@@ -2559,6 +2577,9 @@ packages:
       jiti:
         optional: true
 
+  esm-env@1.2.2:
+    resolution: {integrity: sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA==}
+
   espree@10.4.0:
     resolution: {integrity: sha512-j6PAQ2uUr79PZhBjP5C5fhl8e39FmRnOjsD5lGnWrFU8i2G776tBK7+nP8KuQUTTyAZUwfQqXAgrVH5MbH9CYQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -2864,6 +2885,9 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  gsap@3.15.0:
+    resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
 
   handlebars@4.7.9:
     resolution: {integrity: sha512-4E71E0rpOaQuJR2A3xDZ+GM1HyWYv1clR58tC8emQNeQe3RH7MAzSbat+V0wG78LQBo6m6bzSG/L4pBuCsgnUQ==}
@@ -3356,6 +3380,20 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
+  lenis@1.3.23:
+    resolution: {integrity: sha512-YxYq3TJqj9sJNv0V9SkyQHejt14xwyIwgDaaMK89Uf9SxQfIszu+gTQSSphh6BWlLTNVKvvXAGkg+Zf+oFIevg==}
+    peerDependencies:
+      '@nuxt/kit': '>=3.0.0'
+      react: '>=17.0.0'
+      vue: '>=3.0.0'
+    peerDependenciesMeta:
+      '@nuxt/kit':
+        optional: true
+      react:
+        optional: true
+      vue:
+        optional: true
+
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
@@ -3730,6 +3768,9 @@ packages:
   npmlog@5.0.1:
     resolution: {integrity: sha512-AqZtDUWOMKs1G/8lwylVjrdYgqA4d9nu8hc+0gzRxlDb1I10+FHBGMXs6aiQHFdCUUlqH99MUMuLfzWDNDtfxw==}
     deprecated: This package is no longer supported.
+
+  number-flow@0.6.0:
+    resolution: {integrity: sha512-K8flNq2Wqus53vjp/btVo3qXFkagF8dIdYavreBfE7hlvFFG/b1HMGEH6nZL+mlrJ+4lbLP9OmPv3t2rmRkpSQ==}
 
   oauth-sign@0.9.0:
     resolution: {integrity: sha512-fexhUFFPTGV8ybAtSIGbV6gOkSv8UtRbDBnAyLQw4QPKkgNlsH2ByPGtMUqdWkos6YCRmAqViwgZrJc/mRDzZQ==}
@@ -4338,6 +4379,10 @@ packages:
     engines: {node: '>= v0.10.32'}
     peerDependencies:
       express: '>=4.0.0 || >=5.0.0-beta'
+
+  swiper@12.1.4:
+    resolution: {integrity: sha512-bihiwoKMOQwW8FfdUbo1DgkVH25E+4ZELIq0oopL1KTKBteLuaTMi/wwFjMxtlhTkk45k3XQ89D1Fvv0spSqBA==}
+    engines: {node: '>= 4.7.0'}
 
   swr@2.4.1:
     resolution: {integrity: sha512-2CC6CiKQtEwaEeNiqWTAw9PGykW8SR5zZX8MZk6TeAvEAnVS7Visz8WzphqgtQ8v2xz/4Q5K+j+SeMaKXeeQIA==}
@@ -5806,6 +5851,13 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
 
+  '@number-flow/react@0.6.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      esm-env: 1.2.2
+      number-flow: 0.6.0
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
+
   '@nuxt/opencollective@0.4.1':
     dependencies:
       consola: 3.4.2
@@ -7251,6 +7303,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  esm-env@1.2.2: {}
+
   espree@10.4.0:
     dependencies:
       acorn: 8.15.0
@@ -7606,6 +7660,8 @@ snapshots:
   gopd@1.2.0: {}
 
   graceful-fs@4.2.11: {}
+
+  gsap@3.15.0: {}
 
   handlebars@4.7.9:
     dependencies:
@@ -8325,6 +8381,10 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
+  lenis@1.3.23(react@19.2.0):
+    optionalDependencies:
+      react: 19.2.0
+
   leven@3.1.0: {}
 
   levn@0.4.1:
@@ -8616,6 +8676,10 @@ snapshots:
       console-control-strings: 1.1.0
       gauge: 3.0.2
       set-blocking: 2.0.0
+
+  number-flow@0.6.0:
+    dependencies:
+      esm-env: 1.2.2
 
   oauth-sign@0.9.0: {}
 
@@ -9359,6 +9423,8 @@ snapshots:
     dependencies:
       express: 5.2.1
       swagger-ui-dist: 5.32.6
+
+  swiper@12.1.4: {}
 
   swr@2.4.1(react@19.2.0):
     dependencies:

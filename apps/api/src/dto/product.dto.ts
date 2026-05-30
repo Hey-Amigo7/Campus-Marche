@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -14,12 +16,14 @@ export class CreateProductDto {
   @ApiProperty()
   @IsString()
   @Length(2, 120)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   title!: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @Length(0, 2000)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   description?: string;
 
   @ApiProperty({ minimum: 0 })
@@ -31,11 +35,13 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   @Length(2, 40)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   condition?: string;
 
   @ApiProperty()
   @IsString()
   @Length(2, 120)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   location!: string;
 
   @ApiPropertyOptional()
@@ -43,20 +49,16 @@ export class CreateProductDto {
   @IsUrl({ require_protocol: true })
   imageUrl?: string;
 
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsUrl({ require_protocol: true }, { each: true })
+  imageUrls?: string[];
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   imageStyle?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  featured?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  boosted?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -67,11 +69,12 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   @Length(0, 80)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   category?: string;
 
   @ApiPropertyOptional({ enum: ['product', 'service'] })
   @IsOptional()
-  @IsString()
+  @IsIn(['product', 'service'])
   listingType?: string;
 
   @ApiPropertyOptional({ type: [String] })
@@ -86,12 +89,14 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   @Length(2, 120)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   title?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @Length(0, 2000)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   description?: string;
 
   @ApiPropertyOptional({ minimum: 0 })
@@ -104,12 +109,14 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   @Length(2, 40)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   condition?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @Length(2, 120)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   location?: string;
 
   @ApiPropertyOptional()
@@ -117,20 +124,16 @@ export class UpdateProductDto {
   @IsUrl({ require_protocol: true })
   imageUrl?: string;
 
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsUrl({ require_protocol: true }, { each: true })
+  imageUrls?: string[];
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   imageStyle?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  featured?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  boosted?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -141,11 +144,12 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   @Length(0, 80)
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
   category?: string;
 
   @ApiPropertyOptional({ enum: ['product', 'service'] })
   @IsOptional()
-  @IsString()
+  @IsIn(['product', 'service'])
   listingType?: string;
 
   @ApiPropertyOptional({ type: [String] })

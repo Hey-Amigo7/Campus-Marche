@@ -187,7 +187,7 @@ export class AuthService {
     return { message: 'A new verification code has been sent to your email' };
   }
 
-  async sendPhoneOtp(userId: string, phone: string): Promise<{ message: string }> {
+  async sendPhoneOtp(userId: string, phone: string): Promise<{ message: string; devCode?: string }> {
     const normalizedPhone = this.smsService.normalizeGhanaPhone(phone);
 
     await this.prisma.user.update({ where: { id: userId }, data: { phone: normalizedPhone } });
@@ -204,8 +204,22 @@ export class AuthService {
       data: { userId, code, purpose: 'phone', expiresAt },
     });
 
-    await this.smsService.sendOtp(normalizedPhone, code);
-    return { message: 'Verification code sent to your phone' };
+    let smsSent = false;
+    try {
+      await this.smsService.sendOtp(normalizedPhone, code);
+      smsSent = true;
+    } catch (err) {
+      this.logger.error(`SMS failed for ${normalizedPhone}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    const devCode = this.config.get('NODE_ENV') !== 'production' ? code : undefined;
+
+    return {
+      message: smsSent
+        ? 'Verification code sent to your phone'
+        : 'SMS delivery failed — check server logs for the code (dev mode)',
+      devCode,
+    };
   }
 
   async verifyPhoneOtp(userId: string, code: string) {
@@ -275,6 +289,7 @@ export class AuthService {
       const match = await bcrypt.compare(password, candidate.password ?? DUMMY_PASSWORD_HASH);
       if (match) {
         const token = await this.signToken(candidate);
+        this.logger.log(`[AUTH] Login success: ${candidate.email}`);
         return { user: this.sanitizeUser(candidate as Parameters<typeof this.sanitizeUser>[0]), token };
       }
     }
@@ -284,6 +299,7 @@ export class AuthService {
       await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     }
 
+    this.logger.warn(`[AUTH] Failed login attempt for identifier: "${identifier.slice(0, 40)}"`);
     throw new UnauthorizedException('Invalid credentials');
   }
 
@@ -464,13 +480,13 @@ export class AuthService {
       return { message: 'Admin account already exists. Use the admin login to sign in.' };
     }
 
-    const DEFAULT_EMAIL = 'admin@campus-marche.com';
-    const DEFAULT_PASSWORD = 'Admin@123!';
-    const hash = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+    const adminEmail = this.config.get<string>('ADMIN_EMAIL', 'admin@campus-marche.com');
+    const adminPassword = this.config.getOrThrow<string>('ADMIN_PASSWORD');
+    const hash = await bcrypt.hash(adminPassword, 12);
 
     const admin = await this.prisma.user.create({
       data: {
-        email: DEFAULT_EMAIL,
+        email: adminEmail,
         name: 'Platform Admin',
         password: hash,
         avatar: '🛡️',
@@ -480,9 +496,7 @@ export class AuthService {
     });
 
     return {
-      message: 'Default admin account created. Login with the credentials below and change them immediately.',
-      email: DEFAULT_EMAIL,
-      password: DEFAULT_PASSWORD,
+      message: 'Admin account created. Use the ADMIN_EMAIL and ADMIN_PASSWORD from your .env to sign in.',
       userId: admin.id,
     };
   }

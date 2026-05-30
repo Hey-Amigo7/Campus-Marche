@@ -14,10 +14,21 @@ const PLANS = [
     name: "Free",
     price: "GHS 0",
     period: "",
-    description: "Buy, sell, chat, and build ratings — no fees, no pressure.",
-    features: ["Up to 5 listings", "Buyer and seller access", "Messaging", "Order tracking"],
-    cta: "Start free",
+    description: "Everything you need to buy, sell, and connect on campus — free forever, no catch.",
+    features: ["Up to 5 listings", "Buyer & seller access", "Messaging", "Order tracking"],
+    cta: "Start selling free",
     href: "/sell",
+    highlight: false,
+  },
+  {
+    key: "daily" as const,
+    name: "Daily Boost",
+    price: "GHS 3",
+    period: "/day",
+    description: "Give your listing a 24-hour spotlight when timing matters most. No commitment needed.",
+    features: ["Boosted listing for 24 hrs", "More eyes, more interest", "No monthly lock-in", "Activates instantly"],
+    cta: "Shine for a day",
+    href: null,
     highlight: false,
   },
   {
@@ -25,9 +36,9 @@ const PLANS = [
     name: "Seller Pro",
     price: "GHS 20",
     period: "/month",
-    description: "For students selling regularly who want more visibility and trust.",
+    description: "For the student hustle that never stops — more reach, real credibility, and tools to grow.",
     features: ["Unlimited listings", "Verified seller badge", "Seller analytics", "Boosted products", "Priority in search"],
-    cta: "Upgrade to Pro",
+    cta: "Level up →",
     href: null,
     highlight: true,
   },
@@ -36,9 +47,9 @@ const PLANS = [
     name: "Featured",
     price: "GHS 50",
     period: "/month",
-    description: "For local vendors who want homepage placement and priority support.",
+    description: "Your campus brand, front and centre. Maximum reach and a storefront that makes buyers trust you instantly.",
     features: ["Everything in Pro", "Homepage featured placement", "Advanced analytics", "Priority support", "Storefront customization"],
-    cta: "Get Featured",
+    cta: "Go Featured →",
     href: null,
     highlight: false,
   },
@@ -48,7 +59,7 @@ export default function PremiumPage() {
   const { success, error } = useToast();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
-  async function handleUpgrade(plan: "pro" | "featured") {
+  async function handleUpgrade(plan: "daily" | "pro" | "featured") {
     setLoadingPlan(plan);
     try {
       const { authorizationUrl } = await api.upgradeSubscription(plan);
@@ -82,13 +93,13 @@ export default function PremiumPage() {
               style={{ background: "rgba(127,182,133,0.12)", color: "#5A9460", border: "1px solid rgba(127,182,133,0.25)" }}
             >
               <Crown className="h-4 w-4" />
-              Premium seller growth
+              Seller growth tools
             </span>
             <h1 className="mt-6 max-w-3xl text-4xl font-black tracking-tight text-brand-navy md:text-5xl">
-              Grow your campus store without locking out free sellers.
+              Your campus hustle, amplified.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-              Campus Marche premium tools add real visibility, storefront trust, and seller analytics — while keeping the marketplace open and welcoming to everyone.
+              Every student starts free — and that never changes. When you&apos;re ready to reach more buyers, earn trust faster, and grow your campus brand, these tools are here for you.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <button
@@ -121,19 +132,19 @@ export default function PremiumPage() {
       </section>
 
       <section className="py-10">
-        <SectionHeading title="Premium features" subtitle="Subtle seller upgrades that make trust and discovery clearer." />
+        <SectionHeading title="What you unlock" subtitle="Small upgrades that make a real difference to how buyers find and trust you." />
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          <TrustFeature type="featured" title="Featured listings" description="Premium products appear highlighted and boosted above standard listings." />
-          <TrustFeature type="store" title="Storefronts" description="Branded page with banner, products, ratings, and trust context." />
-          <TrustFeature type="analytics" title="Analytics" description="Track views this week, product clicks, and interested buyer signals." />
-          <TrustFeature type="verified" title="Verified badge" description="Green seller verification helps students choose trusted vendors faster." />
+          <TrustFeature type="featured" title="Get seen first" description="Your listings appear at the top of search and browse — more eyes, more chances to sell." />
+          <TrustFeature type="store" title="Your own storefront" description="A clean, branded page buyers can share and come back to. Your name, your reputation." />
+          <TrustFeature type="analytics" title="Know what's working" description="See exactly how many students viewed your listings, clicked through, and showed interest." />
+          <TrustFeature type="verified" title="A badge that builds trust" description="One green checkmark that tells buyers you're verified and serious. Conversions go up." />
         </div>
       </section>
 
       {/* Pricing */}
       <section className="py-4">
-        <SectionHeading title="Pricing" subtitle="Flexible options for students and local vendors." />
-        <div className="grid gap-5 lg:grid-cols-3">
+        <SectionHeading title="Pick your pace" subtitle="Start free, boost when you want, or go all-in. No pressure either way." />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {PLANS.map((plan) => (
             <div
               key={plan.key}
@@ -185,7 +196,7 @@ export default function PremiumPage() {
                   </Link>
                 ) : (
                   <button
-                    onClick={() => void handleUpgrade(plan.key as "pro" | "featured")}
+                    onClick={() => void handleUpgrade(plan.key as "daily" | "pro" | "featured")}
                     disabled={loadingPlan === plan.key}
                     className={`${plan.highlight ? "btn-primary" : "btn-secondary"} w-full justify-center`}
                   >
@@ -200,7 +211,7 @@ export default function PremiumPage() {
           ))}
         </div>
         <p className="mt-4 text-center text-xs" style={{ color: "#94A3B8" }}>
-          All plans are billed monthly. Cancel anytime from your profile. Paystack processes all payments securely.
+          Monthly plans renew automatically. Cancel from your profile whenever you like — no questions asked. Paystack handles all payments securely.
         </p>
       </section>
 
@@ -209,10 +220,10 @@ export default function PremiumPage() {
         <SectionHeading title="FAQ" />
         <div className="grid gap-4 md:grid-cols-2">
           {[
-            ["Can I sell without paying?", "Yes. Standard seller accounts are free and fully functional. Premium adds visibility and trust signals on top."],
-            ["What does the verified badge do?", "It shows a green checkmark on your listings and profile, helping buyers choose your products with more confidence."],
-            ["How is payment processed?", "All subscription payments go through Paystack, Ghana's trusted payment platform. Your card details are never stored on our servers."],
-            ["Can I cancel anytime?", "Yes. Cancel from your profile at any time. Access continues until the end of your billing period."],
+            ["Is it really free to get started?", "Completely. Free accounts have everything you need to buy, sell, chat, and earn ratings. Premium is purely optional — it's there when you want to grow faster, not because you have to."],
+            ["What does the verified badge do?", "A green checkmark appears on your listings and profile. It's a trust signal — buyers feel more confident choosing a verified seller over an unknown one."],
+            ["How are payments handled?", "All payments go through Paystack, Ghana's most trusted payment platform. Your card or MoMo details are never stored on our servers."],
+            ["Can I cancel anytime?", "Always. Cancel from your profile with one tap. You keep your premium perks until the end of the period you already paid for."],
           ].map(([question, answer]) => (
             <div key={question} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <HelpCircle className="h-5 w-5 text-brand-green" />

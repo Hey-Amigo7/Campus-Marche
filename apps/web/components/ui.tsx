@@ -1,47 +1,13 @@
-import Link from "next/link";
-import { BadgeCheck, Crown, Search, Star, Zap } from "lucide-react";
+import {
+  AnimatedBadgeCheck,
+  AnimatedCrown,
+  AnimatedSearch,
+  AnimatedStar,
+  AnimatedZap,
+} from "@/components/animated-icons";
 import { cn } from "@/lib/format";
 
-export function Logo() {
-  return (
-    <Link href="/" className="flex items-center gap-2.5" aria-label="Campus Marche home">
-      <div className="relative flex h-9 w-9 items-center justify-center">
-        <svg className="h-9 w-9" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Bag handle */}
-          <path d="M8 8C8 6 9 4 12 4C15 4 16 6 16 8" stroke="#0F172A" strokeWidth="1.5" strokeLinecap="round" />
-          {/* Bag body — navy */}
-          <path d="M7 8H17V18C17 19.1 16.1 20 15 20H9C7.9 20 7 19.1 7 18V8Z" fill="#0F172A" />
-          {/* Sage bar-chart icon on bag */}
-          <g opacity="0.80">
-            <rect x="10" y="10" width="2" height="3" fill="#7FB685" />
-            <rect x="12.5" y="10" width="2" height="4" fill="#7FB685" />
-          </g>
-          {/* Caramel coin badge */}
-          <circle cx="19" cy="6" r="3" fill="#C68B59" />
-          <text x="19" y="7.2" textAnchor="middle" fill="white" fontSize="2.2" fontWeight="bold">₵</text>
-        </svg>
-      </div>
-      <span className="leading-tight">
-        <span className="block text-sm font-extrabold tracking-tight">
-          <span
-            style={{
-              background: "linear-gradient(135deg, #0F172A, #7FB685)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-            }}
-          >
-            Campus
-          </span>
-          <span style={{ color: "#C68B59" }}> Marche</span>
-        </span>
-        <span className="block text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#94A3B8" }}>
-          Buy · Sell · Connect
-        </span>
-      </span>
-    </Link>
-  );
-}
+export { Logo } from "@/components/logo";
 
 export function SectionHeading({
   title,
@@ -79,13 +45,13 @@ export function SellerBadge({
     <span className={cn("inline-flex flex-wrap items-center gap-1.5", compact && "gap-1")}>
       {verified ? (
         <span className="chip chip-sage">
-          <BadgeCheck className="h-3.5 w-3.5" />
+          <AnimatedBadgeCheck size={14} />
           Verified
         </span>
       ) : null}
       {premium ? (
         <span className="chip chip-caramel">
-          <Crown className="h-3.5 w-3.5" />
+          <AnimatedCrown size={14} />
           Premium
         </span>
       ) : null}
@@ -99,7 +65,7 @@ export function FeaturedBadge() {
       className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-md"
       style={{ background: "linear-gradient(135deg, #0F172A, #7FB685)", boxShadow: "0 4px 12px rgba(15,23,42,0.25)" }}
     >
-      <Zap className="h-3 w-3" />
+      <AnimatedZap size={12} />
       Featured
     </span>
   );
@@ -108,7 +74,7 @@ export function FeaturedBadge() {
 export function Rating({ value, reviews }: { value: number; reviews?: number }) {
   return (
     <span className="inline-flex items-center gap-1 text-sm font-bold" style={{ color: "#1E293B" }}>
-      <Star className="h-4 w-4" style={{ fill: "#C68B59", color: "#C68B59" }} />
+      <AnimatedStar size={16} active activeColor="#C68B59" />
       {value.toFixed(1)}
       {reviews ? <span className="font-medium" style={{ color: "#64748B" }}>({reviews})</span> : null}
     </span>
@@ -133,7 +99,7 @@ export function SearchBar({
         boxShadow:      "0 2px 10px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.90)",
       }}
     >
-      <Search className="h-4.5 w-4.5 shrink-0" style={{ color: "#94A3B8" }} />
+      <AnimatedSearch size={18} color="#94A3B8" />
       <input
         name="q"
         defaultValue={defaultValue}
@@ -170,7 +136,7 @@ export function EmptyState({
           className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl shadow-sm"
           style={{ background: "#ffffff", color: "#7FB685", boxShadow: "0 2px 10px rgba(127,182,133,0.20)" }}
         >
-          <Search className="h-5 w-5" />
+          <AnimatedSearch size={20} />
         </div>
         <h3 className="text-lg font-extrabold" style={{ color: "#1E293B" }}>{title}</h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6" style={{ color: "#64748B" }}>{description}</p>

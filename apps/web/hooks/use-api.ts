@@ -131,3 +131,11 @@ export function useWallet() {
 export function usePayouts() {
   return useSWR<Payout[]>("payouts", api.getPayouts, { fallbackData: [] });
 }
+
+export function useSiteStats() {
+  return useSWR<{ users: number; products: number; orders: number }>(
+    "site-stats",
+    api.getStats,
+    { fallbackData: { users: 0, products: 0, orders: 0 }, revalidateOnFocus: false },
+  );
+}

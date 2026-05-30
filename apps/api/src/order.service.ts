@@ -137,7 +137,7 @@ export class OrderService {
     });
 
     this.notificationService
-      ?.notify(product.sellerId, 'order', 'New order received', `Someone placed an order for your listing "${product.id}".`)
+      ?.notify(product.sellerId, 'order', 'New order received', `Someone placed an order for "${order.product.title}".`)
       .catch(() => undefined);
 
     return order;

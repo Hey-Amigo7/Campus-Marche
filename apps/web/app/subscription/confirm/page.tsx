@@ -44,7 +44,7 @@ function ConfirmInner() {
       });
   }, [reference]);
 
-  const planLabel = plan === "featured" ? "Featured" : "Seller Pro";
+  const planLabel = plan === "featured" ? "Featured" : plan === "daily" ? "Daily Boost" : "Seller Pro";
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">

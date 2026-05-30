@@ -92,12 +92,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 function applyTheme(id: ThemeId) {
   const html = document.documentElement;
-  THEMES.forEach((t) => html.removeAttribute(`data-theme-${t.id}`));
-  if (id !== "classic") {
-    html.setAttribute("data-theme", id);
-  } else {
-    html.removeAttribute("data-theme");
+  const doApply = () => {
+    THEMES.forEach((t) => html.removeAttribute(`data-theme-${t.id}`));
+    if (id !== "classic") html.setAttribute("data-theme", id);
+    else html.removeAttribute("data-theme");
+  };
+
+  // Skiper26-style View Transitions circular reveal from top of page
+  if (!("startViewTransition" in document)) {
+    doApply();
+    return;
   }
+  (document as Document & { startViewTransition: (cb: () => void) => void })
+    .startViewTransition(doApply);
 }
 
 export function useTheme() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, CheckCheck, Loader2, Search, Send } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, Plus, Search, Send, X } from "lucide-react";
 import { useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
@@ -15,6 +15,27 @@ import type { ApiConversation, ApiMessage } from "@/types";
 
 function getInitials(name: string): string {
   return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+}
+
+function isAvatarUrl(avatar: string | null | undefined): boolean {
+  if (!avatar) return false;
+  return avatar.startsWith("http") || avatar.startsWith("/uploads") || avatar.startsWith("/");
+}
+
+function AvatarCircle({ avatar, name, size }: { avatar?: string | null; name: string; size: number }) {
+  const cls = "rounded-full object-cover";
+  if (isAvatarUrl(avatar)) {
+    return <img src={avatar!} alt={name} className={`h-full w-full ${cls}`} />;
+  }
+  const display = avatar && avatar.length <= 2 ? avatar : getInitials(name);
+  return (
+    <span
+      className="flex h-full w-full items-center justify-center font-black text-white"
+      style={{ fontSize: size * 0.38 }}
+    >
+      {display}
+    </span>
+  );
 }
 
 function formatTime(iso: string): string {
@@ -124,11 +145,9 @@ function ConvItem({ conv, active, onClick }: { conv: ApiConversation; active: bo
     >
       {/* Avatar */}
       <div className="relative h-12 w-12 shrink-0">
-        <div className="grid h-full w-full place-items-center rounded-full text-sm font-black text-white"
+        <div className="grid h-full w-full overflow-hidden place-items-center rounded-full text-sm font-black text-white"
           style={{ background: "linear-gradient(135deg, #0F172A, #1a3a2a)" }}>
-          {conv.user.avatar
-            ? <img src={conv.user.avatar} alt={conv.user.name} className="h-full w-full rounded-full object-cover" />
-            : getInitials(conv.user.name)}
+          <AvatarCircle avatar={conv.user.avatar} name={conv.user.name} size={48} />
         </div>
         {conv.user.verified && (
           <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full text-[8px]"
@@ -171,6 +190,111 @@ function ConvItem({ conv, active, onClick }: { conv: ApiConversation; active: bo
   );
 }
 
+// ─── New chat modal ────────────────────────────────────────────────────────────
+
+function NewChatModal({ onClose, onStarted }: { onClose: () => void; onStarted: (id: string) => void }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Array<{ id: string; name: string; avatar: string | null; verified: boolean }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [starting, setStarting] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    if (q.trim().length < 2) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await api.searchUsers(q.trim());
+        setResults(data);
+      } catch { setResults([]); }
+      finally { setSearching(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  async function handleStart(userId: string) {
+    setStarting(userId);
+    try {
+      const { id } = await api.startConversation(userId);
+      onStarted(id);
+    } catch { /* ignore */ }
+    finally { setStarting(null); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.50)", backdropFilter: "blur(4px)" }}>
+      <div className="w-full max-w-sm overflow-hidden rounded-3xl shadow-2xl"
+        style={{ background: "rgba(10,15,26,0.96)", border: "1px solid rgba(255,255,255,0.10)" }}>
+        <div className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <h2 className="text-base font-black text-white">New message</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-xl p-1.5"
+            style={{ color: "rgba(255,255,255,0.50)" }}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-4">
+          <div className="flex items-center gap-2 rounded-2xl px-3"
+            style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)" }}>
+            <Search className="h-3.5 w-3.5 shrink-0" style={{ color: "rgba(255,255,255,0.40)" }} />
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by name or email…"
+              className="min-w-0 flex-1 bg-transparent py-3 text-sm text-white outline-none placeholder:text-[rgba(255,255,255,0.30)]"
+            />
+            {searching && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" style={{ color: "rgba(255,255,255,0.40)" }} />}
+          </div>
+
+          <div className="mt-3 max-h-64 overflow-y-auto">
+            {q.trim().length < 2 && (
+              <p className="py-6 text-center text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
+                Type at least 2 characters to search
+              </p>
+            )}
+            {q.trim().length >= 2 && !searching && results.length === 0 && (
+              <p className="py-6 text-center text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
+                No users found
+              </p>
+            )}
+            {results.map((user) => (
+              <button
+                key={user.id}
+                type="button"
+                onClick={() => handleStart(user.id)}
+                disabled={starting === user.id}
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors disabled:opacity-60"
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = ""; }}
+              >
+                <div className="grid h-10 w-10 shrink-0 overflow-hidden place-items-center rounded-full text-xs font-black text-white"
+                  style={{ background: "linear-gradient(135deg, #0F172A, #1a3a2a)" }}>
+                  <AvatarCircle avatar={user.avatar} name={user.name} size={40} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm font-bold text-white">{user.name}</p>
+                  {user.verified && (
+                    <p className="text-xs" style={{ color: "#7FB685" }}>✓ Verified</p>
+                  )}
+                </div>
+                {starting === user.id
+                  ? <Loader2 className="h-4 w-4 animate-spin shrink-0" style={{ color: "#7FB685" }} />
+                  : <Send className="h-4 w-4 shrink-0" style={{ color: "rgba(255,255,255,0.35)" }} />
+                }
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function MessagesPage() {
@@ -192,6 +316,7 @@ function MessagesContent() {
   const [query, setQuery] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [showNewChat, setShowNewChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { mutate } = useSWRConfig();
@@ -302,6 +427,7 @@ function MessagesContent() {
               <div className="px-4 pb-3 pt-4" style={{ borderBottom: "1px solid rgba(226,232,240,0.60)" }}>
                 <div className="flex items-center justify-between">
                   <h1 className="text-lg font-black" style={{ color: "#1E293B" }}>Messages</h1>
+                  <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold"
                     style={{
                       background: connected ? "rgba(127,182,133,0.12)" : "rgba(148,163,184,0.12)",
@@ -311,6 +437,18 @@ function MessagesContent() {
                       style={{ background: connected ? "#7FB685" : "#CBD5E1", display: "inline-block" }} />
                     {connected ? "Live" : "Connecting…"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewChat(true)}
+                    aria-label="New message"
+                    className="grid h-7 w-7 place-items-center rounded-xl transition-colors"
+                    style={{ background: "rgba(127,182,133,0.12)", color: "#4A7C59" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(127,182,133,0.22)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(127,182,133,0.12)"; }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2 rounded-2xl px-3"
                   style={{ background: "rgba(248,245,239,0.80)", border: "1px solid rgba(226,232,240,0.70)" }}>
@@ -361,11 +499,9 @@ function MessagesContent() {
                       style={{ color: "#64748B" }}>
                       <ArrowLeft className="h-4 w-4" />
                     </button>
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-black text-white"
+                    <div className="grid h-10 w-10 shrink-0 overflow-hidden place-items-center rounded-full text-xs font-black text-white"
                       style={{ background: "linear-gradient(135deg, #0F172A, #1a3a2a)" }}>
-                      {active.user.avatar
-                        ? <img src={active.user.avatar} alt={active.user.name} className="h-full w-full rounded-full object-cover" />
-                        : getInitials(active.user.name)}
+                      <AvatarCircle avatar={active.user.avatar} name={active.user.name} size={40} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-sm" style={{ color: "#1E293B" }}>{active.user.name}</p>
@@ -460,6 +596,16 @@ function MessagesContent() {
           </div>
         </div>
       </div>
+      {showNewChat && (
+        <NewChatModal
+          onClose={() => setShowNewChat(false)}
+          onStarted={(id) => {
+            setShowNewChat(false);
+            setActiveId(id);
+            void mutate("conversations");
+          }}
+        />
+      )}
     </AuthGate>
   );
 }

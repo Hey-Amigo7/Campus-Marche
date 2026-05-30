@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 
 const CODE_LENGTH = 6;
@@ -10,6 +11,7 @@ const RESEND_COOLDOWN = 60;
 export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { mutate } = useSWRConfig();
   const email   = searchParams.get("email")   ?? "";
   const devCode = searchParams.get("devCode") ?? "";
 
@@ -79,6 +81,8 @@ export default function VerifyEmailPage() {
     setLoading(true);
     try {
       await api.auth.verifyEmailOtp(code);
+      // Flush caches so verified badge and notifications update immediately
+      await Promise.all([mutate("profile"), mutate("notifications")]);
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);
     } catch (err) {
@@ -234,13 +238,21 @@ export default function VerifyEmailPage() {
               </div>
 
               <div
-                className="border-t pt-4 text-center text-sm"
+                className="border-t pt-4 text-center text-sm space-y-2"
                 style={{ borderColor: "rgba(226,232,240,0.60)", color: "#64748B" }}
               >
-                Wrong email?{" "}
-                <a href="/register" className="font-semibold hover:underline" style={{ color: "#0F172A" }}>
-                  Register again
-                </a>
+                <div>
+                  Wrong email?{" "}
+                  <a href="/register" className="font-semibold hover:underline" style={{ color: "#0F172A" }}>
+                    Register again
+                  </a>
+                </div>
+                <div>
+                  Prefer phone verification?{" "}
+                  <a href="/verify-phone" className="font-semibold hover:underline" style={{ color: "#5A9460" }}>
+                    Verify phone instead →
+                  </a>
+                </div>
               </div>
             </div>
           )}

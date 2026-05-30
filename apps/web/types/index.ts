@@ -83,6 +83,7 @@ export type Product = {
   tags: string[];
   imageStyle: string;
   imageUrl?: string;
+  imageUrls?: string[];
   views: number;
 };
 
@@ -249,7 +250,9 @@ export type CampusEvent = {
   eventDate: string;
   category: string;
   opportunity?: string | null;
+  registrationLink?: string | null;
   imageUrl?: string | null;
+  featured?: boolean;
 };
 
 export type Message = {

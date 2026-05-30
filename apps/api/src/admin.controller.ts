@@ -4,6 +4,7 @@ import { IsBoolean, IsIn, IsNotEmpty, IsString, Length } from 'class-validator';
 import { AdminService } from './admin.service';
 import { AuthUser } from './auth/auth-user.decorator';
 import { AdminAuthGuard } from './auth/admin-auth.guard';
+import { EventsAuthGuard } from './auth/events-auth.guard';
 
 class SetRoleDto {
   @IsString()
@@ -156,7 +157,8 @@ export class AdminController {
   }
 
   @Get('events')
-  @ApiOperation({ summary: 'List events' })
+  @UseGuards(EventsAuthGuard)
+  @ApiOperation({ summary: 'List events (admin view)' })
   @ApiQuery({ name: 'skip', required: false })
   @ApiQuery({ name: 'take', required: false })
   getEvents(@Query('skip') skip = 0, @Query('take') take = 50) {
@@ -164,6 +166,7 @@ export class AdminController {
   }
 
   @Post('events')
+  @UseGuards(EventsAuthGuard)
   @ApiOperation({ summary: 'Create event' })
   createEvent(
     @Body()
@@ -174,6 +177,7 @@ export class AdminController {
       eventDate: string;
       category: string;
       opportunity?: string;
+      registrationLink?: string;
       imageUrl?: string;
     },
   ) {
@@ -181,6 +185,7 @@ export class AdminController {
   }
 
   @Patch('events/:id')
+  @UseGuards(EventsAuthGuard)
   @ApiOperation({ summary: 'Update event' })
   updateEvent(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     const data = { ...body };
@@ -189,6 +194,7 @@ export class AdminController {
   }
 
   @Delete('events/:id')
+  @UseGuards(EventsAuthGuard)
   @ApiOperation({ summary: 'Delete event' })
   deleteEvent(@Param('id') id: string) {
     return this.adminService.deleteEvent(id);

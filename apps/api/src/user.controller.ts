@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Patch, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import * as bcrypt from 'bcrypt';
@@ -34,6 +34,27 @@ export class UserController {
     private authService: AuthService,
     private prisma: PrismaService,
   ) {}
+
+  @Get('search')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Search users by name or email prefix' })
+  async searchUsers(@AuthUser() user: { id: string }, @Query('q') q: string) {
+    if (!q || q.trim().length < 2) return [];
+    const term = q.trim();
+    const results = await this.prisma.user.findMany({
+      where: {
+        id: { not: user.id },
+        OR: [
+          { name:  { contains: term, mode: 'insensitive' } },
+          { email: { startsWith: term.toLowerCase() } },
+        ],
+      },
+      select: { id: true, name: true, avatar: true, verified: true },
+      take: 10,
+      orderBy: { name: 'asc' },
+    });
+    return results;
+  }
 
   @Get('profile')
   @UseGuards(JwtAuthGuard)

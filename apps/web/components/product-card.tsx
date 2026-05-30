@@ -2,17 +2,31 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bookmark, BookmarkCheck, Loader2, MapPin, Star, Wrench } from "lucide-react";
+import { Eye, MapPin, Star, Wrench } from "lucide-react";
+import { motion } from "framer-motion";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import type { Product } from "@/types";
 import { api } from "@/lib/api";
-import { cn, formatCurrency, formatRelativeDate } from "@/lib/format";
+import { formatCurrency, formatRelativeDate } from "@/lib/format";
 import { hasAuthToken } from "@/lib/auth";
 import { useSavedStatus } from "@/hooks/use-api";
+import { AnimatedHeart, AnimatedLoader } from "@/components/animated-icons";
 
+const spring = { type: "spring", stiffness: 340, damping: 26 } as const;
+
+/* ── Condition badge config ─────────────────────────────────── */
+const CONDITION_COLOR: Record<string, string> = {
+  "New":      "var(--green)",
+  "Like new": "var(--green-dark)",
+  "Good":     "var(--caramel)",
+  "Fair":     "var(--muted)",
+};
+
+/* ── Product image / placeholder ─────────────────────────────── */
 export function ProductArt({
-  style,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  style: _s,
   className,
   imageUrl,
   title,
@@ -22,17 +36,25 @@ export function ProductArt({
   imageUrl?: string;
   title?: string;
 }) {
-  void style;
+  const emoji =
+    title?.toLowerCase().includes("laptop") || title?.toLowerCase().includes("computer") ? "💻"
+    : title?.toLowerCase().includes("phone") ? "📱"
+    : title?.toLowerCase().includes("book")  || title?.toLowerCase().includes("text")   ? "📚"
+    : title?.toLowerCase().includes("chair") || title?.toLowerCase().includes("furniture") ? "🪑"
+    : title?.toLowerCase().includes("shoe")  || title?.toLowerCase().includes("cloth")  ? "👟"
+    : title?.toLowerCase().includes("tutor") || title?.toLowerCase().includes("teach")  ? "🎓"
+    : "📦";
 
   if (imageUrl) {
     return (
-      <div className={cn("relative overflow-hidden", className)}>
+      <div className={`relative overflow-hidden ${className ?? ""}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}
           alt={title ?? "Product image"}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }}
         />
       </div>
     );
@@ -40,37 +62,18 @@ export function ProductArt({
 
   return (
     <div
-      className={cn("relative grid place-items-center overflow-hidden", className)}
-      style={{ background: "linear-gradient(145deg, #F0F7F1 0%, #DFF3E3 60%, #F8F5EF 100%)" }}
+      className={`grid place-items-center ${className ?? ""}`}
+      style={{ background: "var(--surface-raised)" }}
     >
-      <div className="flex flex-col items-center gap-2 px-4 text-center">
-        <div
-          className="grid h-14 w-14 place-items-center rounded-2xl"
-          style={{ background: "rgba(127,182,133,0.12)", border: "1px solid rgba(127,182,133,0.18)" }}
-        >
-          <span className="text-2xl select-none">
-            {title?.toLowerCase().includes("laptop") || title?.toLowerCase().includes("computer") ? "💻"
-              : title?.toLowerCase().includes("phone") ? "📱"
-              : title?.toLowerCase().includes("book") || title?.toLowerCase().includes("text") ? "📚"
-              : title?.toLowerCase().includes("chair") || title?.toLowerCase().includes("furniture") ? "🪑"
-              : title?.toLowerCase().includes("shoe") || title?.toLowerCase().includes("cloth") ? "👟"
-              : title?.toLowerCase().includes("tutor") || title?.toLowerCase().includes("teach") ? "🎓"
-              : title?.toLowerCase().includes("hair") || title?.toLowerCase().includes("braid") ? "✂️"
-              : title?.toLowerCase().includes("design") || title?.toLowerCase().includes("graphic") ? "🎨"
-              : "📦"}
-          </span>
-        </div>
-        {title ? (
-          <p className="line-clamp-2 text-xs font-semibold" style={{ color: "#7FB685" }}>{title}</p>
-        ) : null}
-      </div>
+      <span className="text-4xl opacity-40 select-none">{emoji}</span>
     </div>
   );
 }
 
-function SaveButton({ productId, compact = false }: { productId: string; compact?: boolean }) {
+/* ── Heart save button ────────────────────────────────────────── */
+function SaveButton({ productId }: { productId: string }) {
   const { data: status } = useSavedStatus(productId);
-  const { mutate } = useSWRConfig();
+  const { mutate }       = useSWRConfig();
   const [loading, setLoading] = useState(false);
 
   if (!hasAuthToken()) return null;
@@ -90,136 +93,185 @@ function SaveButton({ productId, compact = false }: { productId: string; compact
     }
   }
 
+  if (loading) {
+    return (
+      <span className="grid h-7 w-7 place-items-center rounded-full"
+        style={{ background: "rgba(250,250,249,0.92)", border: "1px solid rgba(228,228,231,0.80)" }}>
+        <AnimatedLoader size={12} color="var(--muted)" />
+      </span>
+    );
+  }
+
   return (
-    <button
-      onClick={toggle}
-      disabled={loading}
-      aria-label={status?.saved ? "Remove from saved" : "Save listing"}
-      className="grid h-9 w-9 place-items-center rounded-full shadow-md transition-all hover:scale-110 active:scale-95"
-      style={{
-        background: "rgba(255,255,255,0.92)",
-        backdropFilter: "blur(8px)",
-        border: "1px solid rgba(255,255,255,0.60)",
-      }}
+    <span
+      className="block rounded-full"
+      style={{ background: "rgba(250,250,249,0.92)", border: "1px solid rgba(228,228,231,0.80)" }}
     >
-      {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" style={{ color: "#94A3B8" }} />
-      ) : status?.saved ? (
-        <BookmarkCheck className="h-4 w-4" style={{ color: "#C68B59" }} />
-      ) : (
-        <Bookmark className="h-4 w-4" style={{ color: "#64748B" }} />
-      )}
-    </button>
+      <AnimatedHeart
+        saved={!!status?.saved}
+        onToggle={toggle}
+        size={15}
+        className="h-7 w-7 rounded-full"
+      />
+    </span>
   );
 }
 
+/* ── Main product card ────────────────────────────────────────── */
 export function ProductCard({ product, compact = false }: { product: Product; compact?: boolean }) {
-  const router = useRouter();
-  const isService = (product as Product & { listingType?: string }).listingType === "service";
+  const router    = useRouter();
+  const imageUrl  = product.imageUrl ?? product.imageUrls?.[0];
+  const isService = product.listingType === "service" || product.category === "Services";
+  const isSold    = product.active === false || !!(product as Product & { soldAt?: string | null }).soldAt;
+  const conditionColor = product.condition ? (CONDITION_COLOR[product.condition] ?? "var(--muted)") : null;
 
   return (
-    <article
-      className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1",
-      )}
+    <motion.article
+      whileHover={{ y: -4, scale: 1.015 }}
+      whileTap={{ scale: 0.98 }}
+      transition={spring}
+      className="group relative flex flex-col overflow-hidden rounded-2xl"
       style={{
-        background: "rgba(255,255,255,0.90)",
-        backdropFilter: "blur(20px) saturate(160%)",
-        border: product.featured
-          ? "1.5px solid rgba(127,182,133,0.45)"
-          : "1px solid rgba(226,232,240,0.65)",
-        boxShadow: product.featured
-          ? "0 6px 28px rgba(127,182,133,0.15), 0 2px 6px rgba(15,23,42,0.06)"
-          : "0 2px 14px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.04)",
+        background: "var(--surface)",
+        border:     "1px solid var(--border)",
+        boxShadow:  "0 2px 8px rgba(9,9,11,0.04)",
       }}
     >
-      {/* Image — full width, no button overlay */}
+      {/* Image */}
       <Link href={`/products/${product.id}`} className="block overflow-hidden">
-        <div className="relative">
+        <div className="relative overflow-hidden bg-[var(--surface-raised)]" style={{ height: compact ? 128 : 192 }}>
           <ProductArt
             style={product.imageStyle}
-            imageUrl={product.imageUrl}
+            imageUrl={imageUrl}
             title={product.title}
-            className={compact ? "min-h-32" : "min-h-48"}
+            className="h-full w-full"
           />
 
-          {/* Badges top-left */}
-          <div className="absolute left-3 top-3 flex flex-wrap gap-1">
-            {product.featured ? (
-              <span
-                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black text-white shadow-sm"
-                style={{ background: "linear-gradient(135deg, #0F172A, #1a3a2a)" }}
-              >
-                Featured
-              </span>
-            ) : null}
-            {isService ? (
-              <span
-                className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-black shadow-sm"
-                style={{ background: "rgba(198,139,89,0.90)", color: "#fff" }}
-              >
-                <Wrench className="h-2.5 w-2.5" />
-                Service
-              </span>
-            ) : null}
-          </div>
-
-          {/* Save button top-right */}
-          <div className="absolute right-3 top-3">
-            <SaveButton productId={product.id} compact />
-          </div>
-
-          {/* Price overlay at bottom of image — Instagram/Airbnb style */}
-          <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between p-3 pt-8"
-            style={{ background: "linear-gradient(to top, rgba(15,23,42,0.55) 0%, transparent 100%)" }}>
-            <span className="text-base font-black text-white drop-shadow-sm">
-              {formatCurrency(product.price)}
-              {product.negotiable ? <span className="ml-1 text-[10px] font-semibold opacity-80">· negotiable</span> : null}
+          {/* Condition badge — top left */}
+          {conditionColor && (
+            <span
+              className="absolute left-2.5 top-2.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+              style={{ background: conditionColor }}
+            >
+              {product.condition}
             </span>
+          )}
+
+          {/* Service badge — top left (if service, overrides condition) */}
+          {isService && (
+            <span
+              className="absolute left-2.5 top-2.5 inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+              style={{ background: "var(--caramel)" }}
+            >
+              <Wrench className="h-2.5 w-2.5" />
+              Service
+            </span>
+          )}
+
+          {/* Featured badge — top right (only when no save button) */}
+          {product.featured && !hasAuthToken() && (
+            <span
+              className="absolute right-2.5 top-2.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+              style={{ background: "var(--green)" }}
+            >
+              Featured
+            </span>
+          )}
+
+          {/* Heart save button — top right */}
+          <div className="absolute right-2.5 top-2.5">
+            <SaveButton productId={product.id} />
           </div>
+
+          {/* Sold overlay */}
+          {isSold && (
+            <div className="absolute inset-0 flex items-center justify-center"
+              style={{ background: "rgba(9,9,11,0.50)" }}>
+              <span
+                className="rounded-full px-4 py-1.5 text-sm font-bold"
+                style={{ background: "rgba(250,250,249,0.92)", color: "var(--on-surface)" }}
+              >
+                SOLD
+              </span>
+            </div>
+          )}
         </div>
       </Link>
 
-      {/* Card body — minimal */}
-      <Link href={`/products/${product.id}`} className="flex flex-1 flex-col p-3">
-        <h3
-          className="line-clamp-2 text-sm font-bold leading-snug tracking-tight"
-          style={{ color: "#1E293B" }}
-        >
-          {product.title}
-        </h3>
+      {/* Body */}
+      <div className="flex flex-1 flex-col gap-2 p-3">
 
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-0.5 text-xs font-medium" style={{ color: "#94A3B8" }}>
-            <MapPin className="h-3 w-3" />
-            {product.location}
-          </span>
-          {product.seller.verified ? (
-            <span className="text-[10px] font-bold" style={{ color: "#5A9460" }}>✓ verified</span>
-          ) : null}
-        </div>
-
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/store/${product.sellerId}`); }}
-            className="min-w-0 truncate text-xs font-semibold hover:underline text-left"
-            style={{ color: "#64748B" }}
+        {/* Title */}
+        <Link href={`/products/${product.id}`}>
+          <h3
+            className="line-clamp-2 text-sm font-semibold leading-snug transition-colors hover:text-[var(--green)]"
+            style={{ color: "var(--on-surface)" }}
           >
-            {product.seller.name}
+            {product.title}
+          </h3>
+        </Link>
+
+        {/* Price row */}
+        <div className="flex items-baseline gap-2">
+          <span className="text-base font-black" style={{ color: "var(--on-surface)" }}>
+            {formatCurrency(product.price)}
+          </span>
+          {product.negotiable && (
+            <span className="ml-auto text-[10px] font-medium" style={{ color: "var(--green)" }}>
+              Negotiable
+            </span>
+          )}
+        </div>
+
+        {/* Seller + location row */}
+        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
+          <button
+            type="button"
+            className="flex items-center gap-1 hover:underline"
+            onClick={(e) => { e.preventDefault(); router.push(`/store/${product.sellerId}`); }}
+          >
+            <span className="max-w-[80px] truncate">{product.seller.name.split(" ")[0]}</span>
+            {product.seller.verified && (
+              <svg className="h-2.5 w-2.5 shrink-0" style={{ color: "var(--green)", fill: "var(--green)" }}
+                viewBox="0 0 24 24" aria-hidden>
+                <path d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-.723 3.066 3.745 3.745 0 01-3.066.723A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.066-.723 3.745 3.745 0 01-.723-3.066A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 01.723-3.066 3.746 3.746 0 013.066-.723A3.745 3.745 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.066.723 3.746 3.746 0 01.723 3.066A3.745 3.745 0 0121 12z" strokeWidth="1.5" stroke="currentColor" fill="none" />
+              </svg>
+            )}
           </button>
-          <span className="shrink-0 text-[10px] font-medium" style={{ color: "#94A3B8" }}>
-            {formatRelativeDate(product.postedAt)}
+          {product.seller.rating !== undefined && product.seller.rating > 0 && (
+            <>
+              <span>·</span>
+              <span className="flex items-center gap-0.5 shrink-0">
+                <Star size={9} style={{ fill: "var(--caramel)", stroke: "var(--caramel)" }} />
+                {product.seller.rating.toFixed(1)}
+              </span>
+            </>
+          )}
+          <span>·</span>
+          <span className="flex items-center gap-0.5 min-w-0">
+            <MapPin size={9} className="shrink-0" />
+            <span className="truncate">{product.location}</span>
           </span>
         </div>
 
-        {product.seller.premium && !compact ? (
-          <div className="mt-2 flex items-center gap-1">
-            <Star className="h-3 w-3" style={{ fill: "#C68B59", color: "#C68B59" }} />
-            <span className="text-[10px] font-bold" style={{ color: "#C68B59" }}>Premium seller</span>
+        {/* Footer: views + time */}
+        <div className="mt-auto flex items-center justify-between pt-1">
+          <div className="flex items-center gap-2.5 text-[11px]" style={{ color: "var(--subtle)" }}>
+            <span className="flex items-center gap-0.5">
+              <Eye size={11} />
+              {product.views ?? 0}
+            </span>
+            <span>{formatRelativeDate(product.postedAt)}</span>
           </div>
-        ) : null}
-      </Link>
-    </article>
+
+          {product.seller.premium && (
+            <span className="text-[10px] font-semibold" style={{ color: "var(--caramel)" }}>
+              ★ Premium
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.article>
   );
 }
 

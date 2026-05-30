@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 
 const CODE_LENGTH = 6;
@@ -11,9 +13,11 @@ type Step = "phone" | "otp";
 
 export default function VerifyPhonePage() {
   const router = useRouter();
+  const { mutate } = useSWRConfig();
 
   const [step, setStep]           = useState<Step>("phone");
   const [phone, setPhone]         = useState("");
+  const [devCode, setDevCode]     = useState<string | null>(null);
   const [digits, setDigits]       = useState<string[]>(Array(CODE_LENGTH).fill(""));
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState(false);
@@ -38,9 +42,9 @@ export default function VerifyPhonePage() {
     if (!phone.trim()) return;
     setError(null);
     setLoading(true);
-
     try {
-      await api.auth.sendPhoneOtp(phone.trim());
+      const result = await api.auth.sendPhoneOtp(phone.trim());
+      if (result.devCode) setDevCode(result.devCode);
       setStep("otp");
       setResendCooldown(RESEND_COOLDOWN);
       setTimeout(() => focusInput(0), 50);
@@ -89,9 +93,9 @@ export default function VerifyPhonePage() {
     if (code.length < CODE_LENGTH) { setError("Please enter all 6 digits."); return; }
     setError(null);
     setLoading(true);
-
     try {
       await api.auth.verifyPhoneOtp(code);
+      await Promise.all([mutate("profile"), mutate("notifications")]);
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);
     } catch (err) {
@@ -105,9 +109,9 @@ export default function VerifyPhonePage() {
     if (resendCooldown > 0 || resendLoading) return;
     setResendLoading(true);
     setError(null);
-
     try {
-      await api.auth.sendPhoneOtp(phone);
+      const result = await api.auth.sendPhoneOtp(phone);
+      if (result.devCode) setDevCode(result.devCode);
       setResendCooldown(RESEND_COOLDOWN);
       setDigits(Array(CODE_LENGTH).fill(""));
       focusInput(0);
@@ -120,7 +124,6 @@ export default function VerifyPhonePage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <div
         className="relative overflow-hidden py-14 text-white"
         style={{ background: "linear-gradient(135deg, #0F172A 0%, #102542 55%, #1a3a2a 100%)" }}
@@ -132,11 +135,9 @@ export default function VerifyPhonePage() {
         <div className="container-shell text-center">
           <h1 className="text-4xl font-black tracking-tight">Verify your phone</h1>
           <p className="mt-3 text-lg" style={{ color: "#94A3B8" }}>
-            {step === "phone" ? (
-              "Add your Ghana number to unlock secure transactions"
-            ) : (
-              <>We sent a code to <span className="font-semibold text-white">{phone}</span></>
-            )}
+            {step === "phone"
+              ? "Add your Ghana number to unlock secure transactions"
+              : <>We sent a code to <span className="font-semibold text-white">{phone}</span></>}
           </p>
         </div>
       </div>
@@ -153,10 +154,7 @@ export default function VerifyPhonePage() {
         >
           {success ? (
             <div className="flex flex-col items-center gap-4 py-4 text-center">
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-full"
-                style={{ background: "rgba(127,182,133,0.15)" }}
-              >
+              <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "rgba(127,182,133,0.15)" }}>
                 <svg className="h-8 w-8" style={{ color: "#5A9460" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-12" />
                 </svg>
@@ -167,9 +165,7 @@ export default function VerifyPhonePage() {
           ) : step === "phone" ? (
             <form className="space-y-5" onSubmit={handleSendOtp}>
               <div>
-                <label className="block text-sm font-bold" style={{ color: "#1E293B" }}>
-                  Ghana phone number
-                </label>
+                <label className="block text-sm font-bold" style={{ color: "#1E293B" }}>Ghana phone number</label>
                 <input
                   type="tel"
                   value={phone}
@@ -178,27 +174,34 @@ export default function VerifyPhonePage() {
                   className="input-shell mt-2"
                   required
                 />
-                <p className="mt-2 text-xs" style={{ color: "#94A3B8" }}>
-                  Supports MTN, Telecel, and AirtelTigo numbers.
-                </p>
+                <p className="mt-2 text-xs" style={{ color: "#94A3B8" }}>Supports MTN, Telecel, and AirtelTigo numbers.</p>
               </div>
 
               {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full justify-center py-3 text-base font-bold disabled:opacity-50"
-              >
+              <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base font-bold disabled:opacity-50">
                 {loading ? "Sending code…" : "Send verification code"}
               </button>
+
+              {/* Cross-link */}
+              <p className="text-center text-sm" style={{ color: "#64748B" }}>
+                No Ghana number?{" "}
+                <Link href="/verify-email" className="font-semibold hover:underline" style={{ color: "#5A9460" }}>
+                  Verify email instead →
+                </Link>
+              </p>
             </form>
           ) : (
             <div className="space-y-6">
+              {devCode && (
+                <div className="rounded-xl border px-4 py-3 text-sm"
+                  style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.30)", color: "#92400E" }}>
+                  <span className="font-bold">Dev mode:</span> SMS not delivered — code: <span className="font-mono font-black tracking-widest">{devCode}</span>
+                </div>
+              )}
+
               <div>
-                <p className="mb-4 text-sm font-semibold" style={{ color: "#1E293B" }}>
-                  Enter verification code
-                </p>
+                <p className="mb-4 text-sm font-semibold" style={{ color: "#1E293B" }}>Enter verification code</p>
                 <div className="flex justify-center gap-2">
                   {digits.map((digit, index) => (
                     <input
@@ -236,36 +239,29 @@ export default function VerifyPhonePage() {
 
               <div className="text-center text-sm" style={{ color: "#64748B" }}>
                 {resendCooldown > 0 ? (
-                  <span>
-                    Resend in{" "}
-                    <span className="font-semibold" style={{ color: "#1E293B" }}>{resendCooldown}s</span>
-                  </span>
+                  <span>Resend in <span className="font-semibold" style={{ color: "#1E293B" }}>{resendCooldown}s</span></span>
                 ) : (
-                  <button
-                    type="button"
-                    disabled={resendLoading}
-                    onClick={handleResend}
-                    className="font-semibold hover:underline disabled:opacity-50"
-                    style={{ color: "#5A9460" }}
-                  >
+                  <button type="button" disabled={resendLoading} onClick={handleResend}
+                    className="font-semibold hover:underline disabled:opacity-50" style={{ color: "#5A9460" }}>
                     {resendLoading ? "Sending…" : "Resend code"}
                   </button>
                 )}
               </div>
 
-              <div
-                className="border-t pt-4 text-center text-sm"
-                style={{ borderColor: "rgba(226,232,240,0.60)", color: "#64748B" }}
-              >
-                Wrong number?{" "}
-                <button
-                  type="button"
-                  onClick={() => { setStep("phone"); setDigits(Array(CODE_LENGTH).fill("")); setError(null); }}
-                  className="font-semibold hover:underline"
-                  style={{ color: "#0F172A" }}
-                >
-                  Change it
-                </button>
+              <div className="border-t pt-4 space-y-2 text-center text-sm" style={{ borderColor: "rgba(226,232,240,0.60)", color: "#64748B" }}>
+                <p>
+                  Wrong number?{" "}
+                  <button type="button" onClick={() => { setStep("phone"); setDigits(Array(CODE_LENGTH).fill("")); setError(null); setDevCode(null); }}
+                    className="font-semibold hover:underline" style={{ color: "#0F172A" }}>
+                    Change it
+                  </button>
+                </p>
+                <p>
+                  Having trouble?{" "}
+                  <Link href="/verify-email" className="font-semibold hover:underline" style={{ color: "#5A9460" }}>
+                    Verify email instead →
+                  </Link>
+                </p>
               </div>
             </div>
           )}

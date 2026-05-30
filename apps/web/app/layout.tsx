@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
-import { MobileNav, Navbar } from "@/components/navbar";
-import { Footer } from "@/components/footer";
+import { ConditionalShell } from "@/components/conditional-shell";
 import { ToastProvider } from "@/providers/toast-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
+import { LenisProvider } from "@/providers/lenis-provider";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -54,14 +54,13 @@ export default function RootLayout({
       className={`${plusJakarta.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">
-        <ThemeProvider>
-          <ToastProvider>
-            <Navbar />
-            <main className="pb-24 md:pb-0">{children}</main>
-            <Footer />
-            <MobileNav />
-          </ToastProvider>
-        </ThemeProvider>
+        <LenisProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <ConditionalShell>{children}</ConditionalShell>
+            </ToastProvider>
+          </ThemeProvider>
+        </LenisProvider>
       </body>
     </html>
   );

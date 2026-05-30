@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -71,9 +71,20 @@ export class ProductController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a product by ID (also increments view count)' })
+  @ApiOperation({ summary: 'Get a product by ID' })
   getById(@Param('id') id: string) {
     return this.productService.getById(id);
+  }
+
+  @Post(':id/view')
+  @ApiOperation({ summary: 'Record a unique view for a product listing' })
+  async recordView(
+    @Param('id') id: string,
+    @Headers('x-viewer-id') viewerId?: string,
+  ) {
+    const key = viewerId?.trim() || `anon-${id}`;
+    await this.productService.recordView(id, key);
+    return { ok: true };
   }
 
   @Post()

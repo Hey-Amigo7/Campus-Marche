@@ -4,9 +4,10 @@ import { PrismaService } from './prisma.service';
 import type { NotificationService } from './notification.service';
 
 export const PLANS = {
-  free: { name: 'Free', maxListings: 5, analytics: false, boosting: false, badge: false },
-  pro: { name: 'Seller Pro', maxListings: 999, analytics: true, boosting: true, badge: true, priceGhs: 20 },
-  featured: { name: 'Featured', maxListings: 999, analytics: true, boosting: true, badge: true, homepagePlacement: true, priceGhs: 50 },
+  free:     { name: 'Free',         maxListings: 5,   analytics: false, boosting: false, badge: false, durationDays: 0   },
+  daily:    { name: 'Daily Boost',  maxListings: 999, analytics: false, boosting: true,  badge: false, priceGhs: 3,  durationDays: 1  },
+  pro:      { name: 'Seller Pro',   maxListings: 999, analytics: true,  boosting: true,  badge: true,  priceGhs: 20, durationDays: 30 },
+  featured: { name: 'Featured',     maxListings: 999, analytics: true,  boosting: true,  badge: true,  homepagePlacement: true, priceGhs: 50, durationDays: 30 },
 } as const;
 
 export type PlanKey = keyof typeof PLANS;
@@ -35,6 +36,7 @@ export class SubscriptionService {
 
   async initializeUpgrade(userId: string, plan: PlanKey) {
     if (plan === 'free') throw new BadRequestException('Cannot subscribe to the free plan');
+    if (!('priceGhs' in PLANS[plan])) throw new BadRequestException('Invalid plan');
 
     const paystackKey = this.config.get<string>('PAYSTACK_SECRET_KEY');
     if (!paystackKey) {
@@ -114,7 +116,7 @@ export class SubscriptionService {
   }
 
   async activateFromPayment(userId: string, plan: PlanKey, reference: string) {
-    const durationDays = 30;
+    const durationDays = PLANS[plan].durationDays || 30;
     const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
     await this.prisma.subscription.upsert({

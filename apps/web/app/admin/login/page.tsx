@@ -124,16 +124,6 @@ export default function AdminLoginPage() {
           </form>
         </div>
 
-        {/* Info box */}
-        <div className="mt-4 rounded-2xl px-5 py-4"
-          style={{ background: "rgba(198,139,89,0.10)", border: "1px solid rgba(198,139,89,0.20)" }}>
-          <p className="text-xs font-black" style={{ color: "#C68B59" }}>Developer note</p>
-          <p className="mt-1 text-xs leading-5" style={{ color: "#94A3B8" }}>
-            Admin credentials are configured via <code className="rounded px-1" style={{ background: "rgba(255,255,255,0.08)", color: "#C68B59" }}>ADMIN_EMAIL</code> and{" "}
-            <code className="rounded px-1" style={{ background: "rgba(255,255,255,0.08)", color: "#C68B59" }}>ADMIN_PASSWORD</code> environment variables.
-            No database account is created — the admin exists outside the user system entirely.
-          </p>
-        </div>
       </div>
     </div>
   );
