@@ -374,13 +374,13 @@ export function Navbar() {
                         </div>
                       </div>
                       {[
-                        { icon: BarChart2,     label: "Dashboard",    href: "/profile"          },
                         { icon: User,          label: "My Profile",   href: "/profile"          },
                         { icon: Package,       label: "My Listings",  href: "/profile/listings" },
                         { icon: Heart,         label: "Saved Items",  href: "/saved"            },
                         { icon: MessageCircle, label: "Messages",     href: "/messages"         },
                         { icon: ShoppingBag,   label: "My Orders",    href: "/orders"           },
                         { icon: Bell,          label: "Notifications",href: "/notifications"    },
+                        { icon: Settings,      label: "Settings",     href: "/settings"         },
                       ].map(({ icon: Icon, label, href }) => (
                         <Link key={label} href={href}
                           className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-raised)]"
