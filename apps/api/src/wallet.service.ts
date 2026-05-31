@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import type { Prisma } from '@prisma/client';
 
@@ -50,7 +50,7 @@ export class WalletService {
     const client = tx ?? this.prisma;
     const wallet = await client.wallet.findUnique({ where: { userId } });
     if (!wallet || wallet.availableBalance < amount) {
-      throw new Error(`Insufficient available balance for payout (have ${wallet?.availableBalance ?? 0}, need ${amount})`);
+      throw new BadRequestException(`Insufficient balance for payout — available: GHS ${(wallet?.availableBalance ?? 0).toFixed(2)}, required: GHS ${amount.toFixed(2)}`);
     }
     await client.wallet.update({
       where: { userId },

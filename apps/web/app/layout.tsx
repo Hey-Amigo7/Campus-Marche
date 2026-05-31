@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { ConditionalShell } from "@/components/conditional-shell";
+import { SystemStatusBanner } from "@/components/system-status-banner";
 import { ToastProvider } from "@/providers/toast-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { LenisProvider } from "@/providers/lenis-provider";
@@ -57,6 +58,7 @@ export default function RootLayout({
         <LenisProvider>
           <ThemeProvider>
             <ToastProvider>
+              <SystemStatusBanner />
               <ConditionalShell>{children}</ConditionalShell>
             </ToastProvider>
           </ThemeProvider>

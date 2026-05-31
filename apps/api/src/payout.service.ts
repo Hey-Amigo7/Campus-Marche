@@ -60,9 +60,15 @@ export class PayoutService {
       throw new BadRequestException('No MoMo phone on file. Please add your Mobile Money number in your business profile or provide one in the request.');
     }
 
-    const payout = await this.prisma.payout.create({
-      data: { sellerId, amount, payoutMethod },
-    });
+    let payout: Awaited<ReturnType<typeof this.prisma.payout.create>>;
+    try {
+      payout = await this.prisma.payout.create({
+        data: { sellerId, amount, payoutMethod },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to create payout record for seller ${sellerId}: ${err instanceof Error ? err.message : String(err)}`);
+      throw new BadRequestException('Could not create payout request. Please try again.');
+    }
 
     const autoApprove = this.config.get<string>('PAYOUT_AUTO_APPROVE') !== 'false';
     if (autoApprove) {
@@ -74,7 +80,7 @@ export class PayoutService {
         await this.prisma.payout.update({
           where: { id: payout.id },
           data: { failureReason: msg },
-        });
+        }).catch(() => null);
       }
     }
 
@@ -90,9 +96,15 @@ export class PayoutService {
     payoutMethod: PayoutMethod,
     momoPhone?: string,
   ) {
-    const payout = await this.prisma.payout.create({
-      data: { sellerId, orderId, amount, payoutMethod },
-    });
+    let payout: Awaited<ReturnType<typeof this.prisma.payout.create>>;
+    try {
+      payout = await this.prisma.payout.create({
+        data: { sellerId, orderId, amount, payoutMethod },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to create escrow payout for order ${orderId}: ${err instanceof Error ? err.message : String(err)}`);
+      throw new BadRequestException('Could not create escrow payout record.');
+    }
 
     const autoApprove = this.config.get<string>('PAYOUT_AUTO_APPROVE') !== 'false';
     if (autoApprove) {
@@ -100,6 +112,10 @@ export class PayoutService {
         await this.processPayout(payout.id, momoPhone);
       } catch (err) {
         this.logger.error(`Auto-process escrow payout ${payout.id} failed: ${String(err)}`);
+        await this.prisma.payout.update({
+          where: { id: payout.id },
+          data: { failureReason: err instanceof Error ? err.message : String(err) },
+        }).catch(() => null);
       }
     }
 

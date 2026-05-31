@@ -8,6 +8,7 @@ import { AdminService } from './admin.service';
 import { AdminAuthGuard } from './auth/admin-auth.guard';
 import { EventsAuthGuard } from './auth/events-auth.guard';
 import { AppController } from './app.controller';
+import { HealthController } from './health.controller';
 import { AppService } from './app.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -79,6 +80,7 @@ import { UserController } from './user.controller';
     AdminAuthController,
     AdminController,
     AppController,
+    HealthController,
     AuthController,
     BusinessController,
     ContactController,
