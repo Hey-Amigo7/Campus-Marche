@@ -59,6 +59,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { ok: true };
   }
 
+  @SubscribeMessage('join:order')
+  async handleJoinOrder(@ConnectedSocket() socket: Socket, @MessageBody() orderId: string) {
+    await socket.join(`order:${orderId}`);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('leave:order')
+  async handleLeaveOrder(@ConnectedSocket() socket: Socket, @MessageBody() orderId: string) {
+    await socket.leave(`order:${orderId}`);
+    return { ok: true };
+  }
+
   // ── WebRTC Signaling ──────────────────────────────────────────────────────
 
   @SubscribeMessage('call:offer')
@@ -136,5 +148,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitLocationUpdate(conversationId: string, userId: string, lat: number, lng: number) {
     this.server.to(`conv:${conversationId}`).emit('location:update', { userId, lat, lng });
+  }
+
+  emitDeliveryLocation(orderId: string, lat: number, lng: number, heading?: number | null, speed?: number | null) {
+    this.server.to(`order:${orderId}`).emit('delivery:location', { lat, lng, heading, speed, updatedAt: new Date().toISOString() });
   }
 }

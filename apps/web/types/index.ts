@@ -163,6 +163,15 @@ export type DeliveryTracking = {
   updatedAt: string;
 };
 
+export type OrderTrackingResponse = {
+  orderId: string;
+  status: string;
+  deliveryAddress?: string | null;
+  deliveryPhone?: string | null;
+  deliveryPerson?: { id: string; name: string; avatar: string | null; phone?: string | null } | null;
+  tracking: DeliveryTracking | null;
+};
+
 export type Order = {
   id: string;
   product: Pick<Product, "id" | "title" | "price" | "imageUrl" | "imageStyle" | "location">;

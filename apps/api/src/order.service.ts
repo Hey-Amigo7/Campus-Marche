@@ -4,6 +4,7 @@ import { EscrowStatus } from '@prisma/client';
 import { calculateCommission } from './commission.engine';
 import { PrismaService } from './prisma.service';
 import type { NotificationService } from './notification.service';
+import type { ChatGateway } from './chat.gateway';
 
 // Buyer may cancel unpaid orders; delivery confirmation goes through PaymentService.releaseEscrow
 const ALLOWED_BUYER_TRANSITIONS: Record<string, string[]> = {
@@ -30,6 +31,7 @@ export class OrderService {
     private prisma: PrismaService,
     private config: ConfigService,
     @Optional() private notificationService?: NotificationService,
+    @Optional() private chatGateway?: ChatGateway,
   ) {}
 
   async getForUser(userId: string) {
@@ -210,11 +212,16 @@ export class OrderService {
       throw new ForbiddenException('You are not the assigned delivery person for this order');
     }
 
-    return this.prisma.deliveryTracking.upsert({
+    const result = await this.prisma.deliveryTracking.upsert({
       where: { orderId },
       create: { orderId, latitude, longitude, heading, speed },
       update: { latitude, longitude, heading, speed },
     });
+
+    // Push live update to anyone watching the order room
+    this.chatGateway?.emitDeliveryLocation(orderId, latitude, longitude, heading, speed);
+
+    return result;
   }
 
   async getDeliveryTracking(orderId: string, userId: string) {

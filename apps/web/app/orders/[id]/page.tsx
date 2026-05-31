@@ -3,26 +3,37 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState, type FormEvent } from "react";
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   CheckCircle2,
+  Copy,
   Loader2,
   MapPin,
   MessageCircle,
   Navigation,
   Phone,
+  Square,
   Truck,
   User,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { getMomoWarning } from "@/lib/momo-detect";
 import { useOrder } from "@/hooks/use-api";
+import { useSocket } from "@/hooks/use-socket";
 import { ESCROW_LABELS, PAID_ESCROW_STATES, type EscrowStatus } from "@/types";
 import { useToast } from "@/providers/toast-provider";
 import { AuthGate } from "@/components/auth-gate";
 import { OrderTimeline } from "@/components/order-timeline";
 import { ProductArt } from "@/components/product-card";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
+import type { DeliveryCoords } from "@/components/delivery-map";
+
+// Leaflet reads window on import — must be client-only
+const DeliveryMap = dynamic(
+  () => import("@/components/delivery-map").then(m => m.DeliveryMap),
+  { ssr: false, loading: () => <div className="h-64 w-full animate-pulse rounded-2xl bg-slate-100" /> }
+);
 
 const ESCROW_COLORS: Partial<Record<EscrowStatus, string>> & Record<string, string> = {
   PENDING_PAYMENT:     "bg-amber-100 text-amber-800",
@@ -94,7 +105,61 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [deliveryPersonId, setDeliveryPersonId] = useState("");
   const [assigning, setAssigning] = useState(false);
 
-  // Location update
+  // Live delivery tracking
+  const [liveCoords, setLiveCoords] = useState<DeliveryCoords | null>(
+    order?.tracking ? { lat: order.tracking.latitude, lng: order.tracking.longitude, heading: order.tracking.heading, speed: order.tracking.speed, updatedAt: order.tracking.updatedAt } : null
+  );
+  const [sharingLocation, setSharingLocation] = useState(false);
+  const watchRef = useRef<number | null>(null);
+  const { socketRef } = useSocket();
+
+  // Sync liveCoords when order data loads/refreshes
+  useEffect(() => {
+    if (order?.tracking && !sharingLocation) {
+      setLiveCoords({ lat: order.tracking.latitude, lng: order.tracking.longitude, heading: order.tracking.heading, speed: order.tracking.speed, updatedAt: order.tracking.updatedAt });
+    }
+  }, [order?.tracking, sharingLocation]);
+
+  // Join order socket room for live updates
+  useEffect(() => {
+    if (!id) return;
+    const socket = socketRef.current;
+    if (!socket) return;
+    socket.emit("join:order", id);
+    const handler = (data: unknown) => {
+      const d = data as { lat: number; lng: number; heading?: number; speed?: number; updatedAt: string };
+      setLiveCoords({ lat: d.lat, lng: d.lng, heading: d.heading, speed: d.speed, updatedAt: d.updatedAt });
+    };
+    socket.on("delivery:location", handler);
+    return () => {
+      socket.emit("leave:order", id);
+      socket.off("delivery:location", handler);
+    };
+  }, [id, socketRef.current]); // eslint-disable-line
+
+  function startSharingLocation() {
+    if (!navigator.geolocation) { toast("Geolocation not supported on this device."); return; }
+    setSharingLocation(true);
+    watchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, heading, speed } = pos.coords;
+        setLiveCoords({ lat: latitude, lng: longitude, heading, speed, updatedAt: new Date().toISOString() });
+        api.updateDeliveryLocation(id, latitude, longitude, heading ?? undefined, speed ? speed * 3.6 : undefined)
+          .catch(() => null);
+      },
+      () => { toast("Could not get your location. Please allow GPS access."); setSharingLocation(false); },
+      { enableHighAccuracy: true, maximumAge: 0 }
+    );
+  }
+
+  function stopSharingLocation() {
+    if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+    setSharingLocation(false);
+  }
+
+  useEffect(() => () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); }, []);
+
+  // Location update (legacy single-shot — kept for backward compat)
   const [updatingLocation, setUpdatingLocation] = useState(false);
 
   // Escrow release
@@ -595,52 +660,69 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 ) : null}
 
-                {order.tracking ? (
+                {/* Live map */}
+                {liveCoords ? (
                   <div className="mt-3 space-y-2">
-                    <div className="rounded-xl bg-white p-3 text-sm">
-                      <p className="font-black text-slate-700">
-                        {order.tracking.latitude.toFixed(5)}, {order.tracking.longitude.toFixed(5)}
-                        {order.tracking.heading != null ? (
-                          <span className="ml-2 font-semibold text-slate-500">
-                            · {headingToCompass(order.tracking.heading)} {Math.round(order.tracking.heading)}°
-                          </span>
-                        ) : null}
-                        {order.tracking.speed != null ? (
-                          <span className="ml-2 font-semibold text-slate-500">
-                            · {order.tracking.speed.toFixed(1)} km/h
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        Updated {formatRelativeDate(order.tracking.updatedAt)}
-                      </p>
+                    <DeliveryMap
+                      coords={liveCoords}
+                      destinationLabel={order.deliveryAddress ?? order.product?.location}
+                      height="h-64"
+                    />
+                    <div className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-500">
+                      <span className="flex items-center gap-1.5">
+                        {sharingLocation && (
+                          <span className="inline-flex h-2 w-2 animate-ping rounded-full bg-green-500" />
+                        )}
+                        {liveCoords.speed != null ? `${(liveCoords.speed).toFixed(1)} km/h · ` : ""}
+                        {liveCoords.heading != null ? `${headingToCompass(liveCoords.heading)} · ` : ""}
+                        {liveCoords.updatedAt ? `Updated ${formatRelativeDate(liveCoords.updatedAt)}` : "Live"}
+                      </span>
+                      <a href={`https://www.openstreetmap.org/?mlat=${liveCoords.lat}&mlon=${liveCoords.lng}&zoom=16`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 hover:underline" style={{ color: "#5A9460" }}>
+                        <MapPin className="h-3 w-3" /> Open map ↗
+                      </a>
                     </div>
-                    <a
-                      href={`https://maps.google.com/?q=${order.tracking.latitude},${order.tracking.longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-bold shadow-sm hover:bg-slate-50" style={{ color: "#0F172A" }}
-                    >
-                      <MapPin className="h-3.5 w-3.5" />
-                      Open in Google Maps
-                    </a>
                   </div>
                 ) : (
                   <p className="mt-3 text-sm font-semibold" style={{ color: "#5A9460" }}>
-                    Delivery person hasn&apos;t shared their location yet.
+                    {role === "delivery" ? "Tap the button below to start sharing your location." : "Waiting for the delivery person to share their location."}
                   </p>
                 )}
 
-                {role === "delivery" ? (
-                  <button
-                    onClick={handleUpdateLocation}
-                    disabled={updatingLocation}
-                    className="btn-primary mt-4 w-full justify-center text-sm disabled:opacity-50"
-                  >
-                    {updatingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
-                    Share my location
-                  </button>
-                ) : null}
+                {/* Seller/delivery person controls */}
+                {(role === "seller" || role === "delivery") && (
+                  <div className="mt-4 space-y-2">
+                    {sharingLocation ? (
+                      <button type="button" onClick={stopSharingLocation}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white"
+                        style={{ background: "#EF4444" }}>
+                        <Square className="h-4 w-4" />
+                        Stop sharing location
+                      </button>
+                    ) : (
+                      <button type="button" onClick={startSharingLocation}
+                        className="btn-primary w-full justify-center text-sm">
+                        <Navigation className="h-4 w-4" />
+                        {liveCoords ? "Restart live tracking" : "Start live tracking"}
+                      </button>
+                    )}
+
+                    {/* Shareable tracking link */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `${window.location.origin}/track/${id}`;
+                        void navigator.clipboard.writeText(url).then(() => toast("Tracking link copied!"));
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border py-2.5 text-xs font-bold transition-colors hover:bg-slate-50"
+                      style={{ borderColor: "rgba(226,232,240,0.80)", color: "#64748B" }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy tracking link for buyer
+                    </button>
+                  </div>
+                )}
               </section>
             ) : null}
 

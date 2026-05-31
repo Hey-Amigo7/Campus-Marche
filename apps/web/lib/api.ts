@@ -291,7 +291,7 @@ export const api = {
     }),
 
   getDeliveryTracking: (orderId: string) =>
-    request<import("@/types").DeliveryTracking | null>(`/orders/${orderId}/tracking`, null),
+    request<import("@/types").OrderTrackingResponse | null>(`/orders/${orderId}/tracking`, null),
 
   initializePayment: (orderId: string) =>
     request<PaymentTransaction>(`/payments/orders/${orderId}/initialize`, {} as PaymentTransaction, {
