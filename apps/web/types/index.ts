@@ -170,6 +170,7 @@ export type OrderTrackingResponse = {
   deliveryPhone?: string | null;
   deliveryPerson?: { id: string; name: string; avatar: string | null; phone?: string | null } | null;
   tracking: DeliveryTracking | null;
+  buyerLocation?: { latitude: number; longitude: number; updatedAt: string | null } | null;
 };
 
 export type Order = {

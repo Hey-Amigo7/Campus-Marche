@@ -81,4 +81,14 @@ export class OrderController {
   getTracking(@Param('id') id: string, @AuthUser() user: { id: string }) {
     return this.orderService.getDeliveryTracking(id, user.id);
   }
+
+  @Post(':id/buyer-location')
+  @ApiOperation({ summary: 'Buyer shares their current location for the delivery person' })
+  updateBuyerLocation(
+    @Param('id') id: string,
+    @Body() body: UpdateLocationDto,
+    @AuthUser() user: { id: string },
+  ) {
+    return this.orderService.updateBuyerLocation(id, user.id, body.latitude, body.longitude);
+  }
 }

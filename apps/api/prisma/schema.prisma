@@ -538,6 +538,11 @@ model DeliveryTracking {
   speed     Float?
   updatedAt DateTime @updatedAt
 
+  // Buyer's shared location so the delivery person can find them
+  buyerLatitude            Float?
+  buyerLongitude           Float?
+  buyerLocationUpdatedAt   DateTime?
+
   orderId String @unique
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 

@@ -37,21 +37,25 @@ export default function TrackPage({ params }: { params: Promise<{ orderId: strin
     { refreshInterval: 15_000 }
   );
 
-  const [liveCoords, setLiveCoords] = useState<DeliveryCoords | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
-  const [isLive, setIsLive] = useState(false);
+  const [liveCoords,  setLiveCoords]  = useState<DeliveryCoords | null>(null);
+  const [buyerCoords, setBuyerCoords] = useState<DeliveryCoords | null>(null);
+  const [lastUpdate, setLastUpdate]   = useState<string | null>(null);
+  const [isLive, setIsLive]           = useState(false);
 
   // Seed from initial REST response
   useEffect(() => {
     if (tracking?.tracking && !isLive) {
       setLiveCoords({
-        lat: tracking.tracking.latitude,
-        lng: tracking.tracking.longitude,
-        heading: tracking.tracking.heading,
-        speed: tracking.tracking.speed,
+        lat:      tracking.tracking.latitude,
+        lng:      tracking.tracking.longitude,
+        heading:  tracking.tracking.heading,
+        speed:    tracking.tracking.speed,
         updatedAt: tracking.tracking.updatedAt,
       });
       setLastUpdate(tracking.tracking.updatedAt);
+    }
+    if (tracking?.buyerLocation?.latitude) {
+      setBuyerCoords({ lat: tracking.buyerLocation.latitude, lng: tracking.buyerLocation.longitude });
     }
   }, [tracking, isLive]);
 
@@ -69,10 +73,17 @@ export default function TrackPage({ params }: { params: Promise<{ orderId: strin
       setIsLive(true);
     }
 
+    function handleBuyerLocation(data: unknown) {
+      const d = data as { lat: number; lng: number };
+      setBuyerCoords({ lat: d.lat, lng: d.lng });
+    }
+
     socket.on("delivery:location", handleLocation);
+    socket.on("buyer:location",    handleBuyerLocation);
     return () => {
       socket.emit("leave:order", orderId);
       socket.off("delivery:location", handleLocation);
+      socket.off("buyer:location",    handleBuyerLocation);
     };
   }, [orderId, socketRef.current]); // eslint-disable-line
 
@@ -122,6 +133,7 @@ export default function TrackPage({ params }: { params: Promise<{ orderId: strin
           >
             <DeliveryMap
               coords={liveCoords}
+              buyerCoords={buyerCoords}
               destinationLabel={address ?? undefined}
               height="h-72"
             />

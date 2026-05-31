@@ -224,6 +224,31 @@ export class OrderService {
     return result;
   }
 
+  async updateBuyerLocation(orderId: string, buyerId: string, latitude: number, longitude: number) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.buyerId !== buyerId) throw new ForbiddenException('Only the buyer can share their location');
+
+    await this.prisma.deliveryTracking.upsert({
+      where: { orderId },
+      create: {
+        orderId,
+        latitude: 0, longitude: 0, // placeholder — delivery person hasn't started yet
+        buyerLatitude: latitude,
+        buyerLongitude: longitude,
+        buyerLocationUpdatedAt: new Date(),
+      },
+      update: {
+        buyerLatitude: latitude,
+        buyerLongitude: longitude,
+        buyerLocationUpdatedAt: new Date(),
+      },
+    });
+
+    this.chatGateway?.emitBuyerLocation(orderId, latitude, longitude);
+    return { ok: true };
+  }
+
   async getDeliveryTracking(orderId: string, userId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -252,11 +277,18 @@ export class OrderService {
       deliveryPerson: order.deliveryPerson,
       tracking: order.tracking
         ? {
-            latitude: order.tracking.latitude,
+            latitude:  order.tracking.latitude,
             longitude: order.tracking.longitude,
-            heading: order.tracking.heading,
-            speed: order.tracking.speed,
+            heading:   order.tracking.heading,
+            speed:     order.tracking.speed,
             updatedAt: order.tracking.updatedAt,
+          }
+        : null,
+      buyerLocation: order.tracking?.buyerLatitude != null
+        ? {
+            latitude:  order.tracking.buyerLatitude,
+            longitude: order.tracking.buyerLongitude!,
+            updatedAt: order.tracking.buyerLocationUpdatedAt?.toISOString() ?? null,
           }
         : null,
     };

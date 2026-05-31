@@ -153,4 +153,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitDeliveryLocation(orderId: string, lat: number, lng: number, heading?: number | null, speed?: number | null) {
     this.server.to(`order:${orderId}`).emit('delivery:location', { lat, lng, heading, speed, updatedAt: new Date().toISOString() });
   }
+
+  emitBuyerLocation(orderId: string, lat: number, lng: number) {
+    this.server.to(`order:${orderId}`).emit('buyer:location', { lat, lng, updatedAt: new Date().toISOString() });
+  }
 }

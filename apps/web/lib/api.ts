@@ -408,6 +408,13 @@ export const api = {
       { method: "PATCH", strict: true },
     ),
 
+  updateBuyerLocation: (orderId: string, latitude: number, longitude: number) =>
+    request<{ ok: boolean }>(
+      `/orders/${orderId}/buyer-location`,
+      { ok: false },
+      { method: "POST", body: JSON.stringify({ latitude, longitude }), strict: true },
+    ),
+
   updateLiveLocation: (conversationId: string, latitude: number, longitude: number) =>
     request<{ ok: boolean }>(
       `/conversations/${conversationId}/live-location`,

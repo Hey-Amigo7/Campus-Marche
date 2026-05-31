@@ -109,34 +109,50 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [liveCoords, setLiveCoords] = useState<DeliveryCoords | null>(
     order?.tracking ? { lat: order.tracking.latitude, lng: order.tracking.longitude, heading: order.tracking.heading, speed: order.tracking.speed, updatedAt: order.tracking.updatedAt } : null
   );
-  const [sharingLocation, setSharingLocation] = useState(false);
-  const watchRef = useRef<number | null>(null);
+  const [buyerCoords, setBuyerCoords] = useState<DeliveryCoords | null>(
+    (order as (typeof order & { buyerLocation?: { latitude: number; longitude: number; updatedAt?: string | null } | null }))?.buyerLocation
+      ? { lat: (order as never as { buyerLocation: { latitude: number; longitude: number; updatedAt?: string | null } }).buyerLocation.latitude, lng: (order as never as { buyerLocation: { latitude: number; longitude: number } }).buyerLocation.longitude }
+      : null
+  );
+  const [sharingLocation, setSharingLocation]       = useState(false);
+  const [sharingBuyerLoc, setSharingBuyerLoc]       = useState(false);
+  const watchRef      = useRef<number | null>(null);
+  const buyerWatchRef = useRef<number | null>(null);
   const { socketRef } = useSocket();
 
-  // Sync liveCoords when order data loads/refreshes
+  // Sync delivery coords from fresh order data
   useEffect(() => {
     if (order?.tracking && !sharingLocation) {
       setLiveCoords({ lat: order.tracking.latitude, lng: order.tracking.longitude, heading: order.tracking.heading, speed: order.tracking.speed, updatedAt: order.tracking.updatedAt });
     }
   }, [order?.tracking, sharingLocation]);
 
-  // Join order socket room for live updates
+  // Join order socket room — receive both delivery and buyer location events
   useEffect(() => {
     if (!id) return;
     const socket = socketRef.current;
     if (!socket) return;
     socket.emit("join:order", id);
-    const handler = (data: unknown) => {
+
+    const onDelivery = (data: unknown) => {
       const d = data as { lat: number; lng: number; heading?: number; speed?: number; updatedAt: string };
       setLiveCoords({ lat: d.lat, lng: d.lng, heading: d.heading, speed: d.speed, updatedAt: d.updatedAt });
     };
-    socket.on("delivery:location", handler);
+    const onBuyer = (data: unknown) => {
+      const d = data as { lat: number; lng: number; updatedAt: string };
+      setBuyerCoords({ lat: d.lat, lng: d.lng, updatedAt: d.updatedAt });
+    };
+
+    socket.on("delivery:location", onDelivery);
+    socket.on("buyer:location",    onBuyer);
     return () => {
       socket.emit("leave:order", id);
-      socket.off("delivery:location", handler);
+      socket.off("delivery:location", onDelivery);
+      socket.off("buyer:location",    onBuyer);
     };
   }, [id, socketRef.current]); // eslint-disable-line
 
+  // ── Delivery person location sharing ──
   function startSharingLocation() {
     if (!navigator.geolocation) { toast("Geolocation not supported on this device."); return; }
     setSharingLocation(true);
@@ -151,13 +167,34 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       { enableHighAccuracy: true, maximumAge: 0 }
     );
   }
-
   function stopSharingLocation() {
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
     setSharingLocation(false);
   }
 
-  useEffect(() => () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); }, []);
+  // ── Buyer location sharing ──
+  function startSharingBuyerLocation() {
+    if (!navigator.geolocation) { toast("Geolocation not supported on this device."); return; }
+    setSharingBuyerLoc(true);
+    buyerWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setBuyerCoords({ lat: latitude, lng: longitude, updatedAt: new Date().toISOString() });
+        api.updateBuyerLocation(id, latitude, longitude).catch(() => null);
+      },
+      () => { toast("Could not get your location. Please allow GPS access."); setSharingBuyerLoc(false); },
+      { enableHighAccuracy: true, maximumAge: 0 }
+    );
+  }
+  function stopSharingBuyerLocation() {
+    if (buyerWatchRef.current !== null) navigator.geolocation.clearWatch(buyerWatchRef.current);
+    setSharingBuyerLoc(false);
+  }
+
+  useEffect(() => () => {
+    if (watchRef.current      !== null) navigator.geolocation.clearWatch(watchRef.current);
+    if (buyerWatchRef.current !== null) navigator.geolocation.clearWatch(buyerWatchRef.current);
+  }, []);
 
   // Location update (legacy single-shot — kept for backward compat)
   const [updatingLocation, setUpdatingLocation] = useState(false);
@@ -665,6 +702,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   <div className="mt-3 space-y-2">
                     <DeliveryMap
                       coords={liveCoords}
+                      buyerCoords={buyerCoords}
                       destinationLabel={order.deliveryAddress ?? order.product?.location}
                       height="h-64"
                     />
@@ -688,6 +726,30 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   <p className="mt-3 text-sm font-semibold" style={{ color: "#5A9460" }}>
                     {role === "delivery" ? "Tap the button below to start sharing your location." : "Waiting for the delivery person to share their location."}
                   </p>
+                )}
+
+                {/* Buyer — share their location so delivery can find them */}
+                {role === "buyer" && (
+                  <div className="mt-4">
+                    {sharingBuyerLoc ? (
+                      <button type="button" onClick={stopSharingBuyerLocation}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white"
+                        style={{ background: "#EF4444" }}>
+                        <Square className="h-4 w-4" />
+                        Stop sharing my location
+                      </button>
+                    ) : (
+                      <button type="button" onClick={startSharingBuyerLocation}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white"
+                        style={{ background: "#3B82F6" }}>
+                        <MapPin className="h-4 w-4" />
+                        {buyerCoords ? "Update my location" : "Share my location with delivery"}
+                      </button>
+                    )}
+                    <p className="mt-1.5 text-center text-xs" style={{ color: "#94A3B8" }}>
+                      Helps the delivery person find you without asking for directions.
+                    </p>
+                  </div>
                 )}
 
                 {/* Seller/delivery person controls */}
