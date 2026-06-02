@@ -44,6 +44,25 @@ export class AdminService {
     return this.getDashboardStats();
   }
 
+  async applyFeeAdjustment(adminId: string) {
+    const products = await this.prisma.product.findMany({
+      where: { active: true },
+      select: { id: true, title: true, price: true },
+    });
+
+    const updates: Array<{ id: string; from: number; to: number }> = [];
+    for (const product of products) {
+      const newPrice = Math.round(product.price * 1.025 * 100) / 100;
+      if (newPrice !== product.price) {
+        await this.prisma.product.update({ where: { id: product.id }, data: { price: newPrice } });
+        updates.push({ id: product.id, from: product.price, to: newPrice });
+      }
+    }
+
+    await this.log(adminId, 'BULK_FEE_ADJUSTMENT', 'Product', 'ALL', `+2.5% applied to ${updates.length} listings`);
+    return { updated: updates.length, total: products.length, changes: updates };
+  }
+
   async getDashboardStats() {
     const [users, products, orders, reports, revenue] = await Promise.all([
       this.prisma.user.count(),

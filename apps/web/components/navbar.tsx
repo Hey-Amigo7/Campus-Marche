@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogIn, ChevronDown, LogOut, User, ShoppingBag,
   Package, Settings, MessageCircle, Heart, Bell,
-  BarChart2, Menu, X, Palette,
+  BarChart2, Menu, X, Palette, ShoppingCart, Store,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -15,6 +15,7 @@ import { Logo } from "@/components/logo";
 import { AnimatedBell } from "@/components/animated-icons";
 import { TextRoll } from "@/components/text-roll";
 import { useProfile } from "@/hooks/use-api";
+import { useCart } from "@/providers/cart-provider";
 import { useCombinedNotifications } from "@/hooks/use-combined-notifications";
 import { THEMES, useTheme } from "@/providers/theme-provider";
 import { isEnvAdminToken } from "@/lib/auth";
@@ -25,7 +26,6 @@ const NAV_LINKS = [
   { href: "/products",   label: "Shop"       },
   { href: "/categories", label: "Categories" },
   { href: "/events",     label: "Events"     },
-  { href: "/sell",       label: "Sell"        },
 ];
 
 /* ── User avatar ────────────────────────────────────────────── */
@@ -202,6 +202,7 @@ export function Navbar() {
 
   const { data: profile } = useProfile();
   const { unreadCount }   = useCombinedNotifications();
+  const { cartCount }     = useCart();
 
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
   useEffect(() => { setMenuOpen(false); setUserDropOpen(false); }, [pathname]);
@@ -256,6 +257,29 @@ export function Navbar() {
                 </Link>
               );
             })}
+            {/* Sell — routes to onboarding for guests, sell page for members */}
+            {(() => {
+              const sellHref = isAuthenticated ? "/sell" : "/register?next=/onboarding";
+              const active = pathname === "/sell" || pathname === "/onboarding";
+              return (
+                <Link href={sellHref}
+                  className={cn(
+                    "relative px-3.5 py-2 text-sm font-medium transition-colors",
+                    active ? "text-[var(--on-surface)]" : "text-[var(--muted)] hover:text-[var(--on-surface)]",
+                  )}
+                >
+                  <TextRoll>Sell</TextRoll>
+                  {active && (
+                    <motion.span
+                      layoutId="nav-underline"
+                      className="absolute bottom-0 left-3.5 right-3.5 h-[2px] rounded-full"
+                      style={{ background: "var(--green)" }}
+                      transition={spring}
+                    />
+                  )}
+                </Link>
+              );
+            })()}
           </nav>
 
           {/* Right actions */}
@@ -277,6 +301,22 @@ export function Navbar() {
                 )}
               </Link>
             )}
+
+            {/* Cart icon */}
+            <Link href="/cart" aria-label="Cart"
+              className="relative grid h-9 w-9 place-items-center rounded-xl transition-colors hover:bg-[var(--surface-raised)]"
+              style={{ color: "var(--muted)" }}
+            >
+              <ShoppingCart size={17} />
+              {cartCount > 0 && (
+                <span
+                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
+                  style={{ background: "var(--green)" }}
+                >
+                  {cartCount > 9 ? "9+" : cartCount}
+                </span>
+              )}
+            </Link>
 
             {/* Theme cycle button */}
             <ThemeCycleButton />
@@ -362,6 +402,18 @@ export function Navbar() {
                     >{link.label}</Link>
                   );
                 })}
+                {/* Sell */}
+                <Link
+                  href={isAuthenticated ? "/sell" : "/register?next=/onboarding"}
+                  className={cn(
+                    "rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+                    (pathname === "/sell" || pathname === "/onboarding")
+                      ? "bg-[rgba(22,163,74,0.10)] text-[var(--green)]"
+                      : "text-[var(--muted)] hover:bg-[var(--surface-raised)]",
+                  )}
+                >
+                  Sell
+                </Link>
 
                 <div className="mt-2 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
                   {isAuthenticated ? (
@@ -379,6 +431,8 @@ export function Navbar() {
                         { icon: Heart,         label: "Saved Items",  href: "/saved"            },
                         { icon: MessageCircle, label: "Messages",     href: "/messages"         },
                         { icon: ShoppingBag,   label: "My Orders",    href: "/orders"           },
+                        { icon: ShoppingCart,  label: "Cart",         href: "/cart"             },
+                        { icon: Store,         label: "Sell",         href: "/sell"             },
                         { icon: Bell,          label: "Notifications",href: "/notifications"    },
                         { icon: Settings,      label: "Settings",     href: "/settings"         },
                       ].map(({ icon: Icon, label, href }) => (
@@ -391,6 +445,10 @@ export function Navbar() {
                           {label === "Notifications" && unreadCount > 0 && (
                             <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-black text-white"
                               style={{ background: "#72CC23" }}>{unreadCount}</span>
+                          )}
+                          {label === "Cart" && cartCount > 0 && (
+                            <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-black text-white"
+                              style={{ background: "#72CC23" }}>{cartCount > 9 ? "9+" : cartCount}</span>
                           )}
                         </Link>
                       ))}

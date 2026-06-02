@@ -126,6 +126,12 @@ export class AdminController {
     return this.adminService.getProducts(+skip, +take, q);
   }
 
+  @Post('products/apply-fee-adjustment')
+  @ApiOperation({ summary: 'Apply +1% price adjustment to all active listings (one-time migration)' })
+  applyFeeAdjustment(@AuthUser() admin: { id: string }) {
+    return this.adminService.applyFeeAdjustment(admin.id);
+  }
+
   @Patch('products/:id/deactivate')
   @ApiOperation({ summary: 'Deactivate product' })
   deactivateProduct(@Param('id') id: string, @AuthUser() admin: { id: string }) {

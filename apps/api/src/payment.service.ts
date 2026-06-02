@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { EscrowStatus, PayoutMethod } from '@prisma/client';
 import { calculateCommission, escrowToStatus, isEscrowPaid } from './commission.engine';
 import type { NotificationService } from './notification.service';
+import type { ChatGateway } from './chat.gateway';
 import { PayoutService } from './payout.service';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
@@ -71,6 +72,7 @@ export class PaymentService {
     private walletService: WalletService,
     private payoutService: PayoutService,
     @Optional() private notificationService?: NotificationService,
+    @Optional() private chatGateway?: ChatGateway,
   ) {}
 
   private getSecret() {
@@ -79,7 +81,7 @@ export class PaymentService {
 
   private getFeeConfig() {
     return {
-      feePercent: parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '1'),
+      feePercent: parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '2.5'),
       feeFixed:   parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')    ?? '0'),
     };
   }
@@ -126,7 +128,7 @@ export class PaymentService {
         amount: amountInPesewas,
         currency: 'GHS',
         reference,
-        callback_url: this.config.get<string>('PAYSTACK_CALLBACK_URL') ?? 'http://localhost:3000/orders',
+        callback_url: `${this.config.get<string>('FRONTEND_URL', 'http://localhost:3000')}/orders/${orderId}`,
         metadata: { orderId: order.id, productId: order.product.id, productTitle: order.product.title, userId },
       }),
     });
@@ -526,6 +528,7 @@ export class PaymentService {
     });
 
     this.logger.log(`Refund processed: order ${order.id} → REFUNDED`);
+    this.chatGateway?.emitOrderUpdated(order.id, { escrowStatus: 'REFUNDED', paymentStatus: 'Refunded' });
   }
 
   /**
@@ -598,6 +601,12 @@ export class PaymentService {
     this.logger.log(
       `Escrow funded: order=${order.id} total=${commission.totalAmount} fee=${commission.platformFee} seller=${commission.sellerAmount}`,
     );
+
+    // Push real-time update to anyone watching this order
+    this.chatGateway?.emitOrderUpdated(order.id, {
+      escrowStatus:  EscrowStatus.ESCROW_HELD,
+      paymentStatus: 'Paid',
+    });
 
     return this.prisma.paymentTransaction.findUnique({ where: { reference } });
   }

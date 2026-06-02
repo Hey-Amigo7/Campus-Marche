@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
-import { AnimatedSparkles } from "@/components/animated-icons";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -63,17 +62,6 @@ export default function ForgotPasswordPage() {
           transition={{ duration: 0.5, ease }}
           className="mb-5 flex justify-center"
         >
-          <span
-            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold"
-            style={{
-              background: "rgba(127,182,133,0.10)",
-              border: "1px solid rgba(127,182,133,0.25)",
-              color: "#A8D4AE",
-            }}
-          >
-            <AnimatedSparkles size={12} color="#A8D4AE" />
-            HTU Student Marketplace
-          </span>
         </motion.div>
 
         {/* Title */}

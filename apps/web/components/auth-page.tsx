@@ -340,15 +340,6 @@ export function AuthPage({ defaultTab }: { defaultTab: "signin" | "signup" }) {
       />
 
       <div className="relative z-10 w-full max-w-[420px]">
-        {/* Badge */}
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease }}
-          className="mb-5 flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold"
-            style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.25)", color: "#A8D4AE" }}>
-            <AnimatedSparkles size={12} color="#A8D4AE" />
-            HTU Student Marketplace
-          </span>
-        </motion.div>
 
         {/* Title */}
         <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08, ease }}

@@ -10,17 +10,21 @@ export type CommissionResult = {
  * Calculates marketplace commission and seller receivable.
  *
  * @param totalAmount - The amount the buyer pays (in GHS)
- * @param feePercent  - Platform percentage fee, e.g. 1 for 1%
+ * @param feePercent  - Platform percentage fee, e.g. 2.5 for 2.5%
  * @param feeFixed    - Platform flat fee in GHS, e.g. 0.50
+ *
+ * Buyer-pays model: the platform fee is added ON TOP of the seller's listed price.
+ * Seller always receives their full listed price; the buyer pays slightly more.
  */
 export function calculateCommission(
-  totalAmount: number,
+  baseAmount: number,
   feePercent: number,
   feeFixed: number,
 ): CommissionResult {
-  const rawFee = totalAmount * (feePercent / 100) + feeFixed;
+  const rawFee = baseAmount * (feePercent / 100) + feeFixed;
   const platformFee = Math.round(rawFee * 100) / 100;
-  const sellerAmount = Math.round((totalAmount - platformFee) * 100) / 100;
+  const totalAmount = Math.round((baseAmount + platformFee) * 100) / 100;
+  const sellerAmount = baseAmount;
   return { totalAmount, platformFee, sellerAmount, feePercent, feeFixed };
 }
 

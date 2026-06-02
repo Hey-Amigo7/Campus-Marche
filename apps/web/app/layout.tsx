@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { ConditionalShell } from "@/components/conditional-shell";
 import { SystemStatusBanner } from "@/components/system-status-banner";
 import { ToastProvider } from "@/providers/toast-provider";
+import { CartProvider } from "@/providers/cart-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { LenisProvider } from "@/providers/lenis-provider";
 import "./globals.css";
@@ -21,7 +22,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Campus Marche | HTU Student Marketplace",
+    default: "Campus Marche",
     template: "%s | Campus Marche",
   },
   description:
@@ -31,13 +32,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_GH",
     siteName: "Campus Marche",
-    title: "Campus Marche | HTU Student Marketplace",
+    title: "Campus Marche",
     description:
       "Buy, sell, and connect safely with Ho Technical University students and local vendors.",
   },
   twitter: {
     card: "summary",
-    title: "Campus Marche | HTU Student Marketplace",
+    title: "Campus Marche",
     description:
       "Buy, sell, and connect safely with Ho Technical University students and local vendors.",
   },
@@ -58,8 +59,10 @@ export default function RootLayout({
         <LenisProvider>
           <ThemeProvider>
             <ToastProvider>
-              <SystemStatusBanner />
-              <ConditionalShell>{children}</ConditionalShell>
+              <CartProvider>
+                <SystemStatusBanner />
+                <ConditionalShell>{children}</ConditionalShell>
+              </CartProvider>
             </ToastProvider>
           </ThemeProvider>
         </LenisProvider>

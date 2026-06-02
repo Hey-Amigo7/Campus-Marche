@@ -10,9 +10,9 @@ const LINKS = {
     { label: "Deals",           href: "/deals"      },
   ],
   Selling: [
-    { label: "Start Selling", href: "/sell"  },
-    { label: "Seller Guide",  href: "/help"  },
-    { label: "Pricing",       href: "/help"  },
+    { label: "Start Selling", href: "/sell"         },
+    { label: "Seller Guide",  href: "/help"         },
+    { label: "Pricing",       href: "/subscription" },
   ],
   Company: [
     { label: "About",   href: "/about"   },

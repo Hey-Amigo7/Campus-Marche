@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Lock,
   Loader2,
   MapPin,
   MessageCircle,
@@ -18,7 +19,6 @@ import {
   User,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { getMomoWarning } from "@/lib/momo-detect";
 import { useOrder } from "@/hooks/use-api";
 import { useSocket } from "@/hooks/use-socket";
 import { ESCROW_LABELS, PAID_ESCROW_STATES, type EscrowStatus } from "@/types";
@@ -50,11 +50,6 @@ const ESCROW_COLORS: Partial<Record<EscrowStatus, string>> & Record<string, stri
   FAILED:              "bg-red-100 text-red-800",
 };
 
-const MOMO_PROVIDERS = [
-  { value: "mtn", label: "MTN Mobile Money" },
-  { value: "vod", label: "Telecel Cash" },
-  { value: "tgo", label: "AirtelTigo Money" },
-] as const;
 
 function ChatButton({ counterpartId, productId }: { counterpartId: string; productId: string }) {
   const router = useRouter();
@@ -96,6 +91,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const { toast } = useToast();
   const { data: order, mutate } = useOrder(id);
 
+  // Auto-verify payment when Paystack returns with ?reference= or ?trxref=
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("reference") || params.get("trxref");
+    if (!ref) return;
+    // Remove the query params immediately so a reload doesn't re-trigger
+    router.replace(`/orders/${id}`, { scroll: false });
+    api.verifyPayment(ref)
+      .then(() => { toast("Payment confirmed! Your order is now active."); return mutate(); })
+      .catch(() => { toast("Payment received — your order will update shortly."); return mutate(); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Delivery details form
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryPhone, setDeliveryPhone] = useState("");
@@ -127,7 +134,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [order?.tracking, sharingLocation]);
 
-  // Join order socket room — receive both delivery and buyer location events
+  // Join order socket room — receive delivery location, buyer location, and payment updates
   useEffect(() => {
     if (!id) return;
     const socket = socketRef.current;
@@ -142,13 +149,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       const d = data as { lat: number; lng: number; updatedAt: string };
       setBuyerCoords({ lat: d.lat, lng: d.lng, updatedAt: d.updatedAt });
     };
+    const onOrderUpdated = () => {
+      void mutate();
+    };
 
     socket.on("delivery:location", onDelivery);
     socket.on("buyer:location",    onBuyer);
+    socket.on("order:updated",     onOrderUpdated);
     return () => {
       socket.emit("leave:order", id);
       socket.off("delivery:location", onDelivery);
       socket.off("buyer:location",    onBuyer);
+      socket.off("order:updated",     onOrderUpdated);
     };
   }, [id, socketRef.current]); // eslint-disable-line
 
@@ -205,36 +217,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   // Status update
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Card payment
+  // Payment
   const [initializingPayment, setInitializingPayment] = useState(false);
-
-  // Mobile money
-  const [momoPhone, setMomoPhone] = useState("");
-  const [momoProvider, setMomoProvider] = useState<"mtn" | "vod" | "tgo">("mtn");
-  const [momoRef, setMomoRef] = useState<string | null>(null);
-  const [momoDisplayText, setMomoDisplayText] = useState("");
-  const [momoState, setMomoState] = useState<"idle" | "sending" | "otp" | "submitting_otp" | "waiting" | "paid">("idle");
-  const [momoWarning, setMomoWarning] = useState<string | null>(null);
-  const [momoOtp, setMomoOtp] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Poll MoMo status
-  useEffect(() => {
-    if (momoState !== "waiting" || !momoRef) return;
-    pollRef.current = setInterval(async () => {
-      try {
-        const result = await api.checkMomoStatus(momoRef);
-        if (result.paid) {
-          setMomoState("paid");
-          clearInterval(pollRef.current!);
-          await mutate();
-        }
-      } catch {
-        // keep polling on error
-      }
-    }, 3500);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [momoState, momoRef, mutate]);
 
   // Pre-fill delivery details if already saved
   useEffect(() => {
@@ -348,7 +332,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  async function handleCardPayment() {
+  async function handlePayment() {
     setInitializingPayment(true);
     try {
       const payment = await api.initializePayment(id);
@@ -356,47 +340,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         window.location.href = payment.authorizationUrl;
         return;
       }
-      toast("Paystack keys are not configured. Please use Mobile Money or contact support.");
+      toast("Payment could not be initialised. Please contact support.");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not initialize payment.");
+      toast(err instanceof Error ? err.message : "Could not initialise payment.");
     } finally {
       setInitializingPayment(false);
-    }
-  }
-
-  async function handleMomoSend(e: FormEvent) {
-    e.preventDefault();
-    const warning = getMomoWarning(momoPhone, momoProvider);
-    if (warning && !momoWarning) {
-      setMomoWarning(warning);
-      return;
-    }
-    setMomoWarning(null);
-    setMomoState("sending");
-    try {
-      const result = await api.chargeMobileMoney(id, momoPhone, momoProvider);
-      setMomoRef(result.reference);
-      setMomoDisplayText(result.displayText);
-      // Paystack may require the user to enter an OTP they received
-      setMomoState(result.status === "send_otp" ? "otp" : "waiting");
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not initiate mobile money payment.");
-      setMomoState("idle");
-    }
-  }
-
-  async function handleMomoOtp(e: FormEvent) {
-    e.preventDefault();
-    if (!momoRef) return;
-    setMomoState("submitting_otp");
-    try {
-      const result = await api.submitMomoOtp(momoRef, momoOtp);
-      setMomoOtp("");
-      setMomoState(result.status === "success" ? "paid" : "waiting");
-      if (result.status === "success") await mutate();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "OTP verification failed.");
-      setMomoState("otp");
     }
   }
 
@@ -455,110 +403,43 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
                 <h2 className="text-base font-black text-amber-900">Payment required</h2>
                 <p className="mt-1 text-sm font-semibold text-amber-700">
-                  Complete payment to move your order forward.
+                  Complete payment to move your order forward. Card and Mobile Money are accepted.
                 </p>
-
-                <div className="mt-4 space-y-3">
-                  {/* Card */}
-                  <button
-                    onClick={handleCardPayment}
-                    disabled={initializingPayment}
-                    className="btn-primary w-full justify-center disabled:opacity-50"
-                  >
-                    {initializingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Pay by card (Paystack)
-                  </button>
-
-                  {/* Mobile Money */}
-                  <div className="rounded-xl border border-amber-200 bg-white p-4">
-                    <p className="text-sm font-black text-slate-950">Pay with Mobile Money</p>
-                    {momoState === "paid" ? (
-                      <div className="mt-3 flex items-center gap-2 text-green-700">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="font-bold">Payment confirmed!</span>
+                {/* Fee breakdown */}
+                {(() => {
+                  const base = order.product.price;
+                  const fee  = order.platformFee ?? Math.round(base * 0.025 * 100) / 100;
+                  const total = order.totalAmount ?? Math.round((base + fee) * 100) / 100;
+                  return (
+                    <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-amber-800">Item price</span>
+                        <span className="font-semibold text-amber-900">{formatCurrency(base)}</span>
                       </div>
-                    ) : momoState === "otp" || momoState === "submitting_otp" ? (
-                      <form onSubmit={handleMomoOtp} className="mt-3 space-y-3">
-                        <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 font-semibold">
-                          Enter the OTP sent to your phone to complete payment.
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-slate-700">One-time passcode (OTP)</label>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            maxLength={6}
-                            value={momoOtp}
-                            onChange={(e) => setMomoOtp(e.target.value.replace(/\D/g, ""))}
-                            placeholder="123456"
-                            required
-                            autoFocus
-                            className="input-shell mt-1 text-sm tracking-widest"
-                          />
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={momoState === "submitting_otp" || momoOtp.length < 4}
-                          className="btn-primary w-full justify-center disabled:opacity-50 text-sm"
-                        >
-                          {momoState === "submitting_otp" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                          Verify OTP
-                        </button>
-                      </form>
-                    ) : momoState === "waiting" ? (
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" style={{ color: "#7FB685" }} />
-                          <span className="text-sm font-semibold text-slate-700">{momoDisplayText}</span>
-                        </div>
-                        <p className="text-xs text-slate-400">Waiting for confirmation… this page will update automatically.</p>
+                      <div className="flex justify-between">
+                        <span className="text-amber-800">Service fee (2.5%)</span>
+                        <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
                       </div>
-                    ) : (
-                      <form onSubmit={handleMomoSend} className="mt-3 space-y-3">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div>
-                            <label className="text-xs font-bold text-slate-700">Provider</label>
-                            <select
-                              value={momoProvider}
-                              onChange={(e) => { setMomoProvider(e.target.value as typeof momoProvider); setMomoWarning(null); }}
-                              className="input-shell mt-1 text-sm"
-                            >
-                              {MOMO_PROVIDERS.map((p) => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold text-slate-700">Phone number</label>
-                            <input
-                              type="tel"
-                              value={momoPhone}
-                              onChange={(e) => { setMomoPhone(e.target.value); setMomoWarning(null); }}
-                              placeholder="0244 123 456"
-                              required
-                              className="input-shell mt-1 text-sm"
-                            />
-                          </div>
-                        </div>
-                        {momoWarning ? (
-                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                            ⚠️ {momoWarning}
-                            <p className="mt-1 text-xs font-normal text-amber-700">Tap "Send payment prompt" again to continue anyway.</p>
-                          </div>
-                        ) : null}
-                        <button
-                          type="submit"
-                          disabled={momoState === "sending"}
-                          className="btn-primary w-full justify-center disabled:opacity-50 text-sm"
-                        >
-                          {momoState === "sending" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          {momoWarning ? "Continue anyway" : "Send payment prompt"}
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </div>
+                      <div className="flex justify-between border-t border-amber-200 pt-1.5">
+                        <span className="font-black text-amber-900">Total charged</span>
+                        <span className="font-black text-amber-900">{formatCurrency(total)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <button
+                  onClick={handlePayment}
+                  disabled={initializingPayment}
+                  className="btn-primary mt-4 w-full justify-center disabled:opacity-50"
+                >
+                  {initializingPayment
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <Lock className="h-4 w-4" />}
+                  {initializingPayment ? "Redirecting to Paystack…" : "Pay securely now"}
+                </button>
+                <p className="mt-3 text-center text-xs text-amber-700">
+                  Powered by Paystack · Card, Mobile Money &amp; bank transfer accepted
+                </p>
               </section>
             ) : null}
 
@@ -636,13 +517,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <form onSubmit={handleAssignDelivery} className="space-y-3">
                       <div>
                         <label className="text-xs font-bold text-slate-700">Assign delivery person</label>
-                        <p className="mt-0.5 text-xs text-slate-500">Enter the user ID of the person who will deliver the item.</p>
+                        <p className="mt-0.5 text-xs text-slate-500">Enter the email address of the person who will deliver the item.</p>
                         <input
+                          type="email"
                           value={deliveryPersonId}
                           onChange={(e) => setDeliveryPersonId(e.target.value)}
-                          placeholder="User ID"
+                          placeholder="deliverer@email.com"
                           required
-                          className="input-shell mt-1 text-sm font-mono"
+                          className="input-shell mt-1 text-sm"
                         />
                       </div>
                       <button type="submit" disabled={assigning} className="btn-primary w-full justify-center text-sm disabled:opacity-50">

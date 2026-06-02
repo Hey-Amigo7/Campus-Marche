@@ -182,8 +182,8 @@ function NotificationsContent() {
                     onClick={() => setActiveFilter(tab)}
                     className="relative shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all"
                     style={{
-                      color:      activeFilter === tab ? "white" : "var(--muted)",
-                      background: activeFilter === tab ? "var(--navy)" : "var(--surface-raised)",
+                      color:      activeFilter === tab ? "var(--background)" : "var(--muted)",
+                      background: activeFilter === tab ? "var(--on-surface)" : "var(--surface-raised)",
                       border:     `1px solid ${activeFilter === tab ? "transparent" : "var(--border)"}`,
                     }}
                   >

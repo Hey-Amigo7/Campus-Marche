@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, Check, CheckCircle2, Loader2, Package, Plus, Tag, X } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Check, CheckCircle2, Info, Loader2, Package, Plus, Tag, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -215,12 +215,22 @@ export default function SellPage() {
   const [boostOpen, setBoostOpen] = useState(false);
   const [listingType, setListingType] = useState<"product" | "service">("product");
   const [negotiable, setNegotiable] = useState(true);
+  const [rawPrice, setRawPrice] = useState("");
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { data: business, mutate: refreshBusiness, isLoading: businessLoading } = useBusiness();
   const { data: categoriesData } = useCategories();
-  const categories = categoriesData ?? [];
+  // Always show every category regardless of how many listings exist in each
+  const ALL_CATEGORIES = [
+    "Electronics", "Textbooks", "Clothing", "Furniture",
+    "Notes", "Sports", "Stationery", "Services", "Other",
+  ];
+  const apiNames = new Set((categoriesData ?? []).map(c => c.name));
+  const categories = ALL_CATEGORIES.map(name => ({
+    name,
+    count: apiNames.has(name) ? (categoriesData!.find(c => c.name === name)?.count ?? 0) : 0,
+  }));
   const [businessLoadingSave, setBusinessLoadingSave] = useState(false);
 
   async function handleBusinessSubmit(event: FormEvent<HTMLFormElement>) {
@@ -444,6 +454,20 @@ export default function SellPage() {
                   </div>
 
                   <form onSubmit={handleSubmit} className="p-5 space-y-5">
+                    {/* Seller-pays-nothing notice */}
+                    <div className="flex gap-3 rounded-xl p-3.5"
+                      style={{ background: "rgba(114,204,35,0.08)", border: "1px solid rgba(114,204,35,0.25)" }}>
+                      <Info size={15} className="mt-0.5 shrink-0" style={{ color: "var(--green)" }} />
+                      <div>
+                        <p className="text-xs font-black" style={{ color: "var(--on-surface)" }}>
+                          You receive your full listed price
+                        </p>
+                        <p className="mt-0.5 text-xs leading-5" style={{ color: "var(--muted)" }}>
+                          Campus Marche adds a 2.5% service fee on top for buyers. Whatever price you set is exactly what you receive — nothing is deducted from your payout.
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="md:col-span-2">
                         <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>
@@ -458,7 +482,42 @@ export default function SellPage() {
                         <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>
                           Price (GHS)
                         </label>
-                        <input name="price" required type="number" min={1} placeholder="0.00" className="input-shell" />
+                        <input
+                          name="price"
+                          required
+                          type="number"
+                          min={1}
+                          step="0.01"
+                          placeholder="0.00"
+                          value={rawPrice}
+                          onChange={e => setRawPrice(e.target.value)}
+                          className="input-shell"
+                        />
+                        {/* Real-time buyer total preview */}
+                        {(() => {
+                          const price = parseFloat(rawPrice);
+                          if (!rawPrice || isNaN(price) || price <= 0) return null;
+                          const serviceFee = Math.round(price * 0.025 * 100) / 100;
+                          const buyerTotal = Math.round((price + serviceFee) * 100) / 100;
+                          return (
+                            <div className="mt-2 space-y-1.5 rounded-xl p-3 text-xs"
+                              style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: "var(--muted)" }}>Your listed price</span>
+                                <span className="font-black" style={{ color: "var(--green)" }}>GHS {price.toFixed(2)}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: "var(--muted)" }}>Buyer service fee (2.5%)</span>
+                                <span className="font-semibold" style={{ color: "var(--muted)" }}>+ GHS {serviceFee.toFixed(2)}</span>
+                              </div>
+                              <div className="flex items-center justify-between border-t pt-1.5"
+                                style={{ borderColor: "var(--border)" }}>
+                                <span className="font-bold" style={{ color: "var(--on-surface)" }}>Buyer pays</span>
+                                <span className="font-black" style={{ color: "var(--on-surface)" }}>GHS {buyerTotal.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div>

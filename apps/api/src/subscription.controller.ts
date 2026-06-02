@@ -6,7 +6,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { SubscriptionService, type PlanKey } from './subscription.service';
 
 class UpgradeDto {
-  @IsIn(['pro', 'featured'])
+  @IsIn(['daily', 'pro', 'featured'])
   plan!: PlanKey;
 }
 

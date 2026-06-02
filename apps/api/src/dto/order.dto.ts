@@ -1,7 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
-const ORDER_STATUSES = ['Payment pending', 'In progress', 'Completed', 'Cancelled'] as const;
+const ORDER_STATUSES = [
+  'Awaiting payment',
+  'Payment initiated',
+  'In progress',
+  'Out for delivery',
+  'Delivered',
+  'Releasing funds',
+  'Completed',
+  'Disputed',
+  'Refunded',
+  'Cancelled',
+  'Payment failed',
+] as const;
 
 export class CreateOrderDto {
   @ApiProperty({ description: 'ID of the product to purchase' })

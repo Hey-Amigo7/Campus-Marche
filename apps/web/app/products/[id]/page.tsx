@@ -9,6 +9,7 @@ import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 import { BuyNowButton } from "@/components/buy-now-button";
+import { AddToCartButton } from "@/components/add-to-cart-button";
 import { ProductArt, ProductGrid } from "@/components/product-card";
 import { EmptyState, Rating, SectionHeading, SellerBadge } from "@/components/ui";
 import { useProduct, useProducts, useProfile, useReviews, useSavedStatus } from "@/hooks/use-api";
@@ -462,6 +463,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <p className="mt-4 text-4xl font-black" style={{ color: "#7FB685" }}>
                 {formatCurrency(product.price)}
               </p>
+              {(() => {
+                const fee = Math.round(product.price * 0.025 * 100) / 100;
+                const total = Math.round((product.price + fee) * 100) / 100;
+                return (
+                  <p className="mt-1.5 text-sm font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    + {formatCurrency(fee)} service fee · <span style={{ color: "rgba(255,255,255,0.55)" }}>you pay {formatCurrency(total)}</span>
+                  </p>
+                );
+              })()}
             </div>
 
             {/* Meta */}
@@ -522,6 +532,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="grid gap-2.5 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <BuyNowButton productId={product.id} price={product.price} listingType={product.listingType} category={product.category} />
+              </div>
+              <div className="sm:col-span-2">
+                <AddToCartButton product={product} />
               </div>
               <SaveButton productId={product.id} />
               <button

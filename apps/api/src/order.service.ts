@@ -119,7 +119,7 @@ export class OrderService {
     if (product.sellerId === data.buyerId) throw new BadRequestException('You cannot buy your own listing');
 
     // Calculate commission at order-creation time so amounts are locked in
-    const feePercent = parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '1');
+    const feePercent = parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '2.5');
     const feeFixed   = parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')    ?? '0');
     const commission = calculateCommission(product.price, feePercent, feeFixed);
 
@@ -189,12 +189,15 @@ export class OrderService {
     if (order.product.sellerId !== requesterId) throw new ForbiddenException('Only the seller can assign a delivery person');
     if (!['In progress'].includes(order.status)) throw new BadRequestException('Can only assign delivery for orders in progress');
 
-    const deliveryPerson = await this.prisma.user.findUnique({ where: { id: deliveryPersonId } });
-    if (!deliveryPerson) throw new NotFoundException('Delivery person not found');
+    const identifier = deliveryPersonId.trim();
+    const deliveryPerson = await this.prisma.user.findFirst({
+      where: { OR: [{ email: identifier.toLowerCase() }, { id: identifier }] },
+    });
+    if (!deliveryPerson) throw new NotFoundException('No account found with that email address');
 
     return this.prisma.order.update({
       where: { id: orderId },
-      data: { deliveryPersonId, status: 'Out for delivery' },
+      data: { deliveryPersonId: deliveryPerson.id, status: 'Out for delivery' },
     });
   }
 

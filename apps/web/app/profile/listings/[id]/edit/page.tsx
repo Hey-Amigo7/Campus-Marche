@@ -24,7 +24,14 @@ function EditListingContent() {
   const { toast } = useToast();
   const { data: product, isLoading: productLoading } = useProduct(id);
   const { data: categoriesData } = useCategories();
-  const categories = categoriesData ?? [];
+  const ALL_CATEGORIES = [
+    "Electronics", "Textbooks", "Clothing", "Furniture",
+    "Notes", "Sports", "Stationery", "Services", "Other",
+  ];
+  const categories = ALL_CATEGORIES.map(name => ({
+    name,
+    count: categoriesData?.find(c => c.name === name)?.count ?? 0,
+  }));
 
   const [saving, setSaving] = useState(false);
   const [negotiable, setNegotiable] = useState(true);
@@ -191,8 +198,8 @@ function EditListingContent() {
             <input
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              required type="number" min={1}
-              placeholder="GHS"
+              required type="number" min={0.01} step="0.01"
+              placeholder="0.00"
               className="input-shell mt-2"
             />
           </label>

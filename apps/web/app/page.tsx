@@ -122,20 +122,7 @@ function Hero() {
       />
 
       <div className="relative z-10 max-w-3xl">
-        {/* Badge */}
-        <FadeUp delay={0}>
-          <span
-            className="badge-glow mb-7 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold"
-            style={{
-              background:  "var(--green-tint)",
-              borderColor: "rgba(22,163,74,0.25)",
-              color:       "var(--green-dark)",
-            }}
-          >
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--green)" }} />
-            HTU Student Marketplace · Ho, Ghana
-          </span>
-        </FadeUp>
+
 
         {/* Heading with loop animation */}
         <FadeUp delay={0.08}>
@@ -171,10 +158,11 @@ function Hero() {
             <MotionButton hoverScale={1.04} hoverY={-2} tapScale={0.96}>
               <Link
                 href="/products"
-                className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold text-white transition-shadow"
+                className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold transition-shadow"
                 style={{
-                  background:  "var(--navy)",
-                  boxShadow:   "0 4px 14px rgba(9,9,11,0.20)",
+                  background: "var(--on-surface)",
+                  color:      "var(--background)",
+                  boxShadow:  "0 4px 14px rgba(9,9,11,0.20)",
                 }}
               >
                 Browse marketplace
@@ -612,8 +600,8 @@ function EditorialSplit() {
             <MotionButton hoverScale={1.04} hoverY={-2} tapScale={0.96}>
               <Link
                 href="/products"
-                className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white"
-                style={{ background: "var(--navy)", boxShadow: "0 4px 12px rgba(9,9,11,0.18)" }}
+                className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold"
+                style={{ background: "var(--on-surface)", color: "var(--background)", boxShadow: "0 4px 12px rgba(9,9,11,0.18)" }}
               >
                 Browse marketplace <ArrowRight className="h-3.5 w-3.5" />
               </Link>
