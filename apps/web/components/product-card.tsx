@@ -15,10 +15,10 @@ import { AnimatedHeart, AnimatedLoader } from "@/components/animated-icons";
 
 const spring = { type: "spring", stiffness: 340, damping: 26 } as const;
 
-/* ── Condition badge config ─────────────────────────────────── */
+/* ── Condition label config ─────────────────────────────────── */
 const CONDITION_COLOR: Record<string, string> = {
   "New":      "var(--green)",
-  "Like new": "var(--green-dark)",
+  "Like new": "#16A34A",
   "Good":     "var(--caramel)",
   "Fair":     "var(--muted)",
 };
@@ -121,8 +121,8 @@ function SaveButton({ productId }: { productId: string }) {
 export function ProductCard({ product, compact = false }: { product: Product; compact?: boolean }) {
   const router    = useRouter();
   const imageUrl  = product.imageUrl ?? product.imageUrls?.[0];
-  const isService = product.listingType === "service" || product.category === "Services";
-  const isSold    = product.active === false || !!(product as Product & { soldAt?: string | null }).soldAt;
+  const isService      = product.listingType === "service" || product.category === "Services";
+  const isSold         = product.active === false || !!(product as Product & { soldAt?: string | null }).soldAt;
   const conditionColor = product.condition ? (CONDITION_COLOR[product.condition] ?? "var(--muted)") : null;
 
   return (
@@ -147,18 +147,8 @@ export function ProductCard({ product, compact = false }: { product: Product; co
             className="h-full w-full"
           />
 
-          {/* Condition badge — top left */}
-          {conditionColor && (
-            <span
-              className="absolute left-2.5 top-2.5 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-              style={{ background: conditionColor }}
-            >
-              {product.condition}
-            </span>
-          )}
-
-          {/* Service badge — top left (if service, overrides condition) */}
-          {isService && (
+          {/* Category badge — top left */}
+          {isService ? (
             <span
               className="absolute left-2.5 top-2.5 inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
               style={{ background: "var(--caramel)" }}
@@ -166,7 +156,19 @@ export function ProductCard({ product, compact = false }: { product: Product; co
               <Wrench className="h-2.5 w-2.5" />
               Service
             </span>
-          )}
+          ) : product.category ? (
+            <span
+              className="absolute left-2.5 top-2.5 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{
+                background: "rgba(9,9,11,0.52)",
+                color: "rgba(255,255,255,0.90)",
+                backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
+              }}
+            >
+              {product.category}
+            </span>
+          ) : null}
 
           {/* Featured badge — top right (only when no save button) */}
           {product.featured && !hasAuthToken() && (
@@ -216,6 +218,14 @@ export function ProductCard({ product, compact = false }: { product: Product; co
           <span className="text-base font-black" style={{ color: "var(--on-surface)" }}>
             {formatCurrency(product.price)}
           </span>
+          {conditionColor && product.condition && (
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
+              style={{ background: `${conditionColor}18`, color: conditionColor }}
+            >
+              {product.condition}
+            </span>
+          )}
           {product.negotiable && (
             <span className="ml-auto text-[10px] font-medium" style={{ color: "var(--green)" }}>
               Negotiable
