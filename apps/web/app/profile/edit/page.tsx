@@ -1,14 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Loader2, UploadCloud, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, UploadCloud, X, Palette } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { useProfile } from "@/hooks/use-api";
 import { AuthGate } from "@/components/auth-gate";
 import { useToast } from "@/providers/toast-provider";
-import { THEMES, useTheme } from "@/providers/theme-provider";
 import { UserAvatar } from "@/components/navbar";
 
 const AVATAR_EMOJIS = [
@@ -28,7 +28,6 @@ function EditForm() {
   const router = useRouter();
   const { toast } = useToast();
   const { data: profile, isLoading, mutate } = useProfile();
-  const { theme, setTheme } = useTheme();
 
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("");
@@ -36,7 +35,6 @@ function EditForm() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Avatar image upload
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -224,45 +222,25 @@ function EditForm() {
           </p>
         </div>
 
-        {/* ── Theme picker ── */}
-        <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.88)", border: "1px solid rgba(226,232,240,0.70)" }}>
-          <p className="mb-1 text-sm font-black" style={{ color: "#1E293B" }}>App theme</p>
-          <p className="mb-4 text-xs" style={{ color: "#94A3B8" }}>Choose a colour palette for your experience. Saved to this device.</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
-            {THEMES.map((t) => {
-              const active = theme === t.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTheme(t.id)}
-                  className="flex flex-col gap-2 rounded-2xl p-3 text-left transition-all hover:-translate-y-0.5"
-                  style={{
-                    background: active ? `${t.accent}18` : "rgba(248,245,239,0.70)",
-                    border: active ? `1.5px solid ${t.accent}55` : "1.5px solid rgba(226,232,240,0.70)",
-                    boxShadow: active ? `0 4px 16px ${t.accent}22` : "none",
-                  }}
-                >
-                  {/* Swatch strip */}
-                  <div className="flex gap-1">
-                    <span className="block h-5 flex-1 rounded-lg border" style={{ background: t.swatch, borderColor: `${t.accent}33` }} />
-                    <span className="block h-5 w-5 rounded-lg" style={{ background: t.accent }} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-black leading-tight" style={{ color: active ? t.accent : "#1E293B" }}>{t.label}</p>
-                    <p className="mt-0.5 text-[10px] leading-tight" style={{ color: "#94A3B8" }}>{t.description}</p>
-                  </div>
-                  {active && (
-                    <span className="inline-flex items-center gap-0.5 self-start rounded-full px-2 py-0.5 text-[10px] font-black"
-                      style={{ background: t.accent, color: "#fff" }}>
-                      <Check className="h-2.5 w-2.5" /> Active
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        {/* ── Appearance nudge ── */}
+        <Link
+          href="/settings"
+          className="flex items-center gap-4 rounded-2xl p-5 transition-all hover:-translate-y-0.5"
+          style={{ background: "rgba(255,255,255,0.88)", border: "1px solid rgba(226,232,240,0.70)" }}
+        >
+          <div
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+            style={{ background: "rgba(114,204,35,0.10)", color: "#5EB81B" }}
+          >
+            <Palette className="h-5 w-5" />
           </div>
-        </div>
+          <div className="flex-1">
+            <p className="text-sm font-black" style={{ color: "#1E293B" }}>Appearance &amp; system settings</p>
+            <p className="mt-0.5 text-xs" style={{ color: "#94A3B8" }}>
+              Theme, notifications, privacy, and security live in Settings →
+            </p>
+          </div>
+        </Link>
 
         {/* Read-only account info */}
         {profile && (

@@ -52,13 +52,13 @@ function ToggleRow({
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className="relative h-6 w-11 shrink-0 rounded-full overflow-hidden transition-colors duration-200"
+        className="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200"
         style={{ background: checked ? "#72CC23" : "var(--border)" }}
       >
         <motion.span
-          animate={{ x: checked ? 20 : 2 }}
+          animate={{ x: checked ? 26 : 2 }}
           transition={spring}
-          className="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm"
+          className="absolute top-1 left-0 h-4 w-4 rounded-full bg-white shadow-sm"
         />
       </button>
     </div>

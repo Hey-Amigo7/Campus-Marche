@@ -106,9 +106,11 @@ function ThemeCycleButton() {
 
 /* ── User dropdown ──────────────────────────────────────────── */
 function UserDropdown({
-  name, accountType, isAdmin, onClose, onLogout,
+  name, accountType, isAdmin, sellerId, hasBusiness, onClose, onLogout,
 }: {
-  name: string; accountType?: string; isAdmin?: boolean; onClose: () => void; onLogout: () => void;
+  name: string; accountType?: string; isAdmin?: boolean;
+  sellerId?: string; hasBusiness?: boolean;
+  onClose: () => void; onLogout: () => void;
 }) {
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +128,9 @@ function UserDropdown({
     { icon: Heart,         label: "Saved Items",   href: "/saved"            },
     { icon: MessageCircle, label: "Messages",      href: "/messages"         },
     { icon: ShoppingBag,   label: "My Orders",     href: "/orders"           },
+    ...(hasBusiness && sellerId
+      ? [{ icon: Store, label: "My Storefront", href: `/store/${sellerId}` }]
+      : []),
   ];
 
   return (
@@ -204,7 +209,10 @@ export function Navbar() {
   const { unreadCount }   = useCombinedNotifications();
   const { cartCount }     = useCart();
 
+  // Sync token state on every route change; also run once immediately on mount
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
+  // Fast-path: check token synchronously on first client render to avoid flash
+  useEffect(() => { setIsAuthenticated(hasAuthToken()); }, []);
   useEffect(() => { setMenuOpen(false); setUserDropOpen(false); }, [pathname]);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -330,7 +338,10 @@ export function Navbar() {
                   <UserAvatar avatar={profile?.avatar} name={profile?.name} size={28} />
                   <span className="max-w-[80px] truncate text-sm font-semibold"
                     style={{ color: "var(--on-surface)" }}>
-                    {profile?.name?.split(" ")[0] ?? "Account"}
+                    {profile?.name?.split(" ")[0] ?? (
+                      <span className="inline-block h-2.5 w-14 rounded-full animate-pulse"
+                        style={{ background: "var(--border)" }} />
+                    )}
                   </span>
                   <motion.div animate={{ rotate: userDropOpen ? 180 : 0 }} transition={spring}>
                     <ChevronDown size={13} style={{ color: "var(--muted)" }} />
@@ -343,6 +354,8 @@ export function Navbar() {
                       name={profile?.name ?? ""}
                       accountType={profile?.accountType}
                       isAdmin={profile?.role === "ADMIN" || isEnvAdminToken()}
+                      sellerId={profile?.id}
+                      hasBusiness={!!profile?.business}
                       onClose={() => setUserDropOpen(false)}
                       onLogout={handleLogout}
                     />
@@ -426,15 +439,18 @@ export function Navbar() {
                         </div>
                       </div>
                       {[
-                        { icon: User,          label: "My Profile",   href: "/profile"          },
-                        { icon: Package,       label: "My Listings",  href: "/profile/listings" },
-                        { icon: Heart,         label: "Saved Items",  href: "/saved"            },
-                        { icon: MessageCircle, label: "Messages",     href: "/messages"         },
-                        { icon: ShoppingBag,   label: "My Orders",    href: "/orders"           },
-                        { icon: ShoppingCart,  label: "Cart",         href: "/cart"             },
-                        { icon: Store,         label: "Sell",         href: "/sell"             },
-                        { icon: Bell,          label: "Notifications",href: "/notifications"    },
-                        { icon: Settings,      label: "Settings",     href: "/settings"         },
+                        { icon: User,          label: "My Profile",     href: "/profile"                                       },
+                        { icon: Package,       label: "My Listings",    href: "/profile/listings"                              },
+                        { icon: Heart,         label: "Saved Items",    href: "/saved"                                         },
+                        { icon: MessageCircle, label: "Messages",       href: "/messages"                                      },
+                        { icon: ShoppingBag,   label: "My Orders",      href: "/orders"                                        },
+                        { icon: ShoppingCart,  label: "Cart",           href: "/cart"                                          },
+                        { icon: Store,         label: "Sell",           href: "/sell"                                          },
+                        ...(profile?.business && profile?.id
+                          ? [{ icon: Store, label: "My Storefront", href: `/store/${profile.id}` }]
+                          : []),
+                        { icon: Bell,          label: "Notifications",  href: "/notifications"                                 },
+                        { icon: Settings,      label: "Settings",       href: "/settings"                                      },
                       ].map(({ icon: Icon, label, href }) => (
                         <Link key={label} href={href}
                           className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-raised)]"

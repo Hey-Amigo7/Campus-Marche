@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle, Package, ShoppingBag,
   Edit3, Settings, LogOut, MapPin, Calendar, Plus,
-  Star, ShieldCheck, Heart,
+  Star, ShieldCheck, Heart, Store, ExternalLink,
 } from "lucide-react";
 import { clearAuthToken } from "@/lib/auth";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
@@ -17,11 +17,11 @@ import { useProfile, useMyListings, useSavedItems, useOrders } from "@/hooks/use
 import { UserAvatar } from "@/components/navbar";
 import { ProductCard } from "@/components/product-card";
 import { PageEnter, FadeUp, ScrollStaggerList, StaggerItem } from "@/components/motion-primitives";
+import { AuthGate } from "@/components/auth-gate";
 import type { Order } from "@/types";
 
 const spring = { type: "spring", stiffness: 340, damping: 26 } as const;
-const TABS = ["Listings", "Saved", "Orders", "Settings"] as const;
-type Tab = (typeof TABS)[number];
+type Tab = "Listings" | "Saved" | "Orders" | "Storefront" | "Settings";
 
 /* ── Role badge ─────────────────────────────────────────────── */
 function RoleBadge({ role, accountType }: { role?: string; accountType?: string }) {
@@ -152,20 +152,18 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <p className="text-sm" style={{ color: "var(--muted)" }}>Please sign in to view your profile.</p>
-        <Link
-          href="/login"
-          className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white"
-          style={{ background: "#72CC23" }}
-        >
-          Sign In
-        </Link>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent" style={{ color: "#72CC23" }} />
       </div>
     );
   }
 
+  const tabs: Tab[] = profile.business
+    ? ["Listings", "Saved", "Orders", "Storefront", "Settings"]
+    : ["Listings", "Saved", "Orders", "Settings"];
+
   return (
+    <AuthGate>
     <PageEnter className="min-h-screen pb-20">
 
       {/* ── Dark hero ──────────────────────────────────────────── */}
@@ -234,17 +232,6 @@ export default function ProfilePage() {
               >
                 <Plus size={14} /> List Item
               </Link>
-              <Link
-                href="/profile/edit"
-                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold"
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  color:      "rgba(255,255,255,0.70)",
-                  border:     "1px solid rgba(255,255,255,0.10)",
-                }}
-              >
-                <Edit3 size={13} /> Edit
-              </Link>
             </div>
           </FadeUp>
 
@@ -273,13 +260,13 @@ export default function ProfilePage() {
 
           {/* Tabs */}
           <div className="mt-7 flex gap-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 type="button"
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className="relative shrink-0 rounded-t-xl px-5 py-2.5 text-sm font-semibold transition-colors"
-                style={{ color: activeTab === tab ? "white" : "rgba(255,255,255,0.40)" }}
+                style={{ color: activeTab === tab ? "var(--on-surface)" : "rgba(255,255,255,0.55)" }}
               >
                 {activeTab === tab && (
                   <motion.span
@@ -397,6 +384,111 @@ export default function ProfilePage() {
             </motion.div>
           )}
 
+          {/* Storefront tab — business owners only */}
+          {activeTab === "Storefront" && profile.business && (
+            <motion.div
+              key="storefront"
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              transition={spring}
+              className="max-w-lg space-y-4"
+            >
+              {/* Store identity card */}
+              <div
+                className="overflow-hidden rounded-2xl"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                <div
+                  className="relative p-6"
+                  style={{ background: "linear-gradient(135deg, #0F172A 0%, #102542 60%, #1a3a2a 100%)" }}
+                >
+                  <div
+                    className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full"
+                    style={{ background: "radial-gradient(circle, rgba(114,204,35,0.15), transparent 65%)" }}
+                  />
+                  <div className="relative flex items-start justify-between gap-4">
+                    <div>
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                          style={{ background: "rgba(114,204,35,0.15)", color: "#72CC23", border: "1px solid rgba(114,204,35,0.25)" }}
+                        >
+                          <Store size={10} /> {profile.business.type}
+                        </span>
+                        {profile.business.verified && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
+                            style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.65)" }}
+                          >
+                            <CheckCircle size={10} /> Verified
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="text-xl font-black text-white">{profile.business.name}</h2>
+                      {profile.business.description && (
+                        <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
+                          {profile.business.description}
+                        </p>
+                      )}
+                      {profile.business.location && (
+                        <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.40)" }}>
+                          <MapPin size={11} /> {profile.business.location}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 p-4" style={{ background: "var(--surface)" }}>
+                  <Link
+                    href={`/store/${profile.id}`}
+                    className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black text-white"
+                    style={{ background: "#72CC23" }}
+                  >
+                    <Store size={15} /> Manage Storefront
+                  </Link>
+                  <Link
+                    href={`/store/${profile.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-raised)]"
+                    style={{ border: "1px solid var(--border)", color: "var(--on-surface)" }}
+                  >
+                    <ExternalLink size={14} /> View public storefront
+                  </Link>
+                </div>
+              </div>
+
+              {/* Quick actions */}
+              <div
+                className="divide-y overflow-hidden rounded-2xl"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                {[
+                  { icon: Package,  label: "Manage listings",      href: "/profile/listings", desc: "Edit, pause, or remove your products"    },
+                  { icon: Plus,     label: "Add a new listing",     href: "/sell",             desc: "List a new product on your storefront"   },
+                  { icon: Star,     label: "Wallet & Payouts",      href: "/wallet",           desc: "Earnings, MoMo payouts, and history"     },
+                ].map(({ icon: Icon, label, href, desc }) => (
+                  <Link
+                    key={label}
+                    href={href}
+                    className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--surface-raised)]"
+                  >
+                    <div
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
+                      style={{ background: "var(--green-surface)", color: "var(--green)" }}
+                    >
+                      <Icon size={16} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold" style={{ color: "var(--on-surface)" }}>{label}</p>
+                      <p className="text-xs" style={{ color: "var(--muted)" }}>{desc}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           {/* Settings tab */}
           {activeTab === "Settings" && (
             <motion.div
@@ -456,5 +548,6 @@ export default function ProfilePage() {
         </AnimatePresence>
       </div>
     </PageEnter>
+    </AuthGate>
   );
 }

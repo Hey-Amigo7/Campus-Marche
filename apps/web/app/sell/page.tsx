@@ -588,8 +588,8 @@ export default function SellPage() {
                           onClick={() => setNegotiable(v => !v)}
                           className="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200"
                           style={{ background: negotiable ? "var(--green)" : "var(--border)" }}>
-                          <motion.span animate={{ x: negotiable ? 20 : 2 }} transition={snap}
-                            className="absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm" />
+                          <motion.span animate={{ x: negotiable ? 26 : 2 }} transition={snap}
+                            className="absolute top-1 left-0 h-4 w-4 rounded-full bg-white shadow-sm" />
                         </button>
                       </label>
                     </div>
