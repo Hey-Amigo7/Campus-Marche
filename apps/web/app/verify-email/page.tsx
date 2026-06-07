@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { mutate } = useSWRConfig();
@@ -81,7 +81,6 @@ export default function VerifyEmailPage() {
     setLoading(true);
     try {
       await api.auth.verifyEmailOtp(code);
-      // Flush caches so verified badge and notifications update immediately
       await Promise.all([mutate("profile"), mutate("notifications")]);
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);
@@ -259,5 +258,13 @@ export default function VerifyEmailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense>
+      <VerifyEmailContent />
+    </Suspense>
   );
 }
