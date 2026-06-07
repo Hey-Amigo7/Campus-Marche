@@ -217,6 +217,25 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   // Status update
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
+  // Buyer cancel (unpaid orders only)
+  const [cancelStep, setCancelStep] = useState<"idle" | "confirm">("idle");
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  async function handleBuyerCancel() {
+    setCancelLoading(true);
+    try {
+      await api.updateOrderStatus(id, "Cancelled");
+      await mutate();
+      toast("Order cancelled.");
+      setCancelStep("idle");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not cancel order.");
+      setCancelStep("idle");
+    } finally {
+      setCancelLoading(false);
+    }
+  }
+
   // Payment
   const [initializingPayment, setInitializingPayment] = useState(false);
 
@@ -770,6 +789,47 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     </button>
                   ))}
                 </div>
+              </div>
+            ) : null}
+
+            {/* Buyer cancel — only for unpaid orders */}
+            {role === "buyer" && order.status === "Awaiting payment" && isActive ? (
+              <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+                <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Cancel order</h3>
+                {cancelStep === "idle" ? (
+                  <>
+                    <p className="mt-2 text-sm text-slate-500">Changed your mind? You can cancel before completing payment.</p>
+                    <button
+                      onClick={() => setCancelStep("confirm")}
+                      className="mt-3 w-full rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors hover:bg-red-50"
+                      style={{ color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }}
+                    >
+                      Cancel this order
+                    </button>
+                  </>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-sm font-bold text-red-700">Are you sure? This cannot be undone.</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setCancelStep("idle")}
+                        className="flex-1 rounded-xl border px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                        style={{ borderColor: "rgba(226,232,240,0.70)" }}
+                      >
+                        Keep order
+                      </button>
+                      <button
+                        onClick={handleBuyerCancel}
+                        disabled={cancelLoading}
+                        className="flex-1 rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        style={{ background: "#DC2626" }}
+                      >
+                        {cancelLoading ? <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> : null}
+                        {cancelLoading ? " Cancelling…" : "Yes, cancel"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
 

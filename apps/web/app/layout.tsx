@@ -6,6 +6,7 @@ import { ToastProvider } from "@/providers/toast-provider";
 import { CartProvider } from "@/providers/cart-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { LenisProvider } from "@/providers/lenis-provider";
+import { GoogleProvider } from "@/providers/google-provider";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -55,17 +56,24 @@ export default function RootLayout({
       lang="en"
       className={`${plusJakarta.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="preconnect" href="https://accounts.google.com" />
+        <link rel="preconnect" href="https://oauth2.googleapis.com" />
+        <link rel="dns-prefetch" href="https://accounts.google.com" />
+      </head>
       <body className="min-h-full font-sans">
-        <LenisProvider>
-          <ThemeProvider>
-            <ToastProvider>
-              <CartProvider>
-                <SystemStatusBanner />
-                <ConditionalShell>{children}</ConditionalShell>
-              </CartProvider>
-            </ToastProvider>
-          </ThemeProvider>
-        </LenisProvider>
+        <GoogleProvider>
+          <LenisProvider>
+            <ThemeProvider>
+              <ToastProvider>
+                <CartProvider>
+                  <SystemStatusBanner />
+                  <ConditionalShell>{children}</ConditionalShell>
+                </CartProvider>
+              </ToastProvider>
+            </ThemeProvider>
+          </LenisProvider>
+        </GoogleProvider>
       </body>
     </html>
   );

@@ -249,6 +249,13 @@ export const api = {
         { message: "" },
         { method: "POST", body: JSON.stringify({ code }), strict: true },
       ),
+
+    googleSignIn: (credential: string) =>
+      request<{ user: { id: string; email: string; name: string }; token: string }>(
+        "/auth/google",
+        { user: { id: "", email: "", name: "" }, token: "" },
+        { method: "POST", body: JSON.stringify({ credential }), strict: true },
+      ),
   },
 
   getOrders: () => request<Order[]>("/orders", []),

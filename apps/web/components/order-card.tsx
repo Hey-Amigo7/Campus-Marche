@@ -11,7 +11,8 @@ import { formatCurrency, formatRelativeDate } from "@/lib/format";
 import { ProductArt } from "@/components/product-card";
 
 const STATUS_COLORS: Record<string, string> = {
-  "Payment pending": "bg-amber-100 text-amber-700",
+  "Awaiting payment": "bg-amber-100 text-amber-700",
+  "Payment initiated": "bg-amber-100 text-amber-700",
   "In progress": "bg-blue-100 text-blue-700",
   "Out for delivery": "bg-sky-100 text-sky-700",
   Completed: "bg-green-100 text-green-700",
@@ -19,8 +20,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function canCancel(order: Order): boolean {
-  if (order.role === "buyer") return order.status === "In progress";
-  if (order.role === "seller") return order.status === "Payment pending" || order.status === "In progress";
+  if (order.role === "buyer") return order.status === "Awaiting payment" || order.status === "In progress";
+  if (order.role === "seller") return order.status === "Awaiting payment" || order.status === "In progress";
   return false;
 }
 

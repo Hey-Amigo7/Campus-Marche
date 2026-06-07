@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { AccountType, AuthenticatedUser } from './auth/auth-user.decorator';
 import { EmailService } from './email.service';
 import { SmsService } from './sms.service';
@@ -252,7 +253,7 @@ export class AuthService {
     const raw = identifier.trim();
     const lower = raw.toLowerCase();
 
-    let candidates: Array<(typeof USER_SELECT extends object ? { [K in keyof typeof USER_SELECT]: unknown } : never) & { id: string; email: string; password: string }> = [];
+    let candidates: Array<(typeof USER_SELECT extends object ? { [K in keyof typeof USER_SELECT]: unknown } : never) & { id: string; email: string; password: string | null }> = [];
 
     if (lower.includes('@') && !lower.startsWith('@')) {
       // Looks like an email address
@@ -472,6 +473,58 @@ export class AuthService {
     ]);
 
     return { message: 'Email verified successfully' };
+  }
+
+  async googleSignIn(credential: string) {
+    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
+    if (!clientId) throw new BadRequestException('Google OAuth is not configured on this server');
+
+    const client = new OAuth2Client(clientId);
+    let email: string;
+    let googleId: string;
+    let name: string | undefined;
+
+    try {
+      const ticket = await client.verifyIdToken({ idToken: credential, audience: clientId });
+      const payload = ticket.getPayload();
+      if (!payload?.email) throw new Error('No email in token');
+      email = payload.email.trim().toLowerCase();
+      googleId = payload.sub;
+      name = payload.name;
+    } catch {
+      throw new UnauthorizedException('Google authentication failed. Please try again.');
+    }
+
+    let user = await this.prisma.user.findFirst({
+      where: { OR: [{ email }, { googleId }] },
+      select: USER_SELECT,
+    });
+
+    if (user) {
+      const needsUpdate: { googleId?: string; verified?: boolean } = {};
+      if (!(user as { googleId?: string | null }).googleId) needsUpdate.googleId = googleId;
+      if (!user.verified) needsUpdate.verified = true;
+      if (Object.keys(needsUpdate).length > 0) {
+        await this.prisma.user.update({ where: { id: user.id }, data: needsUpdate });
+        user = { ...user, ...needsUpdate } as typeof user;
+      }
+    } else {
+      const displayName = (name || email.split('@')[0]).trim();
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name: displayName,
+          googleId,
+          avatar: displayName.charAt(0).toUpperCase(),
+          verified: true,
+        },
+        select: USER_SELECT,
+      });
+    }
+
+    const token = await this.signToken(user);
+    this.logger.log(`[AUTH] Google sign-in: ${email}`);
+    return { user: this.sanitizeUser(user as AuthenticatedUser & { canEditEvents?: boolean }), token };
   }
 
   async bootstrapAdmin() {

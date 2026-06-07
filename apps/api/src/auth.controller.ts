@@ -8,6 +8,7 @@ import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import {
   ForgotPasswordDto,
+  GoogleSignInDto,
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
@@ -42,6 +43,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Login a user (accepts email, phone number, or @handle)' })
   async login(@Body() body: LoginDto) {
     return this.authService.login(body.identifier, body.password);
+  }
+
+  @Post('google')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Sign in or register with Google (ID token from Sign In With Google)' })
+  async googleSignIn(@Body() body: GoogleSignInDto) {
+    return this.authService.googleSignIn(body.credential);
   }
 
   @Post('validate')

@@ -32,6 +32,8 @@ export type ApiEnv = {
   ADMIN_SETUP_KEY?: string;
   // Unsplash
   UNSPLASH_ACCESS_KEY?: string;
+  // Google OAuth
+  GOOGLE_CLIENT_ID?: string;
 };
 
 const DEFAULT_ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001';
@@ -88,6 +90,7 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     PAYOUT_AUTO_APPROVE: config.PAYOUT_AUTO_APPROVE,
     ADMIN_SETUP_KEY: config.ADMIN_SETUP_KEY,
     UNSPLASH_ACCESS_KEY: config.UNSPLASH_ACCESS_KEY,
+    GOOGLE_CLIENT_ID: config.GOOGLE_CLIENT_ID,
   };
 }
 

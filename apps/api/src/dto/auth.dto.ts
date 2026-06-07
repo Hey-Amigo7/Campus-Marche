@@ -80,3 +80,10 @@ export class SendPhoneOtpDto {
   @IsNotEmpty()
   phone!: string;
 }
+
+export class GoogleSignInDto {
+  @ApiProperty({ description: 'Google ID token credential from Sign In With Google' })
+  @IsString()
+  @IsNotEmpty()
+  credential!: string;
+}
