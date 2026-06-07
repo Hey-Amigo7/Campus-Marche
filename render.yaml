@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: campus-marche-api
+    runtime: node
+    rootDir: apps/api
+    buildCommand: pnpm install && npx prisma migrate resolve --rolled-back 20260525232825_escrow_schema_sync || true && pnpm run db:migrate:deploy && pnpm run build
+    startCommand: node dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: API_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_CALLBACK_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: ARKESEL_API_KEY
+        sync: false
+      - key: SMS_SENDER_ID
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: ADMIN_SETUP_KEY
+        sync: false
