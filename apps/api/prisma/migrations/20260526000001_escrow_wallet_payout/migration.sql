@@ -93,6 +93,8 @@ CREATE TABLE "Wallet" (
 
 CREATE UNIQUE INDEX "Wallet_userId_key" ON "Wallet"("userId");
 
+ALTER TABLE "Wallet" ALTER COLUMN "updatedAt" DROP DEFAULT;
+
 ALTER TABLE "Wallet"
   ADD CONSTRAINT "Wallet_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "User"("id")
@@ -147,6 +149,8 @@ CREATE INDEX "Payout_sellerId_idx" ON "Payout"("sellerId");
 CREATE INDEX "Payout_orderId_idx"  ON "Payout"("orderId");
 CREATE INDEX "Payout_status_idx"   ON "Payout"("status");
 CREATE INDEX "Payout_createdAt_idx" ON "Payout"("createdAt");
+
+ALTER TABLE "Payout" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 ALTER TABLE "Payout"
   ADD CONSTRAINT "Payout_sellerId_fkey"
