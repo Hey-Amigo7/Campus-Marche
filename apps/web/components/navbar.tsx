@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogIn, ChevronDown, LogOut, User, ShoppingBag,
   Package, Settings, MessageCircle, Heart, Bell,
-  BarChart2, Menu, X, Palette, ShoppingCart, Store,
+  BarChart2, Menu, X, Palette, ShoppingCart, Store, Wallet,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -129,7 +129,10 @@ function UserDropdown({
     { icon: MessageCircle, label: "Messages",      href: "/messages"         },
     { icon: ShoppingBag,   label: "My Orders",     href: "/orders"           },
     ...(hasBusiness && sellerId
-      ? [{ icon: Store, label: "My Storefront", href: `/store/${sellerId}` }]
+      ? [
+          { icon: Store,  label: "My Storefront",    href: `/store/${sellerId}` },
+          { icon: Wallet, label: "Wallet & Payouts",  href: "/wallet"            },
+        ]
       : []),
   ];
 
@@ -447,7 +450,10 @@ export function Navbar() {
                         { icon: ShoppingCart,  label: "Cart",           href: "/cart"                                          },
                         { icon: Store,         label: "Sell",           href: "/sell"                                          },
                         ...(profile?.business && profile?.id
-                          ? [{ icon: Store, label: "My Storefront", href: `/store/${profile.id}` }]
+                          ? [
+                              { icon: Store,  label: "My Storefront",   href: `/store/${profile.id}` },
+                              { icon: Wallet, label: "Wallet & Payouts", href: "/wallet"              },
+                            ]
                           : []),
                         { icon: Bell,          label: "Notifications",  href: "/notifications"                                 },
                         { icon: Settings,      label: "Settings",       href: "/settings"                                      },
