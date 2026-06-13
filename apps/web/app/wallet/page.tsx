@@ -486,10 +486,12 @@ export default function WalletPage() {
                     {/* Amount */}
                     <div>
                       <label className="text-xs font-bold" style={{ color: "var(--on-surface)" }}>Amount</label>
-                      <div className="relative mt-1.5">
+                      <div
+                        className="input-shell mt-1.5 flex items-center overflow-hidden p-0"
+                      >
                         <span
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold"
-                          style={{ color: "var(--muted)" }}
+                          className="flex h-full shrink-0 items-center px-3 text-sm font-bold"
+                          style={{ color: "var(--muted)", borderRight: "1.5px solid var(--border)" }}
                         >
                           GH₵
                         </span>
@@ -502,7 +504,8 @@ export default function WalletPage() {
                           onChange={(e) => setAmount(e.target.value)}
                           placeholder="0.00"
                           required
-                          className="input-shell pl-10 text-sm"
+                          className="flex-1 bg-transparent px-3 py-2.5 text-sm outline-none"
+                          style={{ color: "var(--on-surface)" }}
                         />
                       </div>
                       <button
