@@ -125,11 +125,11 @@ export function useSavedStatus(productId: string | undefined) {
 }
 
 export function useWallet() {
-  return useSWR<Wallet | null>("wallet", api.getWallet, { fallbackData: null });
+  return useSWR<Wallet | null>("wallet", api.getWallet, { fallbackData: null, refreshInterval: 30000 });
 }
 
 export function usePayouts() {
-  return useSWR<Payout[]>("payouts", api.getPayouts, { fallbackData: [] });
+  return useSWR<Payout[]>("payouts", api.getPayouts, { fallbackData: [], refreshInterval: 30000 });
 }
 
 export function useSiteStats() {

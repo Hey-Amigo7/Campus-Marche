@@ -375,6 +375,11 @@ export class PaymentService {
       sellerId, 'escrow', '🎉 Payment incoming', 'The buyer confirmed delivery. Your payout is being processed.',
     ).catch(() => undefined);
 
+    this.chatGateway?.emitOrderUpdated(orderId, {
+      escrowStatus: EscrowStatus.RELEASE_PENDING,
+      paymentStatus: 'Paid',
+    });
+
     return { message: 'Delivery confirmed. Funds are being released to the seller.' };
   }
 

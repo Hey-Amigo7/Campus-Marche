@@ -1,135 +1,77 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { AdminAuthController, AdminController } from './admin.controller';
-import { AdminService } from './admin.service';
-import { AdminAuthGuard } from './auth/admin-auth.guard';
-import { EventsAuthGuard } from './auth/events-auth.guard';
-import { AppController } from './app.controller';
-import { HealthController } from './health.controller';
-import { AppService } from './app.service';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { BusinessController } from './business.controller';
-import { BusinessService } from './business.service';
-import { ChatGateway } from './chat.gateway';
-import { ContactController } from './contact.controller';
-import { ContactService } from './contact.service';
-import { EmailService } from './email.service';
 import { validateEnv } from './config/env.validation';
-import { EventController } from './event.controller';
-import { EventService } from './event.service';
-import { MessageController } from './message.controller';
-import { MessageService } from './message.service';
-import { NotificationController } from './notification.controller';
-import { NotificationService } from './notification.service';
-import { ReportController } from './report.controller';
-import { ReportService } from './report.service';
-import { RolesGuard } from './auth/roles.guard';
-import { ReviewController } from './review.controller';
-import { UploadController } from './upload.controller';
-import { ReviewService } from './review.service';
-import { SavedItemsController } from './saved-items.controller';
-import { SavedItemsService } from './saved-items.service';
-import { OrderController } from './order.controller';
-import { OrderService } from './order.service';
-import { PaymentController } from './payment.controller';
-import { PaymentService } from './payment.service';
-import { PayoutController } from './payout.controller';
-import { PayoutService } from './payout.service';
-import { WalletController } from './wallet.controller';
-import { WalletService } from './wallet.service';
-import { PrismaService } from './prisma.service';
-import { ProductController } from './product.controller';
-import { ProductService } from './product.service';
-import { SellerController } from './seller.controller';
-import { SellerService } from './seller.service';
-import { SmsService } from './sms.service';
-import { SubscriptionController } from './subscription.controller';
-import { SubscriptionService } from './subscription.service';
-import { UserController } from './user.controller';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { HealthController } from './health.controller';
+// ── Global infrastructure ─────────────────────────────────────────────────────
+import { PrismaModule } from './prisma.module';
+import { AuthModule } from './auth.module';         // JWT + guards + EmailService + SmsService
+import { ChatModule } from './chat.module';          // ChatGateway (WebSocket)
+import { NotificationModule } from './notification.module';
+// ── Feature modules ───────────────────────────────────────────────────────────
+import { AdminModule } from './admin.module';
+import { BusinessModule } from './business.module';
+import { ContactModule } from './contact.module';
+import { EventModule } from './event.module';
+import { MessageModule } from './message.module';
+import { OrderModule } from './order.module';
+import { PaymentModule } from './payment.module';   // imports WalletModule + PayoutModule
+import { PayoutModule } from './payout.module';     // imports WalletModule
+import { ProductModule } from './product.module';   // imports AdminModule + SubscriptionModule
+import { ReportModule } from './report.module';
+import { ReviewModule } from './review.module';
+import { SavedItemsModule } from './saved-items.module';
+import { SellerModule } from './seller.module';
+import { SubscriptionModule } from './subscription.module';
+import { UploadModule } from './upload.module';
+import { UserModule } from './user.module';
+import { WalletModule } from './wallet.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validate: validateEnv,
-    }),
+    // ── Core configuration ───────────────────────────────────────────────────
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
         {
-          ttl: config.getOrThrow<number>('THROTTLE_TTL'),
+          ttl:   config.getOrThrow<number>('THROTTLE_TTL'),
           limit: config.getOrThrow<number>('THROTTLE_LIMIT'),
         },
       ],
     }),
-    JwtModule.registerAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.getOrThrow<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: config.getOrThrow<string>('JWT_EXPIRES_IN') as never,
-        },
-      }),
-    }),
+    // ── Global singletons (available in every module without explicit import) ─
+    PrismaModule,
+    AuthModule,
+    ChatModule,
+    NotificationModule,
+    // ── Feature modules ──────────────────────────────────────────────────────
+    AdminModule,
+    BusinessModule,
+    ContactModule,
+    EventModule,
+    MessageModule,
+    OrderModule,
+    PaymentModule,
+    PayoutModule,
+    ProductModule,
+    ReportModule,
+    ReviewModule,
+    SavedItemsModule,
+    SellerModule,
+    SubscriptionModule,
+    UploadModule,
+    UserModule,
+    WalletModule,
   ],
-  controllers: [
-    AdminAuthController,
-    AdminController,
-    AppController,
-    HealthController,
-    AuthController,
-    BusinessController,
-    ContactController,
-    EventController,
-    MessageController,
-    NotificationController,
-    OrderController,
-    PaymentController,
-    PayoutController,
-    ProductController,
-    WalletController,
-    ReportController,
-    ReviewController,
-    SavedItemsController,
-    SellerController,
-    SubscriptionController,
-    UploadController,
-    UserController,
-  ],
+  controllers: [AppController, HealthController],
   providers: [
-    // Apply ThrottlerGuard globally — every endpoint inherits the default limit.
-    // Individual endpoints can override with @Throttle() or opt-out with @SkipThrottle().
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    AdminAuthGuard,
-    EventsAuthGuard,
-    AdminService,
     AppService,
-    AuthService,
-    BusinessService,
-    ChatGateway,
-    ContactService,
-    EmailService,
-    EventService,
-    MessageService,
-    NotificationService,
-    OrderService,
-    PaymentService,
-    PayoutService,
-    PrismaService,
-    WalletService,
-    ProductService,
     Reflector,
-    ReportService,
-    ReviewService,
-    RolesGuard,
-    SavedItemsService,
-    SellerService,
-    SmsService,
-    SubscriptionService,
   ],
 })
 export class AppModule {}

@@ -1014,7 +1014,7 @@ function PayoutsTab() {
   const { data: payouts, isLoading, mutate } = useSWR<Payout[]>(
     "admin-all-payouts",
     api.admin.getAllPayouts,
-    { fallbackData: [] },
+    { fallbackData: [], refreshInterval: 30_000 },
   );
   const [acting, setActing] = useState<string | null>(null);
 
@@ -1057,20 +1057,24 @@ function PayoutsTab() {
           <div key={payout.id} className="rounded-2xl p-4" style={CARD}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-black text-slate-800">{formatCurrency(payout.amount)}</p>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${style.bg} ${style.text}`}>
                     {PAYOUT_STATUS_LABELS[payout.status] ?? payout.status}
                   </span>
+                  {payout.seller && (
+                    <span className="text-xs font-semibold text-slate-600">{payout.seller.name}</span>
+                  )}
                 </div>
                 <p className="mt-0.5 text-xs font-semibold text-slate-400">
                   {PAYOUT_METHOD_LABELS[payout.payoutMethod] ?? payout.payoutMethod}
+                  {payout.seller?.email ? ` · ${payout.seller.email}` : ""}
                   {payout.orderId ? ` · Order ${payout.orderId.slice(0, 8).toUpperCase()}` : ""}
                   {" · "}{formatRelativeDate(payout.createdAt)}
                 </p>
-                {(payout as Payout & { failureReason?: string }).failureReason && (
+                {payout.failureReason && (
                   <p className="mt-1 text-xs font-semibold text-red-500">
-                    ✗ {(payout as Payout & { failureReason?: string }).failureReason}
+                    ✗ {payout.failureReason}
                   </p>
                 )}
               </div>
@@ -1201,28 +1205,28 @@ function Pagination({ skip, take, total, onPage }: { skip: number; take: number;
 
 // ─── Sidebar nav config ───────────────────────────────────────────────────────
 
-const NAV_SECTIONS = [
+const buildNavSections = (pendingPayouts: number) => [
   {
     label: "Dashboard",
     items: [
-      { tab: "overview" as Tab, icon: <LayoutDashboard className="h-4 w-4" />, label: "Overview" },
+      { tab: "overview" as Tab, icon: <LayoutDashboard className="h-4 w-4" />, label: "Overview", badge: 0 },
     ],
   },
   {
     label: "Platform",
     items: [
-      { tab: "users" as Tab,     icon: <Users className="h-4 w-4" />,           label: "Users" },
-      { tab: "listings" as Tab,  icon: <Package className="h-4 w-4" />,          label: "Listings" },
-      { tab: "reports" as Tab,   icon: <AlertTriangle className="h-4 w-4" />,    label: "Reports" },
-      { tab: "payouts" as Tab,   icon: <ArrowDownCircle className="h-4 w-4" />,  label: "Payouts" },
+      { tab: "users" as Tab,     icon: <Users className="h-4 w-4" />,           label: "Users",    badge: 0 },
+      { tab: "listings" as Tab,  icon: <Package className="h-4 w-4" />,          label: "Listings", badge: 0 },
+      { tab: "reports" as Tab,   icon: <AlertTriangle className="h-4 w-4" />,    label: "Reports",  badge: 0 },
+      { tab: "payouts" as Tab,   icon: <ArrowDownCircle className="h-4 w-4" />,  label: "Payouts",  badge: pendingPayouts },
     ],
   },
   {
     label: "Content",
     items: [
-      { tab: "events" as Tab,    icon: <CalendarDays className="h-4 w-4" />,     label: "Events" },
-      { tab: "messages" as Tab,  icon: <Inbox className="h-4 w-4" />,            label: "Messages" },
-      { tab: "broadcast" as Tab, icon: <Megaphone className="h-4 w-4" />,        label: "Broadcast" },
+      { tab: "events" as Tab,    icon: <CalendarDays className="h-4 w-4" />,     label: "Events",    badge: 0 },
+      { tab: "messages" as Tab,  icon: <Inbox className="h-4 w-4" />,            label: "Messages",  badge: 0 },
+      { tab: "broadcast" as Tab, icon: <Megaphone className="h-4 w-4" />,        label: "Broadcast", badge: 0 },
     ],
   },
 ];
@@ -1244,6 +1248,14 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
+
+  // Live pending payout count for sidebar badge
+  const { data: allPayouts } = useSWR<Payout[]>(
+    "admin-all-payouts",
+    api.admin.getAllPayouts,
+    { fallbackData: [], refreshInterval: 30_000 },
+  );
+  const pendingPayoutCount = (allPayouts ?? []).filter((p) => p.status === "PENDING").length;
 
   function handleLogout() {
     clearAuthToken();
@@ -1284,13 +1296,13 @@ export default function AdminPage() {
 
           {/* Nav */}
           <nav className="flex-1 overflow-y-auto px-3 py-4">
-            {NAV_SECTIONS.map((section) => (
+            {buildNavSections(pendingPayoutCount).map((section) => (
               <div key={section.label} className="mb-5">
                 <p className="mb-1.5 px-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
                   {section.label}
                 </p>
                 <div className="space-y-0.5">
-                  {section.items.map(({ tab: t, icon, label }) => (
+                  {section.items.map(({ tab: t, icon, label, badge }) => (
                     <button
                       key={t}
                       onClick={() => { setTab(t); setSidebarOpen(false); }}
@@ -1308,7 +1320,12 @@ export default function AdminPage() {
                         {icon}
                       </span>
                       {label}
-                      {tab === t && (
+                      {badge > 0 && (
+                        <span className="ml-auto flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-black text-white">
+                          {badge}
+                        </span>
+                      )}
+                      {tab === t && badge === 0 && (
                         <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
                       )}
                     </button>

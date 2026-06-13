@@ -7,8 +7,9 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PayoutMethod, PayoutStatus } from '@prisma/client';
+import { PayoutMethod, PayoutStatus, UserRole } from '@prisma/client';
 import { MOMO_BANK_CODES } from './commission.engine';
+import type { ChatGateway } from './chat.gateway';
 import type { NotificationService } from './notification.service';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
@@ -34,6 +35,7 @@ export class PayoutService {
     private config: ConfigService,
     private walletService: WalletService,
     @Optional() private notificationService?: NotificationService,
+    @Optional() private chatGateway?: ChatGateway,
   ) {}
 
   private getSecret() {
@@ -82,6 +84,13 @@ export class PayoutService {
           data: { failureReason: msg },
         }).catch(() => null);
       }
+    } else {
+      // Manual approval mode — notify all admins so they know to act
+      await this.notifyAdmins(
+        'payout',
+        '⏳ Payout request pending',
+        `A seller requested a payout of GHS ${amount.toFixed(2)} (${payoutMethod.replace(/_/g, ' ')}). Please review in the admin panel.`,
+      );
     }
 
     return this.prisma.payout.findUnique({ where: { id: payout.id } });
@@ -117,6 +126,13 @@ export class PayoutService {
           data: { failureReason: err instanceof Error ? err.message : String(err) },
         }).catch(() => null);
       }
+    } else {
+      // Manual approval mode — notify all admins of the pending escrow payout
+      await this.notifyAdmins(
+        'payout',
+        '⏳ Escrow payout pending approval',
+        `Buyer confirmed delivery. Seller payout of GHS ${amount.toFixed(2)} is awaiting your approval in the admin panel.`,
+      );
     }
 
     return payout;
@@ -242,6 +258,14 @@ export class PayoutService {
       }
     });
 
+    // Push real-time update so the order detail page ticks the final step green
+    if (payout.orderId) {
+      this.chatGateway?.emitOrderUpdated(payout.orderId, {
+        escrowStatus: 'RELEASED',
+        paymentStatus: 'Paid',
+      });
+    }
+
     this.notificationService?.notify(
       payout.sellerId,
       'payout',
@@ -346,6 +370,21 @@ export class PayoutService {
     });
 
     return { message: 'Payout cancelled and balance restored.' };
+  }
+
+  // ─── Private: broadcast to all admin users ────────────────────────────────
+
+  private async notifyAdmins(type: string, title: string, body: string) {
+    if (!this.notificationService) return;
+    try {
+      const admins = await this.prisma.user.findMany({
+        where: { role: UserRole.ADMIN },
+        select: { id: true },
+      });
+      await Promise.all(admins.map((a) => this.notificationService!.notify(a.id, type, title, body)));
+    } catch (err) {
+      this.logger.warn(`Failed to notify admins: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   // ─── Private: get or create Paystack transfer recipient ───────────────────
