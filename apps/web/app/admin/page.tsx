@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import NumberFlow from "@number-flow/react";
 import useSWR, { mutate as globalMutate } from "swr";
 import Link from "next/link";
@@ -121,9 +121,13 @@ const ROW_HOVER = "transition-colors hover:bg-slate-50";
 
 function AdminGate({ children }: { children: React.ReactNode }) {
   const { data: profile, isLoading } = useProfile();
-  const envAdmin = typeof window !== "undefined" ? isEnvAdminToken() : false;
+  const [mounted, setMounted] = useState(false);
 
-  if (!envAdmin && isLoading) {
+  useEffect(() => { setMounted(true); }, []);
+
+  const envAdmin = mounted ? isEnvAdminToken() : false;
+
+  if (!mounted || (!envAdmin && isLoading)) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
