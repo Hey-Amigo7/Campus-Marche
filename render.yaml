@@ -3,7 +3,7 @@ services:
     name: campus-marche-api
     runtime: node
     rootDir: apps/api
-    buildCommand: pnpm install && npx prisma migrate resolve --rolled-back 20260525232825_escrow_schema_sync || true && pnpm run db:migrate:deploy && pnpm run build
+    buildCommand: pnpm install && npx prisma migrate resolve --rolled-back 20260525232825_escrow_schema_sync || true && npx prisma migrate resolve --rolled-back 20260526000001_escrow_wallet_payout || true && pnpm run db:migrate:deploy && pnpm run build
     startCommand: node dist/main.js
     envVars:
       - key: NODE_ENV
