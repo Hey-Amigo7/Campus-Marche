@@ -76,7 +76,8 @@ export function OrderTimeline({ status, escrowStatus }: { status: string; escrow
     );
   }
 
-  const current = stepIndex(escrow);
+  // When fully released, treat "current" as past the last step so every step renders green.
+  const current = escrow === 'RELEASED' ? STEPS.length : stepIndex(escrow);
 
   return (
     <div className="space-y-0">

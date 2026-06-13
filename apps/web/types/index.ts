@@ -241,6 +241,7 @@ export type Payout = {
   approvedAt?: string | null;
   completedAt?: string | null;
   createdAt: string;
+  seller?: { id: string; name: string; email: string } | null;
 };
 
 export type PaymentTransaction = {
