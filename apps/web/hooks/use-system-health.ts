@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 type HealthStatus = "ok" | "degraded" | "down" | "unknown";
 
 const POLL_INTERVAL_MS    = 30_000;  // check every 30 s
-const RECOVERY_DELAY_MS   = 5_000;   // confirm recovery after 5 s second clean check
 
 export function useSystemHealth() {
   const [status, setStatus]       = useState<HealthStatus>("unknown");

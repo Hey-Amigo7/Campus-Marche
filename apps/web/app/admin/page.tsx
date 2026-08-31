@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import NumberFlow from "@number-flow/react";
-import useSWR, { mutate as globalMutate } from "swr";
+import useSWR from "swr";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -868,6 +868,7 @@ function EventsTab() {
           events.map((ev) => (
             <div key={ev.id} className="flex items-start gap-4 rounded-2xl p-4" style={CARD}>
               {ev.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={ev.imageUrl} alt={ev.title} className="h-14 w-20 shrink-0 rounded-xl object-cover" />
               )}
               <div className="flex-1 min-w-0">

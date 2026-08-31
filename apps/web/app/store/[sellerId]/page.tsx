@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Edit3, Loader2, MapPin, MessageCircle, Save, Store, X } from "lucide-react";
 import { notFound } from "next/navigation";
 import { use, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
-import { formatCurrency } from "@/lib/format";
 import { AnalyticsCards } from "@/components/premium";
 import { ProductGrid } from "@/components/product-card";
 import { EmptyState, Rating, SectionHeading, SellerBadge } from "@/components/ui";

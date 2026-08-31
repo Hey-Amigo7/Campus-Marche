@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
+import { PrismaService } from './prisma.service';
 
 type JwtPayload = { sub: string; email: string };
 
@@ -24,7 +25,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(ChatGateway.name);
 
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private prisma: PrismaService,
+  ) {}
 
   async handleConnection(socket: Socket) {
     try {
@@ -49,6 +53,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('join:conversation')
   async handleJoinConversation(@ConnectedSocket() socket: Socket, @MessageBody() conversationId: string) {
+    const userId = socket.data.userId as string | undefined;
+    if (!userId || !conversationId) return { ok: false, error: 'Unauthorized' };
+
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { participantAId: true, participantBId: true },
+    });
+
+    if (!conv || (conv.participantAId !== userId && conv.participantBId !== userId)) {
+      return { ok: false, error: 'Forbidden' };
+    }
+
     await socket.join(`conv:${conversationId}`);
     return { ok: true };
   }
@@ -61,6 +77,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('join:order')
   async handleJoinOrder(@ConnectedSocket() socket: Socket, @MessageBody() orderId: string) {
+    const userId = socket.data.userId as string | undefined;
+    if (!userId || !orderId) return { ok: false, error: 'Unauthorized' };
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { buyerId: true, sellerId: true, deliveryPersonId: true, product: { select: { sellerId: true } } },
+    });
+
+    const isAllowed = Boolean(
+      order &&
+        (order.buyerId === userId ||
+          order.sellerId === userId ||
+          order.product?.sellerId === userId ||
+          order.deliveryPersonId === userId),
+    );
+
+    if (!isAllowed) {
+      return { ok: false, error: 'Forbidden' };
+    }
+
     await socket.join(`order:${orderId}`);
     return { ok: true };
   }

@@ -8,7 +8,6 @@ import { GoogleLogin } from "@react-oauth/google";
 import { mutate } from "swr";
 import { api } from "@/lib/api";
 import { setAuthToken } from "@/lib/auth";
-import { AnimatedSparkles } from "@/components/animated-icons";
 
 const GOOGLE_ENABLED = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
@@ -49,17 +48,18 @@ type GoogleSuccessPayload = { token: string; user: { id: string; email: string; 
 
 function GoogleSignInButton({
   mode,
-  disabled,
+  disabled = false,
   onSuccess,
 }: {
   mode: "signin" | "signup";
-  disabled: boolean;
+  disabled?: boolean;
   onSuccess: (payload: GoogleSuccessPayload) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
   async function handleCredential(credential: string) {
+    if (disabled) return;
     setLoading(true);
     setError(null);
     try {

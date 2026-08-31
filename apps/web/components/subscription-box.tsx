@@ -50,7 +50,7 @@ interface SubscriptionBoxProps {
 }
 
 export function SubscriptionBox({ compact = false }: SubscriptionBoxProps) {
-  const { success, error } = useToast();
+  const { error } = useToast();
   const [loading, setLoading] = useState<string | null>(null);
 
   async function handleUpgrade(plan: "daily" | "pro" | "featured") {

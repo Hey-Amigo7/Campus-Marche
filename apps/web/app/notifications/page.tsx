@@ -110,7 +110,7 @@ function NotificationsContent() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
   const { mutate } = useSWRConfig();
 
-  async function markRead(id: string) {
+  async function markRead() {
     // Only real DB notifications can be marked read via API (synthetic ones are just UI)
     await api.markNotificationsRead();
     await mutate("notifications");
@@ -236,7 +236,7 @@ function NotificationsContent() {
             ) : (
               filtered.map((notif) =>
                 notif.href ? (
-                  <Link key={notif.id} href={notif.href} onClick={() => markRead(notif.id)}>
+                  <Link key={notif.id} href={notif.href} onClick={() => markRead()}>
                     <NotifItem notif={notif} onRead={markRead} />
                   </Link>
                 ) : (

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { MapPin, Package, Navigation, Phone, ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
 import useSWR from "swr";
@@ -10,7 +10,6 @@ import { useSocket } from "@/hooks/use-socket";
 import { api } from "@/lib/api";
 import { formatRelativeDate } from "@/lib/format";
 import type { DeliveryCoords } from "@/components/delivery-map";
-import type { OrderTrackingResponse } from "@/types";
 
 const DeliveryMap = dynamic(
   () => import("@/components/delivery-map").then((m) => m.DeliveryMap),

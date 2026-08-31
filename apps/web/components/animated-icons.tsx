@@ -4,7 +4,6 @@ import {
   motion,
   useAnimation,
   AnimatePresence,
-  type Variants,
   type MotionProps,
 } from "framer-motion";
 import {
@@ -72,7 +71,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef } from "react";
 
 // ─── Spring configs ───────────────────────────────────────────────────────────
 const snap    = { type: "spring", stiffness: 500, damping: 28 } as const;
