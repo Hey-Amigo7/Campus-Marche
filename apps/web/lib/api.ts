@@ -262,7 +262,7 @@ export const api = {
       ),
   },
 
-  getOrders: () => request<Order[]>("/orders", []),
+  getOrders: () => request<Order[]>("/orders", [], { strict: true }),
 
   getOrder: (id: string) => request<Order | null>(`/orders/${id}`, null, { strict: true }),
 

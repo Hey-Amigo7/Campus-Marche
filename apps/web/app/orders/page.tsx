@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { OrderCard } from "@/components/order-card";
 import { AuthGate } from "@/components/auth-gate";
 import { EmptyState, LoadingSkeleton, SectionHeading } from "@/components/ui";
@@ -10,7 +11,7 @@ const tabs = ["To Buy", "To Sell", "Completed"] as const;
 
 export default function OrdersPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]>("To Buy");
-  const { data: orders = [], isLoading, mutate } = useOrders();
+  const { data: orders = [], isLoading, error, mutate } = useOrders();
 
   const visible = useMemo(() => {
     if (tab === "Completed") return orders.filter((order) => order.status === "Completed" || order.status === "Cancelled");
@@ -32,6 +33,21 @@ export default function OrdersPage() {
       <div className="space-y-4">
         {isLoading ? (
           <LoadingSkeleton />
+        ) : error ? (
+          <div className="flex flex-col items-center gap-4 rounded-2xl py-14 text-center"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
+              Couldn&apos;t load your orders. The server may be starting up.
+            </p>
+            <button
+              onClick={() => mutate()}
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-black text-white transition-all hover:-translate-y-px active:scale-95"
+              style={{ background: "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)" }}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Try again
+            </button>
+          </div>
         ) : visible.length ? (
           visible.map((order) => <OrderCard key={order.id} order={order} onStatusChange={mutate} />)
         ) : (
