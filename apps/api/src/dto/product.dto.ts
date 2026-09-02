@@ -46,7 +46,7 @@ export class CreateProductDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl({ require_protocol: true })
+  @IsUrl({ require_protocol: true, require_tld: false })
   imageUrl?: string;
 
   @ApiPropertyOptional({ type: [String] })
@@ -121,7 +121,7 @@ export class UpdateProductDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl({ require_protocol: true })
+  @IsUrl({ require_protocol: true, require_tld: false })
   imageUrl?: string;
 
   @ApiPropertyOptional({ type: [String] })

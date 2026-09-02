@@ -49,7 +49,10 @@ export class UploadController {
     const url = config.get<string>('SUPABASE_URL');
     const key = config.get<string>('SUPABASE_SERVICE_ROLE_KEY');
     this.supabase = url && key ? createClient(url, key) : null;
-    if (!this.supabase) {
+    const isProd = config.get<string>('NODE_ENV') === 'production';
+    if (!this.supabase && isProd) {
+      this.logger.error('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set in production — image uploads will fail');
+    } else if (!this.supabase) {
       this.logger.warn('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — falling back to local disk storage');
     }
   }
@@ -109,6 +112,8 @@ export class UploadController {
     try {
       if (this.supabase) {
         url = await this.uploadToSupabase('product-images', filename, file.buffer, file.mimetype);
+      } else if (this.config.get<string>('NODE_ENV') === 'production') {
+        throw new Error('Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Render.');
       } else {
         url = this.saveLocally(file.buffer, filename);
       }
@@ -148,6 +153,8 @@ export class UploadController {
     try {
       if (this.supabase) {
         url = await this.uploadToSupabase('message-media', filename, file.buffer, file.mimetype);
+      } else if (this.config.get<string>('NODE_ENV') === 'production') {
+        throw new Error('Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Render.');
       } else {
         url = this.saveLocally(file.buffer, filename, 'messages');
       }
