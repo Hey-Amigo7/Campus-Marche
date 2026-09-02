@@ -52,7 +52,10 @@ async function request<T>(path: string, fallback: T, init: RequestOptions = {}):
       ...requestInit.headers,
     },
     credentials: "include",
-    signal: requestInit.signal ?? AbortSignal.timeout(8000),
+    // Only enforce a timeout during SSR/SSG builds (server-side). On the client
+    // let SWR + the browser manage retries; Render free tier cold starts can take
+    // 30-60 s which would silently abort client-side fetches with a short limit.
+    signal: requestInit.signal ?? (typeof window === "undefined" ? AbortSignal.timeout(8000) : undefined),
   };
 
   const isGetRequest = !requestInit.method || requestInit.method.toUpperCase() === "GET";
@@ -155,11 +158,11 @@ export const api = {
     if (opts?.skip)        params.set("skip",     String(opts.skip));
     if (opts?.take)        params.set("take",     String(opts.take));
     const qs = params.toString();
-    return request<PaginatedProducts>(`/products${qs ? `?${qs}` : ""}`, EMPTY_PAGE, { revalidate: 60, signal: AbortSignal.timeout(25000) });
+    return request<PaginatedProducts>(`/products${qs ? `?${qs}` : ""}`, EMPTY_PAGE, { revalidate: 60 });
   },
 
   getProduct: (id: string) =>
-    request<Product | null>(`/products/${id}`, null, { revalidate: 60, strict: true, signal: AbortSignal.timeout(25000) }),
+    request<Product | null>(`/products/${id}`, null, { revalidate: 60, strict: true }),
 
   recordView: (productId: string, viewerKey: string) =>
     request<{ ok: boolean }>(
@@ -176,7 +179,7 @@ export const api = {
   },
 
   getCategories: () =>
-    request<Category[]>("/products/categories", [], { revalidate: 300, signal: AbortSignal.timeout(25000) }),
+    request<Category[]>("/products/categories", [], { revalidate: 300 }),
 
   createProduct: (payload: Partial<Product>) => {
     if (!hasAuthToken()) return Promise.reject(new Error("Authentication required"));

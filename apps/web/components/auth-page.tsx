@@ -76,15 +76,15 @@ function GoogleSignInButton({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-px" style={{ background: "#E4E4E7" }} />
-        <span className="text-xs" style={{ color: "#A1A1AA" }}>or continue with</span>
-        <div className="flex-1 h-px" style={{ background: "#E4E4E7" }} />
+        <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+        <span className="text-xs" style={{ color: "var(--subtle)" }}>or continue with</span>
+        <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
       </div>
 
       <div className="flex justify-center" style={{ minHeight: "44px" }}>
         {loading ? (
           <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-semibold w-full justify-center"
-            style={{ background: "#F4F4F5", border: "1px solid #E4E4E7", color: "#71717A" }}>
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--muted)" }}>
             <GoogleIcon />
             Connecting to Google…
           </div>
@@ -155,40 +155,40 @@ function SignInForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <motion.div key="signin" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.32, ease }}>
-      <h2 className="text-xl font-black text-[#09090B]">Sign In</h2>
-      <p className="mt-1 text-sm" style={{ color: "#71717A" }}>
+      <h2 className="text-xl font-black" style={{ color: "var(--on-surface)" }}>Sign In</h2>
+      <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
         Enter your credentials below to access your account
       </p>
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
         <div>
-          <label className="block text-xs font-bold mb-1.5" style={{ color: "#3f3f46" }}>
+          <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--on-surface)" }}>
             Email, phone, or @handle
           </label>
           <input
             type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
             placeholder="you@htu.edu.gh · 0244… · @ama" autoComplete="username" required
-            className="w-full rounded-xl px-4 py-3 text-sm text-[#09090B] outline-none transition-all placeholder:text-[#A1A1AA]"
-            style={{ background: "#FAFAF9", border: "1px solid #E4E4E7", caretColor: "#16A34A" }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "#16A34A"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.10)"; }}
-            onBlur={(e)  => { e.currentTarget.style.borderColor = "#E4E4E7"; e.currentTarget.style.boxShadow = "none"; }}
+            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all"
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--on-surface)", caretColor: "var(--green)" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--border-focus)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.10)"; }}
+            onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}
           />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-bold" style={{ color: "#3f3f46" }}>Password</label>
-            <Link href="/forgot-password" className="text-xs font-semibold transition-colors hover:text-[#14532D]" style={{ color: "#16A34A" }}>
+            <label className="text-xs font-bold" style={{ color: "var(--on-surface)" }}>Password</label>
+            <Link href="/forgot-password" className="text-xs font-semibold transition-colors" style={{ color: "var(--green)" }}>
               Forgot password?
             </Link>
           </div>
           <input
             type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••" autoComplete="current-password" required
-            className="w-full rounded-xl px-4 py-3 text-sm text-[#09090B] outline-none transition-all placeholder:text-[#A1A1AA]"
-            style={{ background: "#FAFAF9", border: "1px solid #E4E4E7", caretColor: "#16A34A" }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "#16A34A"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.10)"; }}
-            onBlur={(e)  => { e.currentTarget.style.borderColor = "#E4E4E7"; e.currentTarget.style.boxShadow = "none"; }}
+            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all"
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--on-surface)", caretColor: "var(--green)" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--border-focus)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.10)"; }}
+            onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}
           />
         </div>
 
@@ -217,9 +217,9 @@ function SignInForm({ onSwitch }: { onSwitch: () => void }) {
         </div>
       )}
 
-      <p className="mt-5 text-center text-xs" style={{ color: "#71717A" }}>
+      <p className="mt-5 text-center text-xs" style={{ color: "var(--muted)" }}>
         Don&apos;t have an account?{" "}
-        <button onClick={onSwitch} className="font-bold transition-colors hover:text-[#14532D]" style={{ color: "#16A34A" }}>
+        <button onClick={onSwitch} className="font-bold transition-colors" style={{ color: "var(--green)" }}>
           Create one free
         </button>
       </p>
@@ -277,8 +277,8 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
     }
   }
 
-  const inputClass = "w-full rounded-xl px-4 py-3 text-sm text-[#09090B] outline-none transition-all placeholder:text-[#A1A1AA]";
-  const inputStyle = { background: "#FAFAF9", border: "1px solid #E4E4E7", caretColor: "#16A34A" };
+  const inputClass = "w-full rounded-xl px-4 py-3 text-sm outline-none transition-all";
+  const inputStyle = { background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--on-surface)", caretColor: "var(--green)" };
   function onFocusInput(e: React.FocusEvent<HTMLInputElement>) {
     e.currentTarget.style.borderColor = "#16A34A";
     e.currentTarget.style.boxShadow   = "0 0 0 3px rgba(22,163,74,0.10)";
@@ -290,15 +290,15 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <motion.div key="signup" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.32, ease }}>
-      <h2 className="text-xl font-black text-[#09090B]">Create account</h2>
-      <p className="mt-1 text-sm" style={{ color: "#71717A" }}>
+      <h2 className="text-xl font-black" style={{ color: "var(--on-surface)" }}>Create account</h2>
+      <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
         Join thousands of HTU students on the marketplace
       </p>
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
         {/* Full name */}
         <div>
-          <label className="block text-xs font-bold mb-1.5" style={{ color: "#3f3f46" }}>Full name</label>
+          <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--on-surface)" }}>Full name</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe"
             autoComplete="name" required
             className={inputClass} style={inputStyle}
@@ -308,7 +308,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
 
         {/* Email */}
         <div>
-          <label className="block text-xs font-bold mb-1.5" style={{ color: "#3f3f46" }}>Campus email</label>
+          <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--on-surface)" }}>Campus email</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@htu.edu.gh"
             autoComplete="email" required
             className={inputClass} style={inputStyle}
@@ -318,7 +318,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
 
         {/* Password */}
         <div>
-          <label className="block text-xs font-bold mb-1.5" style={{ color: "#3f3f46" }}>Create password</label>
+          <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--on-surface)" }}>Create password</label>
           <div className="relative">
             <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
               placeholder="Create a strong password" autoComplete="new-password" required
@@ -327,7 +327,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
             />
             <button type="button" onClick={() => setShowPw(!showPw)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold"
-              style={{ color: "#71717A" }}>
+              style={{ color: "var(--muted)" }}>
               {showPw ? "Hide" : "Show"}
             </button>
           </div>
@@ -363,18 +363,19 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
 
         {/* Confirm password */}
         <div>
-          <label className="block text-xs font-bold mb-1.5" style={{ color: "#3f3f46" }}>Confirm password</label>
+          <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--on-surface)" }}>Confirm password</label>
           <div className="relative">
             <input type={showCf ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)}
               placeholder="Re-enter your password" autoComplete="new-password" required
               className={`${inputClass} pr-11`}
               style={{
-                background: "#FAFAF9",
-                border: `1px solid ${confirm.length > 0 ? (passwordsMatch ? "rgba(22,163,74,0.60)" : "rgba(239,68,68,0.50)") : "#E4E4E7"}`,
-                caretColor: "#16A34A",
+                background: "var(--surface-raised)",
+                border: `1px solid ${confirm.length > 0 ? (passwordsMatch ? "rgba(22,163,74,0.60)" : "rgba(239,68,68,0.50)") : "var(--border)"}`,
+                color: "var(--on-surface)",
+                caretColor: "var(--green)",
               }}
-              onFocus={(e) => { if (confirm.length === 0) { e.currentTarget.style.borderColor = "#16A34A"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.10)"; } }}
-              onBlur={(e)  => { if (confirm.length === 0) { e.currentTarget.style.borderColor = "#E4E4E7"; e.currentTarget.style.boxShadow = "none"; } }}
+              onFocus={(e) => { if (confirm.length === 0) { e.currentTarget.style.borderColor = "var(--border-focus)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.10)"; } }}
+              onBlur={(e)  => { if (confirm.length === 0) { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; } }}
             />
             <button type="button" onClick={() => setShowCf(!showCf)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold"
@@ -423,9 +424,9 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
         </div>
       )}
 
-      <p className="mt-5 text-center text-xs" style={{ color: "#71717A" }}>
+      <p className="mt-5 text-center text-xs" style={{ color: "var(--muted)" }}>
         Already have an account?{" "}
-        <button onClick={onSwitch} className="font-bold transition-colors hover:text-[#14532D]" style={{ color: "#16A34A" }}>
+        <button onClick={onSwitch} className="font-bold transition-colors" style={{ color: "var(--green)" }}>
           Sign in
         </button>
       </p>
@@ -447,9 +448,9 @@ export function AuthPage({ defaultTab }: { defaultTab: "signin" | "signup" }) {
   return (
     <div
       className="relative flex min-h-[calc(100vh-64px)] items-center justify-center overflow-hidden px-4 py-12"
-      style={{ background: "linear-gradient(145deg, #FAFAF9 0%, #F0FDF4 50%, #FAFAF9 100%)" }}
+      style={{ background: "linear-gradient(145deg, var(--background) 0%, var(--green-surface) 50%, var(--background) 100%)" }}
     >
-      {/* Ambient orbs — subtle on light bg */}
+      {/* Ambient orbs */}
       <div
         className="pointer-events-none absolute -left-32 -top-32 h-[560px] w-[560px] rounded-full"
         style={{ background: "radial-gradient(circle, rgba(22,163,74,0.10) 0%, transparent 65%)", filter: "blur(48px)" }}
@@ -479,7 +480,7 @@ export function AuthPage({ defaultTab }: { defaultTab: "signin" | "signup" }) {
             {(["signin", "signup"] as const).map((t) => (
               <button key={t} onClick={() => switchTo(t)}
                 className="relative rounded-full px-5 py-2 text-sm font-semibold transition-colors z-10"
-                style={{ color: tab === t ? "#09090B" : "#71717A", fontWeight: tab === t ? 800 : 600 }}>
+                style={{ color: tab === t ? "var(--on-surface)" : "var(--muted)", fontWeight: tab === t ? 800 : 600 }}>
                 {tab === t && (
                   <motion.span layoutId="auth-tab-pill"
                     className="absolute inset-0 rounded-full"
@@ -499,7 +500,7 @@ export function AuthPage({ defaultTab }: { defaultTab: "signin" | "signup" }) {
           transition={{ layout: spring }}
           className="rounded-2xl p-7 overflow-hidden"
           style={{
-            background: "rgba(255,255,255,0.90)",
+            background: "var(--surface)",
             backdropFilter: "blur(24px) saturate(150%)",
             border: "1px solid rgba(22,163,74,0.15)",
             boxShadow: "0 24px 64px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
@@ -515,7 +516,7 @@ export function AuthPage({ defaultTab }: { defaultTab: "signin" | "signup" }) {
 
         {/* Trust line */}
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.45, ease }}
-          className="mt-5 text-center text-xs" style={{ color: "#A1A1AA" }}>
+          className="mt-5 text-center text-xs" style={{ color: "var(--subtle)" }}>
           🔒 {tab === "signin" ? "Your data stays on campus. No ads. No tracking." : "Free to join. No credit card required. Campus only."}
         </motion.p>
       </div>
