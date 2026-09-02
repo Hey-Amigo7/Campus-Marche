@@ -467,12 +467,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <p className="mt-4 text-4xl font-black" style={{ color: "#16A34A" }}>
                 {formatCurrency(product.price)}
               </p>
-              {(() => {
+              {product.price > 0 && (() => {
                 const fee = Math.round(product.price * 0.025 * 100) / 100;
                 const total = Math.round((product.price + fee) * 100) / 100;
                 return (
-                  <p className="mt-1.5 text-sm font-semibold" style={{ color: "#A1A1AA" }}>
-                    + {formatCurrency(fee)} service fee · <span style={{ color: "#71717A" }}>you pay {formatCurrency(total)}</span>
+                  <p className="mt-1.5 text-sm font-semibold" style={{ color: "#71717A" }}>
+                    You pay {formatCurrency(total)} · <span style={{ color: "#A1A1AA" }}>fees included</span>
                   </p>
                 );
               })()}
