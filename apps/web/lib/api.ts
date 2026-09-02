@@ -52,10 +52,10 @@ async function request<T>(path: string, fallback: T, init: RequestOptions = {}):
       ...requestInit.headers,
     },
     credentials: "include",
-    // Only enforce a timeout during SSR/SSG builds (server-side). On the client
-    // let SWR + the browser manage retries; Render free tier cold starts can take
-    // 30-60 s which would silently abort client-side fetches with a short limit.
-    signal: requestInit.signal ?? (typeof window === "undefined" ? AbortSignal.timeout(8000) : undefined),
+    // SSG/SSR builds: 8 s keeps Vercel from hanging on a sleeping Render instance.
+    // Browser (SWR): 60 s lets Render's ~30 s free-tier cold start finish before
+    // we give up. Without ANY timeout the fetch hangs forever and nothing loads.
+    signal: requestInit.signal ?? AbortSignal.timeout(typeof window === "undefined" ? 8_000 : 60_000),
   };
 
   const isGetRequest = !requestInit.method || requestInit.method.toUpperCase() === "GET";
