@@ -118,8 +118,9 @@ export class UploadController {
         url = this.saveLocally(file.buffer, filename);
       }
     } catch (err) {
-      this.logger.error(`Image upload failed: ${err instanceof Error ? err.message : String(err)}`);
-      throw new InternalServerErrorException('Image upload failed. Please try again.');
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Image upload failed: ${msg}`);
+      throw new InternalServerErrorException(`Image upload failed: ${msg}`);
     }
 
     return { url, filename, size: file.size, mimetype: file.mimetype };
@@ -159,8 +160,9 @@ export class UploadController {
         url = this.saveLocally(file.buffer, filename, 'messages');
       }
     } catch (err) {
-      this.logger.error(`Media upload failed: ${err instanceof Error ? err.message : String(err)}`);
-      throw new InternalServerErrorException('Media upload failed. Please try again.');
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Media upload failed: ${msg}`);
+      throw new InternalServerErrorException(`Media upload failed: ${msg}`);
     }
 
     return { url, fileName: file.originalname, fileSize: file.size, mimeType: file.mimetype };

@@ -16,7 +16,10 @@
       "Bash(node -e ' *)",
       "Bash(node -e \"const v = require\\('./apps/web/node_modules/ios-safari-check/package.json'\\); console.log\\(v\\)\")",
       "Bash(node -e \"const p = require\\('./apps/web/package.json'\\); console.log\\(Object.entries\\(p.dependencies\\).filter\\(\\([k]\\) => k.includes\\('google'\\) || k.includes\\('abort'\\)\\).map\\(\\([k,v]\\) => k+': '+v\\).join\\('\\\\n'\\)\\)\")",
-      "Bash(mkdir -p \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\\\\apps\\\\api\\\\prisma\\\\migrations\\\\20260902000005_external_delivery_contact\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\\\\apps\\\\api\\\\prisma\\\\migrations\\\\20260902000005_external_delivery_contact\")",
+      "Bash(pnpm add *)",
+      "Bash(npx tsc *)",
+      "Bash(npx prisma *)"
     ]
   }
 }
