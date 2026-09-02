@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:skiper-ui.com)",
-      "WebFetch(domain:ui.watermelon.sh)"
+      "WebFetch(domain:ui.watermelon.sh)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git merge *)"
     ]
   }
 }
