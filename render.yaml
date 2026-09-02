@@ -2,12 +2,14 @@ services:
   - type: web
     name: campus-marche-api
     runtime: node
+    plan: free
     rootDir: apps/api
-    # Build runs OUTSIDE the private network — no DB access here.
-    buildCommand: pnpm install --prod=false && pnpm run build
-    # preDeploy runs in the service's runtime network, so it can reach the
-    # internal DATABASE_URL. Migrations belong here, not in buildCommand.
-    preDeployCommand: >-
+    # Free plan has no preDeploy phase, so migrations run in the build.
+    # This ONLY works if DATABASE_URL is the EXTERNAL (public) connection
+    # string — the internal `dpg-...-a` host is unreachable from the build.
+    buildCommand: >-
+      pnpm install --prod=false &&
+      pnpm run build &&
       { npx prisma migrate resolve --rolled-back 20260525232825_escrow_schema_sync || true; } &&
       { npx prisma migrate resolve --rolled-back 20260526000001_escrow_wallet_payout || true; } &&
       pnpm run db:migrate:deploy
