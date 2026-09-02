@@ -63,7 +63,7 @@ export class OrderController {
     @Body() body: AssignDeliveryPersonDto,
     @AuthUser() user: { id: string },
   ) {
-    return this.orderService.assignDeliveryPerson(id, user.id, body.deliveryPersonId);
+    return this.orderService.assignDeliveryPerson(id, user.id, body.identifier, body.name);
   }
 
   @Put(':id/location')

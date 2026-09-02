@@ -109,7 +109,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [savingDelivery, setSavingDelivery] = useState(false);
 
   // Assign delivery person
-  const [deliveryPersonId, setDeliveryPersonId] = useState("");
+  const [deliveryContact, setDeliveryContact] = useState("");
+  const [deliveryContactName, setDeliveryContactName] = useState("");
   const [assigning, setAssigning] = useState(false);
 
   // Live delivery tracking
@@ -289,10 +290,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     e.preventDefault();
     setAssigning(true);
     try {
-      await api.assignDeliveryPerson(id, deliveryPersonId.trim());
+      await api.assignDeliveryPerson(id, deliveryContact.trim(), deliveryContactName.trim() || undefined);
       await mutate();
       toast("Delivery person assigned. Order is now Out for delivery.");
-      setDeliveryPersonId("");
+      setDeliveryContact("");
+      setDeliveryContactName("");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not assign delivery person.");
     } finally {
@@ -503,13 +505,27 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <form onSubmit={handleAssignDelivery} className="space-y-3">
                       <div>
                         <label className="text-xs font-bold text-slate-700">Assign delivery person</label>
-                        <p className="mt-0.5 text-xs text-slate-500">Enter the email address of the person who will deliver the item.</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Enter their email or phone number. They don&apos;t need a Campus Marche account.
+                        </p>
                         <input
-                          type="email"
-                          value={deliveryPersonId}
-                          onChange={(e) => setDeliveryPersonId(e.target.value)}
-                          placeholder="deliverer@email.com"
+                          type="text"
+                          value={deliveryContact}
+                          onChange={(e) => setDeliveryContact(e.target.value)}
+                          placeholder="0244000000 or name@email.com"
                           required
+                          className="input-shell mt-1 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700">
+                          Their name <span className="font-normal text-slate-400">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={deliveryContactName}
+                          onChange={(e) => setDeliveryContactName(e.target.value)}
+                          placeholder="e.g. Kofi Mensah"
                           className="input-shell mt-1 text-sm"
                         />
                       </div>
@@ -561,6 +577,24 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                           {order.deliveryPerson.phone}
                         </a>
                       ) : null}
+                    </div>
+                  </div>
+                ) : (order as { externalDeliveryContact?: string; externalDeliveryName?: string }).externalDeliveryContact ? (
+                  <div className="mt-3 flex items-center gap-3 rounded-xl bg-white p-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: "rgba(127,182,133,0.15)", color: "#5A9460" }}>
+                      <Phone className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-slate-900">
+                        {(order as { externalDeliveryName?: string }).externalDeliveryName ?? "External delivery"}
+                      </p>
+                      <a
+                        href={`tel:${(order as { externalDeliveryContact?: string }).externalDeliveryContact}`}
+                        className="block truncate text-xs font-semibold hover:underline"
+                        style={{ color: "#5A9460" }}
+                      >
+                        {(order as { externalDeliveryContact?: string }).externalDeliveryContact}
+                      </a>
                     </div>
                   </div>
                 ) : null}

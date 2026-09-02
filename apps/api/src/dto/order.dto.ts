@@ -39,9 +39,14 @@ export class SetDeliveryDetailsDto {
 }
 
 export class AssignDeliveryPersonDto {
-  @ApiProperty({ description: 'User ID of the delivery person' })
+  @ApiProperty({ description: 'Email, phone number, or user ID — can be a registered user or an external contact' })
   @IsString()
-  deliveryPersonId!: string;
+  identifier!: string;
+
+  @ApiPropertyOptional({ description: 'Display name for external delivery contacts (not required for registered users)' })
+  @IsOptional()
+  @IsString()
+  name?: string;
 }
 
 export class UpdateLocationDto {
