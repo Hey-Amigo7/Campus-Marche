@@ -216,7 +216,7 @@ export function ProductCard({ product, compact = false }: { product: Product; co
         {/* Price row */}
         <div className="flex items-baseline gap-2">
           <span className="text-base font-black" style={{ color: "var(--on-surface)" }}>
-            {formatCurrency(product.price)}
+            {formatCurrency(Math.round((product.price * 1.025) * 100) / 100)}
           </span>
           {conditionColor && product.condition && (
             <span
@@ -232,6 +232,9 @@ export function ProductCard({ product, compact = false }: { product: Product; co
             </span>
           )}
         </div>
+        <p className="text-[10px]" style={{ color: "var(--muted)" }}>
+          {formatCurrency(product.price)} listed · fees incl.
+        </p>
 
         {/* Seller + location row */}
         <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
