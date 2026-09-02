@@ -34,6 +34,9 @@ export type ApiEnv = {
   UNSPLASH_ACCESS_KEY?: string;
   // Google OAuth
   GOOGLE_CLIENT_ID?: string;
+  // Supabase Storage
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
 };
 
 const DEFAULT_ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001';
@@ -91,6 +94,8 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     ADMIN_SETUP_KEY: config.ADMIN_SETUP_KEY,
     UNSPLASH_ACCESS_KEY: config.UNSPLASH_ACCESS_KEY,
     GOOGLE_CLIENT_ID: config.GOOGLE_CLIENT_ID,
+    SUPABASE_URL: config.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: config.SUPABASE_SERVICE_ROLE_KEY,
   };
 }
 
