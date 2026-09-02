@@ -506,10 +506,6 @@ export default function SellPage() {
                                 <span style={{ color: "var(--muted)" }}>Your listed price</span>
                                 <span className="font-black" style={{ color: "var(--green)" }}>GHS {price.toFixed(2)}</span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span style={{ color: "var(--muted)" }}>Buyer service fee (2.5%)</span>
-                                <span className="font-semibold" style={{ color: "var(--muted)" }}>+ GHS {serviceFee.toFixed(2)}</span>
-                              </div>
                               <div className="flex items-center justify-between border-t pt-1.5"
                                 style={{ borderColor: "var(--border)" }}>
                                 <span className="font-bold" style={{ color: "var(--on-surface)" }}>Buyer pays</span>

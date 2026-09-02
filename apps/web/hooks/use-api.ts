@@ -41,7 +41,10 @@ export function useSearchProducts(q: string) {
 }
 
 export function useOrders() {
-  return useSWR("orders", api.getOrders, { fallbackData: [] });
+  return useSWR("orders", api.getOrders, {
+    fallbackData: [],
+    shouldRetryOnError: false,
+  });
 }
 
 export function useOrder(id: string | null) {
