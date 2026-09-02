@@ -52,6 +52,7 @@ async function request<T>(path: string, fallback: T, init: RequestOptions = {}):
       ...requestInit.headers,
     },
     credentials: "include",
+    signal: requestInit.signal ?? AbortSignal.timeout(8000),
   };
 
   const isGetRequest = !requestInit.method || requestInit.method.toUpperCase() === "GET";
