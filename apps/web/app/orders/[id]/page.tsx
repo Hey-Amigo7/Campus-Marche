@@ -599,8 +599,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 ) : null}
 
-                {/* Live map */}
-                {liveCoords ? (
+                {/* Live map — shown whenever delivery OR buyer has shared coords */}
+                {(liveCoords || buyerCoords) ? (
                   <div className="mt-3 space-y-2">
                     <DeliveryMap
                       coords={liveCoords}
@@ -613,16 +613,28 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         {sharingLocation && (
                           <span className="inline-flex h-2 w-2 animate-ping rounded-full bg-green-500" />
                         )}
-                        {liveCoords.speed != null ? `${(liveCoords.speed).toFixed(1)} km/h · ` : ""}
-                        {liveCoords.heading != null ? `${headingToCompass(liveCoords.heading)} · ` : ""}
-                        {liveCoords.updatedAt ? `Updated ${formatRelativeDate(liveCoords.updatedAt)}` : "Live"}
+                        {liveCoords ? (
+                          <>
+                            {liveCoords.speed != null ? `${(liveCoords.speed).toFixed(1)} km/h · ` : ""}
+                            {liveCoords.heading != null ? `${headingToCompass(liveCoords.heading)} · ` : ""}
+                            {liveCoords.updatedAt ? `Updated ${formatRelativeDate(liveCoords.updatedAt)}` : "Live"}
+                          </>
+                        ) : (
+                          <span style={{ color: "#3B82F6" }}>Buyer location shared</span>
+                        )}
                       </span>
-                      <a href={`https://www.openstreetmap.org/?mlat=${liveCoords.lat}&mlon=${liveCoords.lng}&zoom=16`}
+                      <a
+                        href={`https://www.google.com/maps?q=${(liveCoords ?? buyerCoords)!.lat},${(liveCoords ?? buyerCoords)!.lng}`}
                         target="_blank" rel="noopener noreferrer"
                         className="flex items-center gap-1 hover:underline" style={{ color: "#5A9460" }}>
-                        <MapPin className="h-3 w-3" /> Open map ↗
+                        <MapPin className="h-3 w-3" /> Open in Maps ↗
                       </a>
                     </div>
+                    {!liveCoords && role !== "buyer" && (
+                      <p className="text-xs font-semibold" style={{ color: "#94A3B8" }}>
+                        Delivery person hasn&apos;t started live tracking yet.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="mt-3 text-sm font-semibold" style={{ color: "#5A9460" }}>
