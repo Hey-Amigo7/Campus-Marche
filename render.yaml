@@ -3,12 +3,14 @@ services:
     name: campus-marche-api
     runtime: node
     rootDir: apps/api
-    buildCommand: >-
-      pnpm install --prod=false &&
+    # Build runs OUTSIDE the private network — no DB access here.
+    buildCommand: pnpm install --prod=false && pnpm run build
+    # preDeploy runs in the service's runtime network, so it can reach the
+    # internal DATABASE_URL. Migrations belong here, not in buildCommand.
+    preDeployCommand: >-
       { npx prisma migrate resolve --rolled-back 20260525232825_escrow_schema_sync || true; } &&
       { npx prisma migrate resolve --rolled-back 20260526000001_escrow_wallet_payout || true; } &&
-      pnpm run db:migrate:deploy &&
-      pnpm run build
+      pnpm run db:migrate:deploy
     startCommand: node dist/main.js
     envVars:
       - key: NODE_ENV
