@@ -5,6 +5,8 @@ import { ShoppingBag, Truck, Shield, Gift, ArrowRight } from "lucide-react";
 import { CategoryCard } from "@/components/category-card";
 import { ProductCard } from "@/components/product-card";
 import { useProducts, useCategories, useSiteStats } from "@/hooks/use-api";
+import { hasAuthToken } from "@/lib/auth";
+import { useEffect, useState } from "react";
 import type { Product } from "@/types";
 import {
   FadeUp,
@@ -344,18 +346,9 @@ function LiveListings() {
       </div>
 
       {/* Grid */}
-      {isLoading ? (
+      {isLoading || fresh.length === 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => <ProductSkeleton key={i} />)}
-        </div>
-      ) : fresh.length === 0 ? (
-        <div
-          className="rounded-xl border border-dashed py-20 text-center"
-          style={{ borderColor: "rgba(22,163,74,0.25)", background: "var(--green-surface)" }}
-        >
-          <p className="text-2xl mb-3">🛍️</p>
-          <p className="font-semibold mb-4" style={{ color: "var(--muted)" }}>No listings yet</p>
-          <Link href="/sell" className="btn-primary">List something first</Link>
         </div>
       ) : (
         <motion.div
@@ -626,8 +619,12 @@ function CategoriesGrid() {
   );
 }
 
-/* ─── 12. Final CTA ───────────────────────────────────────── */
+/* ─── 12. Final CTA — guests only ────────────────────────────── */
 function FinalCTA() {
+  const [isGuest, setIsGuest] = useState<boolean | null>(null);
+  useEffect(() => { setIsGuest(!hasAuthToken()); }, []);
+  if (isGuest !== true) return null;
+
   return (
     <section className="container-shell py-20 text-center">
       <ScrollFadeUp delay={0.05}>

@@ -155,11 +155,11 @@ export const api = {
     if (opts?.skip)        params.set("skip",     String(opts.skip));
     if (opts?.take)        params.set("take",     String(opts.take));
     const qs = params.toString();
-    return request<PaginatedProducts>(`/products${qs ? `?${qs}` : ""}`, EMPTY_PAGE, { revalidate: 60 });
+    return request<PaginatedProducts>(`/products${qs ? `?${qs}` : ""}`, EMPTY_PAGE, { revalidate: 60, signal: AbortSignal.timeout(25000) });
   },
 
   getProduct: (id: string) =>
-    request<Product | null>(`/products/${id}`, null, { revalidate: 60, strict: true }),
+    request<Product | null>(`/products/${id}`, null, { revalidate: 60, strict: true, signal: AbortSignal.timeout(25000) }),
 
   recordView: (productId: string, viewerKey: string) =>
     request<{ ok: boolean }>(
@@ -176,7 +176,7 @@ export const api = {
   },
 
   getCategories: () =>
-    request<Category[]>("/products/categories", [], { revalidate: 300 }),
+    request<Category[]>("/products/categories", [], { revalidate: 300, signal: AbortSignal.timeout(25000) }),
 
   createProduct: (payload: Partial<Product>) => {
     if (!hasAuthToken()) return Promise.reject(new Error("Authentication required"));
