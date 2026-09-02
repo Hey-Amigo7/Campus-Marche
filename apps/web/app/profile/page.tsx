@@ -139,7 +139,6 @@ export default function ProfilePage() {
     setTheme("classic");
     toastSuccess("Signed out successfully.");
     router.push("/");
-    router.refresh();
   }
 
   if (isLoading) {

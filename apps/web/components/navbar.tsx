@@ -229,7 +229,6 @@ export function Navbar() {
     setTheme("classic");
     setUserDropOpen(false);
     router.push("/");
-    router.refresh();
   }
 
   return (
@@ -511,7 +510,7 @@ export function MobileNav() {
 
   function handleLogout() {
     clearAuthToken(); setTheme("classic");
-    router.push("/"); router.refresh();
+    router.push("/");
   }
 
   const profileHref  = isAuthenticated ? "/profile" : "/login?next=/profile";

@@ -22,7 +22,6 @@ export default function AdminLoginPage() {
       const res = await api.admin.adminLogin(email.trim(), password);
       setAuthToken(res.token);
       router.push("/admin");
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed. Check your credentials.");
     } finally {

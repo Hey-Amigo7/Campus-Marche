@@ -139,7 +139,6 @@ function SettingsContent() {
       clearAuthToken();
       success("Account deleted. Goodbye!");
       router.push("/");
-      router.refresh();
     } catch {
       toastError("Could not delete account. Please try again.");
       setDeleteLoading(false);

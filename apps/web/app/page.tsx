@@ -186,19 +186,6 @@ function Hero() {
           </div>
         </FadeUp>
 
-        {/* Trust pills */}
-        <FadeUp delay={0.36}>
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
-            {["Free to list", "Campus meetup", "Escrow-protected", "Student verified"].map((label) => (
-              <span
-                key={label}
-                className="trust-pill hero-pill inline-flex items-center rounded-full px-3 py-1 text-xs font-medium cursor-default"
-              >
-                {label}
-              </span>
-            ))}
-          </div>
-        </FadeUp>
       </div>
     </section>
   );
@@ -694,9 +681,7 @@ export default function HomePage() {
   return (
     <PageEnter>
       <Hero />
-      <Marquee />
       <CategoryCircles />
-      <Stats />
       <LiveListings />
       <CollectionGrid />
       <TrendingSection />
