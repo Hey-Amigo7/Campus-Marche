@@ -9,12 +9,11 @@ import { useToast } from "@/providers/toast-provider";
 
 export function BuyNowButton({
   productId,
-  price: _,
   listingType,
   category,
 }: {
   productId: string;
-  price: number;
+  price?: number;
   listingType?: string;
   category?: string;
 }) {

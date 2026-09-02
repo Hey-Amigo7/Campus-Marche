@@ -569,7 +569,7 @@ export default function WalletPage() {
                     {momoWarning && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
                         ⚠️ {momoWarning}
-                        <p className="mt-1 font-normal text-amber-700">Tap "Request payout" again to continue anyway.</p>
+                        <p className="mt-1 font-normal text-amber-700">Tap &quot;Request payout&quot; again to continue anyway.</p>
                       </div>
                     )}
 

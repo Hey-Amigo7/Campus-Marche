@@ -2,7 +2,7 @@
 
 import { MapPin, Search, SlidersHorizontal, X } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProductGrid } from "@/components/product-card";
 import { useCategories, useLocations, useProducts } from "@/hooks/use-api";
@@ -23,7 +23,6 @@ const SORT_OPTIONS = [
 const snap = { type: "spring", stiffness: 340, damping: 24 } as const;
 
 function ProductsContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [query,     setQuery]     = useState(searchParams.get("q")        ?? "");

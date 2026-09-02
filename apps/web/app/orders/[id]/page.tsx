@@ -208,9 +208,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     if (buyerWatchRef.current !== null) navigator.geolocation.clearWatch(buyerWatchRef.current);
   }, []);
 
-  // Location update (legacy single-shot — kept for backward compat)
-  const [updatingLocation, setUpdatingLocation] = useState(false);
-
   // Escrow release
   const [releasingEscrow, setReleasingEscrow] = useState(false);
 
@@ -259,12 +256,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const role = order.role ?? "buyer";
   const escrow = (order.escrowStatus ?? "PENDING_PAYMENT") as EscrowStatus;
   const isPaid = PAID_ESCROW_STATES.includes(escrow);
-  const escrowHeld = escrow === "ESCROW_HELD";
-  const escrowReleasing = escrow === "RELEASE_PENDING";
-  const escrowReleased = escrow === "RELEASED";
   const isActive = !["RELEASED", "REFUNDED", "FAILED", "CANCELLED"].includes(escrow) && order.status !== "Cancelled";
   const isOutForDelivery = order.status === "Out for delivery" || escrow === "SHIPPED";
-  const isInProgress = escrow === "ESCROW_HELD" || escrow === "PROCESSING" || order.status === "In progress";
   const hasDeliveryDetails = !!(order.deliveryAddress && order.deliveryPhone);
   const escrowLabel = ESCROW_LABELS[escrow] ?? order.status;
   const statusClass = ESCROW_COLORS[escrow] ?? "bg-slate-100 text-slate-700";
@@ -305,37 +298,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     } finally {
       setAssigning(false);
     }
-  }
-
-  async function handleUpdateLocation() {
-    if (!navigator.geolocation) {
-      toast("Geolocation is not supported by your browser.");
-      return;
-    }
-    setUpdatingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await api.updateDeliveryLocation(
-            id,
-            pos.coords.latitude,
-            pos.coords.longitude,
-            pos.coords.heading ?? undefined,
-            pos.coords.speed ?? undefined,
-          );
-          await mutate();
-          toast("Location updated.");
-        } catch (err) {
-          toast(err instanceof Error ? err.message : "Could not update location.");
-        } finally {
-          setUpdatingLocation(false);
-        }
-      },
-      () => {
-        toast("Could not get your location. Please allow location access.");
-        setUpdatingLocation(false);
-      },
-    );
   }
 
   async function handleReleaseEscrow() {

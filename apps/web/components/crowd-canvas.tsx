@@ -31,7 +31,6 @@ export function CrowdCanvas({
       removeFromArray(array as unknown[], (array as unknown[]).indexOf(item)) as T;
     const removeRandomFromArray = <T,>(array: T[]) =>
       removeFromArray(array as unknown[], randomIndex(array as unknown[])) as T;
-    const getRandomFromArray = <T,>(array: T[]) => array[randomIndex(array as unknown[]) | 0];
 
     type Peep = {
       image: HTMLImageElement;
@@ -80,7 +79,7 @@ export function CrowdCanvas({
       return peep;
     };
 
-    const resetPeep = (peep: Peep) => {
+    const resetPeep = (peep: Peep): { startX: number; startY: number; endX: number } => {
       const direction = Math.random() > 0.5 ? 1 : -1;
       const offsetY = 100 - 250 * (gsap.parseEase("power2.in")(Math.random()) as number);
       const startY = stage.height - peep.height + offsetY;
@@ -100,8 +99,8 @@ export function CrowdCanvas({
       return { startX, startY, endX };
     };
 
-    const walkPeep = (peep: Peep, props: ReturnType<typeof resetPeep>) => {
-      const { startY, endX } = props;
+    const walkPeep = (peep: Peep, peepProps: { startX: number; startY: number; endX: number }) => {
+      const { startY, endX } = peepProps;
       const xDuration = 10;
       const yDuration = 0.25;
       const tl = gsap.timeline();

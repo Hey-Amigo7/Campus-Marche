@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, BarChart3, CheckCircle2, Crown, HelpCircle, Loader2, Store, TrendingUp, XCircle } from "lucide-react";
+import { ArrowRight, BadgeCheck, BarChart3, CheckCircle2, Crown, HelpCircle, Loader2, Store, TrendingUp } from "lucide-react";
 import { TrustFeature } from "@/components/premium";
 import { SectionHeading } from "@/components/ui";
 import { useToast } from "@/providers/toast-provider";
@@ -56,7 +56,7 @@ const PLANS = [
 ];
 
 export default function PremiumPage() {
-  const { success, error } = useToast();
+  const { error } = useToast();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   async function handleUpgrade(plan: "daily" | "pro" | "featured") {

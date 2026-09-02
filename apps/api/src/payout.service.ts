@@ -358,18 +358,12 @@ export class PayoutService {
       throw new ForbiddenException('Only PENDING payouts can be cancelled');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.payout.update({
-        where: { id: payoutId },
-        data: { status: PayoutStatus.CANCELLED },
-      });
-      // Restore available balance (it was moved from pending → available on delivery confirmation)
-      await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx);
-      // Also restore pending balance (we move pending → available on release, so reversal needs care)
-      // In practice: cancel before the payout fires is OK; just refund available
+    await this.prisma.payout.update({
+      where: { id: payoutId },
+      data: { status: PayoutStatus.CANCELLED },
     });
 
-    return { message: 'Payout cancelled and balance restored.' };
+    return { message: 'Payout cancelled.' };
   }
 
   // ─── Private: broadcast to all admin users ────────────────────────────────

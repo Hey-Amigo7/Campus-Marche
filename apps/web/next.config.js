@@ -1,4 +1,5 @@
 import path from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const isDev = process.env.NODE_ENV !== "production";
@@ -11,8 +12,7 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "**.cloudinary.com" },
+      { protocol: "https", hostname: "**" },
       { protocol: "http", hostname: "localhost" },
     ],
   },

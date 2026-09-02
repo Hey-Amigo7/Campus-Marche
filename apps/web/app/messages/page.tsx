@@ -2,20 +2,20 @@
 
 import {
   ArrowLeft, Check, CheckCheck, FileText, Loader2,
-  MapPin, Mic, MicOff, Navigation, Paperclip, Phone,
+  MapPin, Mic, MicOff, Navigation, Paperclip,
   PhoneOff, Plus, Search, Send, Video, VideoOff, X, Camera,
   Image as ImageIcon, Eye, Download, Square,
 } from "lucide-react";
-import { useEffect, useRef, useState, useMemo, useCallback, Suspense } from "react";
+import { useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSocket, joinConversation, leaveConversation } from "@/hooks/use-socket";
 import { api } from "@/lib/api";
-import { cn, formatCurrency } from "@/lib/format";
+import { cn } from "@/lib/format";
 import { AuthGate } from "@/components/auth-gate";
 import { useConversations, useMessages, useProfile } from "@/hooks/use-api";
-import type { ApiConversation, ApiMessage, MessageType } from "@/types";
+import type { ApiConversation, ApiMessage } from "@/types";
 
 const spring = { type: "spring", stiffness: 340, damping: 26 } as const;
 
@@ -126,7 +126,7 @@ function ViewOnceWrapper({
 
 // ─── Rich message renderers ───────────────────────────────────────────────────
 
-function ImageMessage({ msg, mine, conversationId, myId }: { msg: ApiMessage; mine: boolean; conversationId: string; myId?: string }) {
+function ImageMessage({ msg, conversationId, myId }: { msg: ApiMessage; mine: boolean; conversationId: string; myId?: string }) {
   const inner = (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={msg.mediaUrl!} alt="Sent image"
@@ -176,7 +176,7 @@ function FileMessage({ msg }: { msg: ApiMessage }) {
   );
 }
 
-function LocationMessage({ msg, mine }: { msg: ApiMessage; mine: boolean }) {
+function LocationMessage({ msg }: { msg: ApiMessage; mine: boolean }) {
   const lat = msg.latitude!; const lng = msg.longitude!;
   const isLive = msg.type === "LIVE_LOCATION";
   const expired = isLive && msg.liveUntil ? new Date(msg.liveUntil) < new Date() : false;
@@ -233,7 +233,7 @@ function CallMessage({ msg }: { msg: ApiMessage }) {
 
 // ─── Message bubble ────────────────────────────────────────────────────────────
 
-function Bubble({ message, isFirst, isLast, conversationId, myId }: {
+function Bubble({ message, isLast, conversationId, myId }: {
   message: ApiMessage; isFirst: boolean; isLast: boolean;
   conversationId: string; myId?: string;
 }) {
@@ -794,13 +794,14 @@ function MessagesContent() {
   }, [conversations, activeId, searchParams]);
 
   const { data: messagesData, isLoading: loadingMessages } = useMessages(active?.id ?? null);
-  const messages = messagesData ?? [];
+  const messages = useMemo(() => messagesData ?? [], [messagesData]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => {
     if (!activeId) return;
-    joinConversation(socketRef.current, activeId);
-    return () => leaveConversation(socketRef.current, activeId);
+    const socket = socketRef.current;
+    joinConversation(socket, activeId);
+    return () => leaveConversation(socket, activeId);
   }, [activeId, socketRef, connected]);
 
   // Mark as read only when a conversation is explicitly clicked open
@@ -811,7 +812,7 @@ function MessagesContent() {
       .catch(() => null);
   }, [activeId]); // eslint-disable-line
 
-  useEffect(() => { if (active) setTimeout(() => inputRef.current?.focus(), 100); }, [active?.id]);
+  useEffect(() => { if (active?.id) setTimeout(() => inputRef.current?.focus(), 100); }, [active?.id]);
 
   // Socket: incoming call + view-once events
   useEffect(() => {
@@ -973,7 +974,7 @@ function MessagesContent() {
     setSharingLive(false);
   }
 
-  useEffect(() => () => stopLiveLocation(), []); // eslint-disable-line
+  useEffect(() => () => stopLiveLocation(), []);
 
   // ── WebRTC ────────────────────────────────────────────────────────────────
 

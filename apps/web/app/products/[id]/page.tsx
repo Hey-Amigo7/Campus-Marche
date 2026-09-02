@@ -11,7 +11,7 @@ import { formatCurrency, formatRelativeDate } from "@/lib/format";
 import { BuyNowButton } from "@/components/buy-now-button";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import { ProductArt, ProductGrid } from "@/components/product-card";
-import { EmptyState, Rating, SectionHeading, SellerBadge } from "@/components/ui";
+import { EmptyState, Rating, SellerBadge } from "@/components/ui";
 import { useProduct, useProducts, useProfile, useReviews, useSavedStatus } from "@/hooks/use-api";
 import { hasAuthToken } from "@/lib/auth";
 

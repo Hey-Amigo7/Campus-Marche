@@ -5,8 +5,6 @@ import {
   useInView,
   useScroll,
   useTransform,
-  AnimatePresence,
-  type HTMLMotionProps,
   type Variants,
   type MotionValue,
 } from "framer-motion";
@@ -14,7 +12,6 @@ import { useRef, type ReactNode, type CSSProperties } from "react";
 
 // ─── Spring configs (Watermelon UI–style) ─────────────────────────────────────
 const snap   = { type: "spring", stiffness: 420, damping: 26 } as const;
-const soft   = { type: "spring", stiffness: 280, damping: 22 } as const;
 const bouncy = { type: "spring", stiffness: 380, damping: 18 } as const;
 const ease   = [0.22, 1, 0.36, 1] as const;
 
@@ -116,10 +113,6 @@ export function ScrollFadeUp({
 
 // ─── StaggerList + StaggerItem — staggered children entrance ─────────────────
 // Bento-grid style stagger from Watermelon UI bento components
-const staggerVariants: Variants = {
-  hidden: {},
-  show:   { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
-};
 const itemVariants: Variants = {
   hidden: { opacity: 0, y: 20, scale: 0.97 },
   show:   { opacity: 1, y: 0,  scale: 1,
@@ -461,8 +454,10 @@ export function CountUp({
       animate={inView ? { opacity: 1 } : {}}
     >
       <motion.span
-        initial={{ innerText: from } as any}
-        animate={inView ? { innerText: to } as any : {}}
+        // @ts-expect-error — framer-motion's types don't cover innerText animation; onUpdate reads it correctly
+        initial={{ innerText: from }}
+        // @ts-expect-error — framer-motion's types don't cover innerText animation; onUpdate reads it correctly
+        animate={inView ? { innerText: to } : {}}
         transition={{ duration, ease: "easeOut" }}
         onUpdate={(latest) => {
           if (ref.current) {

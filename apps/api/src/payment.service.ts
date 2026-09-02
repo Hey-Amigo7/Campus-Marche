@@ -525,7 +525,7 @@ export class PaymentService {
       if (order.sellerId && order.sellerAmount) {
         const inAvailable = ['RELEASE_PENDING', 'DELIVERED'].includes(order.escrowStatus);
         if (inAvailable) {
-          await this.walletService.refundAvailable(order.sellerId, order.sellerAmount, tx);
+          await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx);
         } else {
           await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx);
         }
@@ -551,7 +551,7 @@ export class PaymentService {
 
     const order = payment.order;
     const { feePercent, feeFixed } = this.getFeeConfig();
-    const commission = calculateCommission(order.totalAmount || order.price, feePercent, feeFixed);
+    const commission = calculateCommission(order.price, feePercent, feeFixed);
 
     await this.prisma.$transaction(async (tx) => {
       // 1. Mark payment as paid

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
@@ -83,7 +84,7 @@ export default function GlobalError({
                 <RefreshCw size={14} />
                 Try again
               </button>
-              <a
+              <Link
                 href="/"
                 style={{
                   display: "inline-flex", alignItems: "center", gap: "0.5rem",
@@ -94,7 +95,7 @@ export default function GlobalError({
                 }}
               >
                 Go home
-              </a>
+              </Link>
             </div>
           </motion.div>
         </div>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Bell, Lock, Shield, Trash2,
+  ArrowLeft, Lock, Shield, Trash2,
   ChevronRight, Check, AlertTriangle,
   Eye, EyeOff,
 } from "lucide-react";

@@ -42,3 +42,7 @@ yarn-error.log*
 
 # Uploaded files
 uploads/
+
+# Local dev tool directories
+.claude/
+.history-memo/
