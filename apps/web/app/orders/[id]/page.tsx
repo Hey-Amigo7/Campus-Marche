@@ -386,11 +386,16 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="mt-1 text-sm font-semibold text-amber-700">
                   Complete payment to move your order forward. Card and Mobile Money are accepted.
                 </p>
-                {/* Fee breakdown */}
+                {/* Fee breakdown — uses stored DB values so this always matches what Paystack charges */}
                 {(() => {
-                  const base = order.product.price;
-                  const fee  = order.platformFee ?? Math.round(base * 0.025 * 100) / 100;
-                  const total = order.totalAmount ?? Math.round((base + fee) * 100) / 100;
+                  const base  = order.product.price;
+                  const fee   = (order.platformFee != null && order.platformFee > 0)
+                    ? order.platformFee
+                    : Math.round(base * 0.025 * 100) / 100;
+                  const total = (order.totalAmount != null && order.totalAmount > 0)
+                    ? order.totalAmount
+                    : Math.round((base + fee) * 100) / 100;
+                  const feePct = base > 0 ? +(fee / base * 100).toFixed(1) : 2.5;
                   return (
                     <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
                       <div className="flex justify-between">
@@ -398,11 +403,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         <span className="font-semibold text-amber-900">{formatCurrency(base)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-amber-800">Service fee (2.5%)</span>
+                        <span className="text-amber-800">Service fee ({feePct}%)</span>
                         <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
                       </div>
                       <div className="flex justify-between border-t border-amber-200 pt-1.5">
-                        <span className="font-black text-amber-900">Total charged</span>
+                        <span className="font-black text-amber-900">Total you pay</span>
                         <span className="font-black text-amber-900">{formatCurrency(total)}</span>
                       </div>
                     </div>
@@ -689,10 +694,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   <dt className="font-semibold text-slate-500">Item price</dt>
                   <dd className="font-black text-slate-950">{formatCurrency(order.product.price)}</dd>
                 </div>
-                {(order.totalAmount ?? 0) > 0 && order.totalAmount !== order.product.price ? (
+                {order.totalAmount != null && order.totalAmount > 0 && order.totalAmount !== order.product.price ? (
                   <div className="flex justify-between">
                     <dt className="font-semibold text-slate-500">Total paid</dt>
-                    <dd className="font-black text-slate-950">{formatCurrency(order.totalAmount!)}</dd>
+                    <dd className="font-black text-slate-950">{formatCurrency(order.totalAmount)}</dd>
                   </div>
                 ) : null}
                 {role === "seller" && (order.platformFee ?? 0) > 0 ? (
