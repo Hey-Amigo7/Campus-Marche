@@ -15,10 +15,10 @@ import { EmptyState, Rating, SellerBadge } from "@/components/ui";
 import { useProduct, useProducts, useProfile, useReviews, useSavedStatus } from "@/hooks/use-api";
 import { hasAuthToken } from "@/lib/auth";
 
-const DARK_PANEL = {
-  background:    "rgba(255,255,255,0.04)",
+const PANEL = {
+  background:    "rgba(255,255,255,0.85)",
   backdropFilter:"blur(18px)",
-  border:        "1px solid rgba(255,255,255,0.07)",
+  border:        "1px solid #E4E4E7",
 } as const;
 
 const snap = { type: "spring", stiffness: 380, damping: 22 } as const;
@@ -48,7 +48,7 @@ function ImageGallery({
 
   if (allImages.length === 0) {
     return (
-      <div className="overflow-hidden rounded-3xl" style={DARK_PANEL}>
+      <div className="overflow-hidden rounded-3xl" style={PANEL}>
         <ProductArt style={imageStyle} title={title} className="min-h-[480px]" />
       </div>
     );
@@ -57,7 +57,7 @@ function ImageGallery({
   return (
     <div className="space-y-2.5">
       {/* Main image */}
-      <div className="relative overflow-hidden rounded-3xl" style={{ ...DARK_PANEL, aspectRatio: "4/3" }}>
+      <div className="relative overflow-hidden rounded-3xl" style={{ ...PANEL, aspectRatio: "4/3" }}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeIdx}
@@ -80,7 +80,7 @@ function ImageGallery({
         {allImages.length > 1 && (
           <span
             className="absolute bottom-3 right-3 rounded-full px-2.5 py-1 text-xs font-bold text-white"
-            style={{ background: "rgba(6,10,18,0.75)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.12)" }}
+            style={{ background: "rgba(9,9,11,0.70)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)" }}
           >
             {activeIdx + 1} / {allImages.length}
           </span>
@@ -94,7 +94,7 @@ function ImageGallery({
               onClick={prev}
               aria-label="Previous photo"
               className="absolute left-3 top-1/2 -translate-y-1/2 grid h-9 w-9 place-items-center rounded-full shadow-lg transition-all hover:scale-105"
-              style={{ background: "rgba(6,10,18,0.75)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff" }}
+              style={{ background: "rgba(9,9,11,0.70)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff" }}
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -103,7 +103,7 @@ function ImageGallery({
               onClick={next}
               aria-label="Next photo"
               className="absolute right-3 top-1/2 -translate-y-1/2 grid h-9 w-9 place-items-center rounded-full shadow-lg transition-all hover:scale-105"
-              style={{ background: "rgba(6,10,18,0.75)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff" }}
+              style={{ background: "rgba(9,9,11,0.70)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff" }}
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -125,8 +125,8 @@ function ImageGallery({
               aria-label={`View photo ${i + 1}`}
               className="shrink-0 h-16 w-16 overflow-hidden rounded-xl border-2 transition-all"
               style={{
-                borderColor: i === activeIdx ? "#7FB685" : "rgba(255,255,255,0.10)",
-                opacity:     i === activeIdx ? 1 : 0.55,
+                borderColor: i === activeIdx ? "#16A34A" : "#E4E4E7",
+                opacity:     i === activeIdx ? 1 : 0.60,
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -167,7 +167,11 @@ function SaveButton({ productId }: { productId: string }) {
       onClick={toggle}
       disabled={loading}
       className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition-all hover:-translate-y-px disabled:opacity-50"
-      style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", color: status?.saved ? "#7FB685" : "rgba(255,255,255,0.60)" }}
+      style={{
+        background: "#F4F4F5",
+        border: "1px solid #E4E4E7",
+        color: status?.saved ? "#16A34A" : "#71717A",
+      }}
       aria-label={status?.saved ? "Remove from wishlist" : "Save to wishlist"}
     >
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
@@ -187,10 +191,10 @@ type ApiReview = {
 function ReviewList({ productId }: { productId: string }) {
   const { data: reviews, isLoading } = useReviews(productId);
 
-  if (isLoading) return <p className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>Loading reviews…</p>;
+  if (isLoading) return <p className="text-sm" style={{ color: "#A1A1AA" }}>Loading reviews…</p>;
   if (!reviews || reviews.length === 0) {
     return (
-      <p className="text-sm italic" style={{ color: "rgba(255,255,255,0.30)" }}>
+      <p className="text-sm italic" style={{ color: "#A1A1AA" }}>
         No reviews yet. Be the first to leave one after your purchase.
       </p>
     );
@@ -202,21 +206,21 @@ function ReviewList({ productId }: { productId: string }) {
         <div
           key={review.id}
           className="rounded-2xl p-4"
-          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+          style={{ background: "#FAFAF9", border: "1px solid #E4E4E7" }}
         >
           <div className="flex items-center gap-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star
                 key={i}
                 className="h-3.5 w-3.5"
-                style={i < review.rating ? { fill: "#C68B59", color: "#C68B59" } : { color: "rgba(255,255,255,0.15)" }}
+                style={i < review.rating ? { fill: "#D97706", color: "#D97706" } : { color: "#D4D4D8" }}
               />
             ))}
           </div>
           {review.comment ? (
-            <p className="mt-2 text-sm leading-6" style={{ color: "rgba(255,255,255,0.55)" }}>{review.comment}</p>
+            <p className="mt-2 text-sm leading-6" style={{ color: "#27272A" }}>{review.comment}</p>
           ) : null}
-          <p className="mt-2 text-xs font-bold" style={{ color: "rgba(255,255,255,0.25)" }}>
+          <p className="mt-2 text-xs font-bold" style={{ color: "#A1A1AA" }}>
             {review.author} · {formatRelativeDate(review.createdAt)}
           </p>
         </div>
@@ -244,7 +248,7 @@ function StarPicker({ value, hover, onHover, onLeave, onPick }: {
         >
           <Star
             className="h-7 w-7"
-            style={n <= active ? { fill: "#C68B59", color: "#C68B59" } : { color: "rgba(255,255,255,0.18)" }}
+            style={n <= active ? { fill: "#D97706", color: "#D97706" } : { color: "#D4D4D8" }}
           />
         </button>
       ))}
@@ -266,8 +270,8 @@ function ReviewForm({ productId, sellerId }: { productId: string; sellerId: stri
   if (profile?.id === sellerId) return null;
   if (submitted) return (
     <div className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold"
-      style={{ background: "rgba(127,182,133,0.10)", color: "#7FB685", border: "1px solid rgba(127,182,133,0.20)" }}>
-      <Star className="h-4 w-4" style={{ fill: "#7FB685", color: "#7FB685" }} />
+      style={{ background: "rgba(22,163,74,0.08)", color: "#16A34A", border: "1px solid rgba(22,163,74,0.20)" }}>
+      <Star className="h-4 w-4" style={{ fill: "#16A34A", color: "#16A34A" }} />
       Review submitted — thanks!
     </div>
   );
@@ -290,27 +294,27 @@ function ReviewForm({ productId, sellerId }: { productId: string; sellerId: stri
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 space-y-3 rounded-2xl p-4"
-      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-      <p className="text-xs font-black uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.30)" }}>Write a review</p>
+      style={{ background: "#FAFAF9", border: "1px solid #E4E4E7" }}>
+      <p className="text-xs font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>Write a review</p>
       <StarPicker value={rating} hover={hover} onHover={setHover} onLeave={() => setHover(0)} onPick={setRating} />
       <textarea
         rows={3}
         placeholder="What did you think? (optional)"
         value={comment}
         onChange={(e) => setComment(e.target.value)}
-        className="w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none placeholder:text-[rgba(255,255,255,0.22)]"
-        style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", caretColor: "#7FB685" }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(127,182,133,0.40)"; }}
-        onBlur={(e)  => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
+        className="w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none placeholder:text-[#A1A1AA] text-[#09090B]"
+        style={{ background: "#FFFFFF", border: "1px solid #E4E4E7", caretColor: "#16A34A" }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = "#16A34A"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.08)"; }}
+        onBlur={(e)  => { e.currentTarget.style.borderColor = "#E4E4E7"; e.currentTarget.style.boxShadow = "none"; }}
       />
       {error && (
-        <p className="text-xs font-semibold" style={{ color: "#FCA5A5" }}>{error}</p>
+        <p className="text-xs font-semibold" style={{ color: "#DC2626" }}>{error}</p>
       )}
       <button
         type="submit"
         disabled={submitting}
         className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black text-white disabled:opacity-60 transition-all hover:-translate-y-0.5"
-        style={{ background: "linear-gradient(135deg, #7FB685 0%, #5A9460 100%)" }}
+        style={{ background: "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)" }}
       >
         {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
         {submitting ? "Submitting…" : "Submit review"}
@@ -342,8 +346,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center" style={{ background: "#06080F" }}>
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#7FB685" }} />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#16A34A]" />
       </div>
     );
   }
@@ -351,8 +355,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   if (error || product === null) notFound();
   if (!product) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center" style={{ background: "#06080F" }}>
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#7FB685" }} />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#16A34A]" />
       </div>
     );
   }
@@ -366,13 +370,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     .slice(0, 4);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#06080F" }}>
+    <div style={{ minHeight: "100vh" }}>
       <div className="container-shell py-8 md:py-12">
         {/* Back link */}
         <Link
           href="/products"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-colors hover:text-white"
-          style={{ color: "rgba(255,255,255,0.40)" }}
+          className="mb-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-colors hover:text-[#09090B]"
+          style={{ color: "#A1A1AA" }}
         >
           <ChevronLeft className="h-4 w-4" />
           Back to listings
@@ -389,20 +393,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             />
 
             {/* Seller card */}
-            <div className="mt-4 overflow-hidden rounded-3xl" style={DARK_PANEL}>
+            <div className="mt-4 overflow-hidden rounded-3xl" style={PANEL}>
               <div className="max-h-[460px] space-y-5 overflow-y-auto p-6">
                 <div className="flex items-center justify-between gap-3">
                   <Link href={`/store/${seller.id}`} className="flex items-center gap-3 group">
                     <div
                       className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-sm font-black"
-                      style={{ background: "rgba(127,182,133,0.12)", color: "#7FB685", border: "1px solid rgba(127,182,133,0.20)" }}
+                      style={{ background: "rgba(22,163,74,0.10)", color: "#16A34A", border: "1px solid rgba(22,163,74,0.20)" }}
                     >
                       {seller.name.slice(0, 2).toUpperCase()}
                     </div>
                     <span>
-                      <span className="block font-black text-white group-hover:text-[#7FB685] transition-colors">{seller.name}</span>
+                      <span className="block font-black text-[#09090B] group-hover:text-[#16A34A] transition-colors">{seller.name}</span>
                       {sellerLocation && (
-                        <span className="block text-sm font-semibold" style={{ color: "rgba(255,255,255,0.40)" }}>
+                        <span className="block text-sm font-semibold" style={{ color: "#71717A" }}>
                           {sellerLocation}
                         </span>
                       )}
@@ -415,21 +419,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <div className="flex items-center justify-between">
                     <Rating value={sellerRating} />
                     <Link href={`/store/${seller.id}`}
-                      className="text-sm font-bold transition-colors hover:text-white"
-                      style={{ color: "#7FB685" }}>
+                      className="text-sm font-bold transition-colors hover:text-[#14532D]"
+                      style={{ color: "#16A34A" }}>
                       View storefront →
                     </Link>
                   </div>
                 ) : (
                   <Link href={`/store/${seller.id}`}
-                    className="text-sm font-bold transition-colors hover:text-white"
-                    style={{ color: "#7FB685" }}>
+                    className="text-sm font-bold transition-colors hover:text-[#14532D]"
+                    style={{ color: "#16A34A" }}>
                     View storefront →
                   </Link>
                 )}
 
-                <div className="border-t pt-5" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
-                  <p className="mb-3 text-xs font-black uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.30)" }}>Reviews</p>
+                <div className="border-t pt-5" style={{ borderColor: "#E4E4E7" }}>
+                  <p className="mb-3 text-xs font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>Reviews</p>
                   <ReviewList productId={product.id} />
                   <ReviewForm productId={product.id} sellerId={seller.id} />
                 </div>
@@ -442,14 +446,14 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             {/* Badges */}
             <div className="flex flex-wrap gap-2">
               {product.featured && (
-                <span className="rounded-full px-3 py-1 text-xs font-bold text-white"
-                  style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.15)" }}>
+                <span className="rounded-full px-3 py-1 text-xs font-bold text-[#09090B]"
+                  style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
                   Featured
                 </span>
               )}
               {product.boosted && (
                 <span className="rounded-full px-3 py-1 text-xs font-bold"
-                  style={{ background: "rgba(198,139,89,0.12)", color: "#C68B59", border: "1px solid rgba(198,139,89,0.25)" }}>
+                  style={{ background: "rgba(217,119,6,0.10)", color: "#B45309", border: "1px solid rgba(217,119,6,0.20)" }}>
                   Boosted
                 </span>
               )}
@@ -457,50 +461,50 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
             {/* Title + price */}
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-white md:text-4xl leading-tight">
+              <h1 className="text-3xl font-black tracking-tight text-[#09090B] md:text-4xl leading-tight">
                 {product.title}
               </h1>
-              <p className="mt-4 text-4xl font-black" style={{ color: "#7FB685" }}>
+              <p className="mt-4 text-4xl font-black" style={{ color: "#16A34A" }}>
                 {formatCurrency(product.price)}
               </p>
               {(() => {
                 const fee = Math.round(product.price * 0.025 * 100) / 100;
                 const total = Math.round((product.price + fee) * 100) / 100;
                 return (
-                  <p className="mt-1.5 text-sm font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
-                    + {formatCurrency(fee)} service fee · <span style={{ color: "rgba(255,255,255,0.55)" }}>you pay {formatCurrency(total)}</span>
+                  <p className="mt-1.5 text-sm font-semibold" style={{ color: "#A1A1AA" }}>
+                    + {formatCurrency(fee)} service fee · <span style={{ color: "#71717A" }}>you pay {formatCurrency(total)}</span>
                   </p>
                 );
               })()}
             </div>
 
             {/* Meta */}
-            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold" style={{ color: "rgba(255,255,255,0.40)" }}>
+            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold" style={{ color: "#71717A" }}>
               {/* Product vs service badge */}
               {product.listingType === "service" || product.category === "Services" ? (
                 <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black"
-                  style={{ background: "rgba(198,139,89,0.20)", color: "#C68B59" }}>
+                  style={{ background: "rgba(217,119,6,0.10)", color: "#B45309" }}>
                   Service listing
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black"
-                  style={{ background: "rgba(114,204,35,0.15)", color: "#7FB685" }}>
+                  style={{ background: "rgba(22,163,74,0.10)", color: "#16A34A" }}>
                   {product.condition ?? "Physical product"}
                 </span>
               )}
               <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" style={{ color: "#7FB685" }} />
+                <MapPin className="h-3.5 w-3.5" style={{ color: "#16A34A" }} />
                 {product.location}
               </span>
               <span>{formatRelativeDate(product.postedAt)}</span>
             </div>
 
             {/* Description */}
-            <p className="leading-7 text-sm md:text-base" style={{ color: "rgba(255,255,255,0.55)" }}>
+            <p className="leading-7 text-sm md:text-base" style={{ color: "#27272A" }}>
               {product.description}
             </p>
 
-            {/* Details grid — adapts to product vs service */}
+            {/* Details grid */}
             {(() => {
               const isService = product.listingType === "service" || product.category === "Services";
               const fields: [string, string][] = isService
@@ -519,9 +523,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               return (
                 <dl className="grid grid-cols-2 gap-2.5 text-sm">
                   {fields.map(([label, value]) => (
-                    <div key={label} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                      <dt className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.30)" }}>{label}</dt>
-                      <dd className="mt-1 font-black text-white">{value}</dd>
+                    <div key={label} className="rounded-2xl p-4" style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
+                      <dt className="text-xs font-semibold" style={{ color: "#71717A" }}>{label}</dt>
+                      <dd className="mt-1 font-black text-[#09090B]">{value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -540,7 +544,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <button
                 type="button"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition-all hover:-translate-y-px"
-                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", color: "rgba(255,255,255,0.60)" }}
+                style={{ background: "#F4F4F5", border: "1px solid #E4E4E7", color: "#71717A" }}
               >
                 <Share2 className="h-5 w-5" />
                 Share
@@ -554,7 +558,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <span
                     key={tag}
                     className="rounded-full px-3 py-1 text-xs font-semibold"
-                    style={{ background: "rgba(127,182,133,0.08)", color: "#7FB685", border: "1px solid rgba(127,182,133,0.18)" }}
+                    style={{ background: "rgba(22,163,74,0.08)", color: "#16A34A", border: "1px solid rgba(22,163,74,0.18)" }}
                   >
                     #{tag}
                   </span>
@@ -567,10 +571,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         {/* ── Similar items ── */}
         <section className="mt-16">
           <div className="mb-6">
-            <p className="text-xs font-black uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.30)" }}>
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>
               More like this
             </p>
-            <h2 className="mt-1 text-2xl font-black text-white">Similar items</h2>
+            <h2 className="mt-1 text-2xl font-black text-[#09090B]">Similar items</h2>
           </div>
           {similar.length > 0 ? (
             <ProductGrid products={similar} />

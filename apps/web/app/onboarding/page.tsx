@@ -42,7 +42,7 @@ function StepBar({ current }: { current: Step }) {
                 className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black transition-all"
                 style={
                   done   ? { background: "var(--green)", color: "#fff" } :
-                  active ? { background: "#0F172A", color: "var(--green)", border: "2px solid var(--green)" } :
+                  active ? { background: "var(--green-surface)", color: "var(--green)", border: "2px solid var(--green)" } :
                            { background: "var(--surface-raised)", color: "var(--muted)", border: "1px solid var(--border)" }
                 }
               >
@@ -228,21 +228,21 @@ export default function OnboardingPage() {
       <div className="min-h-screen" style={{ background: "var(--background)" }}>
 
         {/* Header */}
-        <div className="relative overflow-hidden py-10 text-white"
-          style={{ background: "linear-gradient(135deg, #0F172A 0%, #102542 55%, #1a3a2a 100%)" }}>
+        <div className="relative overflow-hidden py-10 border-b"
+          style={{ background: "var(--green-surface)", borderColor: "rgba(22,163,74,0.15)" }}>
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full"
-            style={{ background: "radial-gradient(circle, rgba(114,204,35,0.18), transparent 65%)" }} />
+            style={{ background: "radial-gradient(circle, rgba(22,163,74,0.12), transparent 65%)", filter: "blur(32px)" }} />
           <div className="container-shell">
             <div className="mb-6">
               <StepBar current={step} />
             </div>
-            <h1 className="text-2xl font-black tracking-tight md:text-3xl">
+            <h1 className="text-2xl font-black tracking-tight text-[#09090B] md:text-3xl">
               {step === "welcome"  && "Welcome to Campus Marche"}
               {step === "business" && "Set up your store"}
               {step === "listing"  && "Add your first listing"}
               {step === "done"     && "You're all set!"}
             </h1>
-            <p className="mt-2 text-sm leading-6" style={{ color: "#94A3B8" }}>
+            <p className="mt-2 text-sm leading-6" style={{ color: "#71717A" }}>
               {step === "welcome"  && "Tell us what you'd like to do — you can always change this later."}
               {step === "business" && "Buyers need to know who they're dealing with. Takes 60 seconds."}
               {step === "listing"  && "List your first product or service and start earning."}
