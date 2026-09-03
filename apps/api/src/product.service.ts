@@ -1,5 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { SubscriptionService } from './subscription.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
@@ -46,118 +45,14 @@ type ProductWithSeller = {
   [key: string]: unknown;
 };
 
-type UnsplashSearchResponse = {
-  results: Array<{ urls: { regular: string; small: string } }>;
-};
-
 @Injectable()
-export class ProductService implements OnModuleInit {
+export class ProductService {
   private readonly logger = new Logger(ProductService.name);
 
   constructor(
     private prisma: PrismaService,
     private subscriptionService: SubscriptionService,
-    private config: ConfigService,
   ) {}
-
-  onModuleInit() {
-    // Run after the module boots so the DB connection is ready
-    setImmediate(() => this.runImageBackfill());
-  }
-
-  private async runImageBackfill(): Promise<void> {
-    const key = this.config.get<string>('UNSPLASH_ACCESS_KEY');
-    if (!key) return;
-
-    const missing = await this.prisma.product.findMany({
-      where: { imageUrl: null, active: true },
-      select: { id: true, title: true, category: true },
-      orderBy: { postedAt: 'desc' },
-    });
-
-    if (missing.length === 0) return;
-    this.logger.log(`[Backfill] Fetching Unsplash images for ${missing.length} listing(s)…`);
-
-    let updated = 0;
-    for (const p of missing) {
-      const url = await this.fetchRelevantImage(p.title, p.category ?? '');
-      if (url) {
-        await this.prisma.product.update({ where: { id: p.id }, data: { imageUrl: url } }).catch(() => null);
-        updated++;
-      }
-    }
-    this.logger.log(`[Backfill] Done — ${updated}/${missing.length} listing(s) updated.`);
-  }
-
-  /**
-   * Searches Unsplash for an image that matches the product title and category.
-   * Returns the CDN URL (stored permanently in the DB) or null if unavailable.
-   */
-  private static readonly STOP_WORDS = new Set([
-    'for', 'sale', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'a', 'an',
-    'is', 'it', 'its', 'of', 'with', 'from', 'by', 'my', 'our', 'your',
-    'good', 'bad', 'excellent', 'perfect', 'great', 'nice', 'best', 'top',
-    'used', 'new', 'old', 'brand', 'quality', 'cheap', 'affordable', 'price',
-    'condition', 'available', 'call', 'contact', 'offer', 'price', 'reduced',
-  ]);
-
-  private async fetchRelevantImage(title: string, category: string): Promise<string | null> {
-    const key = this.config.get<string>('UNSPLASH_ACCESS_KEY');
-    if (!key) return null;
-
-    // Extract meaningful keywords — drop stop words and very short tokens
-    const titleWords = title
-      .replace(/[^a-zA-Z0-9 ]/g, ' ')
-      .split(/\s+/)
-      .filter((w) => w.length > 2 && !ProductService.STOP_WORDS.has(w.toLowerCase()))
-      .slice(0, 4)
-      .join(' ');
-
-    // Use title keywords as primary signal; fall back to category alone if title is generic
-    const searchQuery = titleWords.length > 2 ? titleWords : category;
-    const query = encodeURIComponent(searchQuery.trim());
-
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
-
-      const res = await fetch(
-        `https://api.unsplash.com/search/photos?query=${query}&per_page=3&orientation=landscape&content_filter=high`,
-        {
-          headers: { Authorization: `Client-ID ${key}` },
-          signal: controller.signal,
-        },
-      );
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        this.logger.warn(`Unsplash search failed (${res.status}) for: ${titleWords}`);
-        return null;
-      }
-
-      const data = (await res.json()) as UnsplashSearchResponse;
-      // Pick the best result — prefer first which Unsplash ranks most relevant
-      const url = data.results[0]?.urls.regular ?? null;
-      if (url) this.logger.log(`Unsplash image resolved for "${titleWords}"`);
-      return url;
-    } catch (err) {
-      if ((err as { name?: string }).name !== 'AbortError') {
-        this.logger.warn(`Unsplash fetch error: ${String(err)}`);
-      }
-      return null;
-    }
-  }
-
-  /** Fire-and-forget: fetch + persist a relevant Unsplash image for a listing that has none. */
-  private backfillProductImage(id: string, title: string, category: string): void {
-    this.fetchRelevantImage(title, category)
-      .then((url) => {
-        if (url) {
-          return this.prisma.product.update({ where: { id }, data: { imageUrl: url } });
-        }
-      })
-      .catch(() => null);
-  }
 
   private normalizeTags(tags: string | null | undefined): string[] {
     if (!tags) return [];
@@ -198,12 +93,6 @@ export class ProductService implements OnModuleInit {
       this.prisma.product.count({ where: { active: true } }),
     ]);
 
-    // Backfill images for listings missing one — max 4 per request, fire-and-forget
-    products
-      .filter((p) => !p.imageUrl)
-      .slice(0, 4)
-      .forEach((p) => this.backfillProductImage(p.id, p.title, p.category ?? ''));
-
     return {
       data: products.map((p) => this.withDefaults(p as ProductWithSeller)),
       total,
@@ -224,10 +113,6 @@ export class ProductService implements OnModuleInit {
     if (!product) return null;
 
     // Backfill image if missing
-    if (!product.imageUrl) {
-      this.backfillProductImage(product.id, product.title, product.category ?? '');
-    }
-
     return this.withDefaults(product as ProductWithSeller);
   }
 
@@ -270,11 +155,9 @@ export class ProductService implements OnModuleInit {
       );
     }
 
-    // Primary image: first of imageUrls array, then imageUrl, then Unsplash fallback
     const { imageUrls, ...restData } = data;
     const primaryFromArray = imageUrls?.[0];
-    const resolvedPrimary =
-      primaryFromArray ?? data.imageUrl ?? (await this.fetchRelevantImage(data.title, data.category ?? ''));
+    const resolvedPrimary = primaryFromArray ?? data.imageUrl ?? undefined;
 
     const product = await this.prisma.product.create({
       data: {
@@ -301,13 +184,7 @@ export class ProductService implements OnModuleInit {
     const { imageUrls, ...restUpdateData } = data;
     const primaryFromArray = imageUrls?.[0];
 
-    // Fetch a smart image only if the listing currently has no real image and none was provided
-    let resolvedImageUrl = primaryFromArray ?? data.imageUrl;
-    if (!resolvedImageUrl && !existing.imageUrl) {
-      const title = data.title ?? existing.title;
-      const category = data.category ?? existing.category ?? '';
-      resolvedImageUrl = (await this.fetchRelevantImage(title, category)) ?? undefined;
-    }
+    const resolvedImageUrl = primaryFromArray ?? data.imageUrl ?? undefined;
 
     const updated = await this.prisma.product.update({
       where: { id },
@@ -399,6 +276,18 @@ export class ProductService implements OnModuleInit {
   }
 
   async getCategories() {
+    const DESCRIPTIONS: Record<string, string> = {
+      Electronics:  'Phones, laptops, chargers, earphones & campus gadgets',
+      Textbooks:    'Recommended reading, past papers & academic resources',
+      Clothing:     'Fits, shoes, accessories & second-hand fashion',
+      Furniture:    'Hostel beds, chairs, desks & room essentials',
+      Notes:        'Handwritten & typed lecture notes by course',
+      Sports:       'Gym gear, jerseys, boots & outdoor equipment',
+      Stationery:   'Pens, notebooks, drawing sets & art supplies',
+      Services:     'Tutoring, delivery, repairs, photography & more',
+      Other:        'Everything else that keeps campus life going',
+    };
+
     const groups = await this.prisma.product.groupBy({
       by: ['category'],
       where: { active: true },
@@ -407,7 +296,11 @@ export class ProductService implements OnModuleInit {
 
     return groups
       .filter((g) => g.category)
-      .map((g) => ({ name: g.category!, count: g._count.id }))
+      .map((g) => ({
+        name: g.category!,
+        count: g._count.id,
+        description: DESCRIPTIONS[g.category!] ?? null,
+      }))
       .sort((a, b) => b.count - a.count);
   }
 
