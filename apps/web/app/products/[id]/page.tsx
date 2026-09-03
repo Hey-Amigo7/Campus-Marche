@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, Loader2, MapPin, Share2, Star } from "lucide-react";
+import { Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, Loader2, MapPin, Share2, Star } from "lucide-react";
 import { notFound } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -176,6 +176,34 @@ function SaveButton({ productId }: { productId: string }) {
     >
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
       {status?.saved ? "Saved" : "Save"}
+    </button>
+  );
+}
+
+function ShareButton({ title, price }: { title: string; price: number }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleShare() {
+    const url = window.location.href;
+    const text = `Check out "${title}" for ${formatCurrency(price)} on Campus Marché`;
+    if (navigator.share) {
+      try { await navigator.share({ title, text, url }); } catch { /* user dismissed */ }
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition-all hover:-translate-y-px"
+      style={{ background: "#F4F4F5", border: "1px solid #E4E4E7", color: "#71717A" }}
+    >
+      {copied ? <Check className="h-5 w-5 text-green-600" /> : <Share2 className="h-5 w-5" />}
+      {copied ? "Copied!" : "Share"}
     </button>
   );
 }
@@ -394,7 +422,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
             {/* Seller card */}
             <div className="mt-4 overflow-hidden rounded-3xl" style={PANEL}>
-              <div className="max-h-[460px] space-y-5 overflow-y-auto p-6">
+              <div className="space-y-4 p-6">
                 <div className="flex items-center justify-between gap-3">
                   <Link href={`/store/${seller.id}`} className="flex items-center gap-3 group">
                     <div
@@ -415,27 +443,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <SellerBadge verified={seller.verified} premium={seller.premium} compact />
                 </div>
 
-                {sellerRating > 0 ? (
-                  <div className="flex items-center justify-between">
-                    <Rating value={sellerRating} />
-                    <Link href={`/store/${seller.id}`}
-                      className="text-sm font-bold transition-colors hover:text-[#14532D]"
-                      style={{ color: "#16A34A" }}>
-                      View storefront →
-                    </Link>
-                  </div>
-                ) : (
+                <div className="flex items-center justify-between">
+                  {sellerRating > 0 && <Rating value={sellerRating} />}
                   <Link href={`/store/${seller.id}`}
-                    className="text-sm font-bold transition-colors hover:text-[#14532D]"
+                    className="ml-auto text-sm font-bold transition-colors hover:text-[#14532D]"
                     style={{ color: "#16A34A" }}>
                     View storefront →
                   </Link>
-                )}
-
-                <div className="border-t pt-5" style={{ borderColor: "#E4E4E7" }}>
-                  <p className="mb-3 text-xs font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>Reviews</p>
-                  <ReviewList productId={product.id} />
-                  <ReviewForm productId={product.id} sellerId={seller.id} />
                 </div>
               </div>
             </div>
@@ -541,14 +555,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <AddToCartButton product={product} />
               </div>
               <SaveButton productId={product.id} />
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition-all hover:-translate-y-px"
-                style={{ background: "#F4F4F5", border: "1px solid #E4E4E7", color: "#71717A" }}
-              >
-                <Share2 className="h-5 w-5" />
-                Share
-              </button>
+              <ShareButton title={product.title} price={product.price} />
             </div>
 
             {/* Tags */}
@@ -565,6 +572,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 ))}
               </div>
             )}
+
+            {/* Reviews — after Share button */}
+            <div className="rounded-3xl p-6" style={PANEL}>
+              <p className="mb-3 text-xs font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>
+                Customer reviews
+              </p>
+              <ReviewList productId={product.id} />
+              <ReviewForm productId={product.id} sellerId={seller.id} />
+            </div>
           </aside>
         </div>
 
