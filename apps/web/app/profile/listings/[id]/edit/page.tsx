@@ -3,6 +3,7 @@
 import { ImagePlus, Loader2, Save, Tag, UploadCloud, X, ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { useCategories, useProduct } from "@/hooks/use-api";
@@ -21,6 +22,7 @@ export default function EditListingPage() {
 function EditListingContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { mutate } = useSWRConfig();
   const { toast } = useToast();
   const { data: product, isLoading: productLoading } = useProduct(id);
   const { data: categoriesData } = useCategories();
@@ -131,6 +133,8 @@ function EditListingContent() {
         imageStyle: (category || "other").toLowerCase(),
       });
       toast("Listing updated successfully.");
+      void mutate("my-listings");
+      void mutate(`product-${id}`);
       setTimeout(() => router.push("/profile/listings"), 800);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not update listing.");

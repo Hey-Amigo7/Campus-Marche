@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle, Package, ShoppingBag,
+  Package, ShoppingBag,
   Edit3, Settings, LogOut, MapPin, Calendar, Plus,
   Star, ShieldCheck, Heart, Store, ExternalLink,
 } from "lucide-react";
@@ -193,14 +193,6 @@ export default function ProfilePage() {
                 }}
               >
                 <UserAvatar avatar={profile.avatar} name={profile.name} size={80} className="rounded-none" />
-                {profile.verified && (
-                  <span
-                    className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full"
-                    style={{ background: "#72CC23" }}
-                  >
-                    <CheckCircle size={13} className="text-white" />
-                  </span>
-                )}
               </div>
 
               <div className="pb-1">
@@ -413,14 +405,6 @@ export default function ProfilePage() {
                         >
                           <Store size={10} /> {profile.business.type}
                         </span>
-                        {profile.business.verified && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
-                            style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.65)" }}
-                          >
-                            <CheckCircle size={10} /> Verified
-                          </span>
-                        )}
                       </div>
                       <h2 className="text-xl font-black text-white">{profile.business.name}</h2>
                       {profile.business.description && (
