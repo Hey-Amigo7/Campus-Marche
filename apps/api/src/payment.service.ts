@@ -105,11 +105,16 @@ export class PaymentService {
     const reference = `CM-${Date.now()}-${order.id.slice(-6)}`;
     const secret = this.getSecret();
 
+    // Use stored totalAmount when available; recalculate for legacy orders where it defaulted to 0
+    const { feePercent, feeFixed } = this.getFeeConfig();
+    const chargeAmount = order.totalAmount > 0
+      ? order.totalAmount
+      : calculateCommission(order.price, feePercent, feeFixed).totalAmount;
+
     if (!secret) {
-      // Dev mode: log and return placeholder
       this.logger.warn('PAYSTACK_SECRET_KEY not configured — returning dev placeholder');
       const tx = await this.prisma.paymentTransaction.create({
-        data: { orderId: order.id, userId, reference, amount: order.totalAmount || order.price, status: 'Dev mode — Paystack not configured' },
+        data: { orderId: order.id, userId, reference, amount: chargeAmount, status: 'Dev mode — Paystack not configured' },
       });
       await this.prisma.order.update({
         where: { id: orderId },
@@ -118,7 +123,7 @@ export class PaymentService {
       return tx;
     }
 
-    const amountInPesewas = Math.round((order.totalAmount || order.price) * 100);
+    const amountInPesewas = Math.round(chargeAmount * 100);
 
     const res = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
@@ -215,7 +220,11 @@ export class PaymentService {
     if (!secret) throw new BadRequestException('Paystack is not configured — contact support');
 
     const reference = `CM-MOMO-${Date.now()}-${order.id.slice(-6)}`;
-    const amountInPesewas = Math.round((order.totalAmount || order.price) * 100);
+    const { feePercent: fp, feeFixed: ff } = this.getFeeConfig();
+    const momoChargeAmount = order.totalAmount > 0
+      ? order.totalAmount
+      : calculateCommission(order.price, fp, ff).totalAmount;
+    const amountInPesewas = Math.round(momoChargeAmount * 100);
     const normalizedPhone = phone.replace(/\D/g, '').replace(/^0/, '233');
 
     const res = await fetch('https://api.paystack.co/charge', {

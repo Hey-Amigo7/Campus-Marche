@@ -287,10 +287,10 @@ export const api = {
       strict: true,
     }),
 
-  assignDeliveryPerson: (orderId: string, deliveryPersonId: string) =>
+  assignDeliveryPerson: (orderId: string, identifier: string, name?: string) =>
     request<Order>(`/orders/${orderId}/assign-delivery`, {} as Order, {
       method: "POST",
-      body: JSON.stringify({ deliveryPersonId }),
+      body: JSON.stringify({ identifier, name }),
       strict: true,
     }),
 

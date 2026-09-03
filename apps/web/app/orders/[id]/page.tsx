@@ -109,7 +109,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [savingDelivery, setSavingDelivery] = useState(false);
 
   // Assign delivery person
-  const [deliveryPersonId, setDeliveryPersonId] = useState("");
+  const [deliveryContact, setDeliveryContact] = useState("");
+  const [deliveryContactName, setDeliveryContactName] = useState("");
   const [assigning, setAssigning] = useState(false);
 
   // Live delivery tracking
@@ -289,10 +290,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     e.preventDefault();
     setAssigning(true);
     try {
-      await api.assignDeliveryPerson(id, deliveryPersonId.trim());
+      await api.assignDeliveryPerson(id, deliveryContact.trim(), deliveryContactName.trim() || undefined);
       await mutate();
       toast("Delivery person assigned. Order is now Out for delivery.");
-      setDeliveryPersonId("");
+      setDeliveryContact("");
+      setDeliveryContactName("");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not assign delivery person.");
     } finally {
@@ -381,47 +383,90 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* ── PAYMENT SECTION ── */}
             {!isPaid && isActive ? (
-              <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-                <h2 className="text-base font-black text-amber-900">Payment required</h2>
-                <p className="mt-1 text-sm font-semibold text-amber-700">
-                  Complete payment to move your order forward. Card and Mobile Money are accepted.
-                </p>
-                {/* Fee breakdown */}
-                {(() => {
-                  const base = order.product.price;
-                  const fee  = order.platformFee ?? Math.round(base * 0.025 * 100) / 100;
-                  const total = order.totalAmount ?? Math.round((base + fee) * 100) / 100;
-                  return (
-                    <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-amber-800">Item price</span>
-                        <span className="font-semibold text-amber-900">{formatCurrency(base)}</span>
+              role === "buyer" ? (
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                  <h2 className="text-base font-black text-amber-900">Payment required</h2>
+                  <p className="mt-1 text-sm font-semibold text-amber-700">
+                    Complete payment to move your order forward. Card and Mobile Money are accepted.
+                  </p>
+                  {(() => {
+                    const base  = order.product.price;
+                    const fee   = (order.platformFee != null && order.platformFee > 0)
+                      ? order.platformFee
+                      : Math.round(base * 0.025 * 100) / 100;
+                    const total = (order.totalAmount != null && order.totalAmount > 0)
+                      ? order.totalAmount
+                      : Math.round((base + fee) * 100) / 100;
+                    const feePct = base > 0 ? +(fee / base * 100).toFixed(1) : 2.5;
+                    return (
+                      <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-amber-800">Item price</span>
+                          <span className="font-semibold text-amber-900">{formatCurrency(base)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-amber-800">Service fee ({feePct}%)</span>
+                          <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-amber-200 pt-1.5">
+                          <span className="font-black text-amber-900">Total you pay</span>
+                          <span className="font-black text-amber-900">{formatCurrency(total)}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-amber-800">Service fee (2.5%)</span>
-                        <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-amber-200 pt-1.5">
-                        <span className="font-black text-amber-900">Total charged</span>
-                        <span className="font-black text-amber-900">{formatCurrency(total)}</span>
-                      </div>
+                    );
+                  })()}
+                  <button
+                    onClick={handlePayment}
+                    disabled={initializingPayment}
+                    className="btn-primary mt-4 w-full justify-center disabled:opacity-50"
+                  >
+                    {initializingPayment
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Lock className="h-4 w-4" />}
+                    {initializingPayment ? "Redirecting to Paystack…" : "Pay securely now"}
+                  </button>
+                  <p className="mt-3 text-center text-xs text-amber-700">
+                    Powered by Paystack · Card, Mobile Money &amp; bank transfer accepted
+                  </p>
+                </section>
+              ) : (
+                /* Seller view — waiting for buyer to pay */
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+                    <h2 className="text-base font-black text-amber-900">Awaiting payment</h2>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-amber-700">
+                    {order.counterpart} hasn&apos;t paid yet. Share your order link to remind them.
+                  </p>
+                  <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-amber-800">Item price</span>
+                      <span className="font-semibold text-amber-900">{formatCurrency(order.product.price)}</span>
                     </div>
-                  );
-                })()}
-                <button
-                  onClick={handlePayment}
-                  disabled={initializingPayment}
-                  className="btn-primary mt-4 w-full justify-center disabled:opacity-50"
-                >
-                  {initializingPayment
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Lock className="h-4 w-4" />}
-                  {initializingPayment ? "Redirecting to Paystack…" : "Pay securely now"}
-                </button>
-                <p className="mt-3 text-center text-xs text-amber-700">
-                  Powered by Paystack · Card, Mobile Money &amp; bank transfer accepted
-                </p>
-              </section>
+                    <div className="flex justify-between border-t border-amber-200 pt-1.5">
+                      <span className="font-black text-amber-900">Buyer pays (fees incl.)</span>
+                      <span className="font-black text-amber-900">
+                        {formatCurrency((order.totalAmount ?? 0) > 0 ? (order.totalAmount ?? 0) : Math.round(order.product.price * 1.025 * 100) / 100)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-amber-800">You receive</span>
+                      <span className="font-semibold text-amber-900">{formatCurrency((order.sellerAmount ?? 0) > 0 ? (order.sellerAmount ?? 0) : order.product.price)}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(`${window.location.origin}/orders/${id}`).then(() => toast("Order link copied! Send it to the buyer."));
+                    }}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-white py-3 text-sm font-black text-amber-900 transition-colors hover:bg-amber-50"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy order link for buyer
+                  </button>
+                </section>
+              )
             ) : null}
 
             {/* ── DELIVERY DETAILS ── */}
@@ -498,13 +543,27 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <form onSubmit={handleAssignDelivery} className="space-y-3">
                       <div>
                         <label className="text-xs font-bold text-slate-700">Assign delivery person</label>
-                        <p className="mt-0.5 text-xs text-slate-500">Enter the email address of the person who will deliver the item.</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Enter their email or phone number. They don&apos;t need a Campus Marche account.
+                        </p>
                         <input
-                          type="email"
-                          value={deliveryPersonId}
-                          onChange={(e) => setDeliveryPersonId(e.target.value)}
-                          placeholder="deliverer@email.com"
+                          type="text"
+                          value={deliveryContact}
+                          onChange={(e) => setDeliveryContact(e.target.value)}
+                          placeholder="0244000000 or name@email.com"
                           required
+                          className="input-shell mt-1 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700">
+                          Their name <span className="font-normal text-slate-400">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={deliveryContactName}
+                          onChange={(e) => setDeliveryContactName(e.target.value)}
+                          placeholder="e.g. Kofi Mensah"
                           className="input-shell mt-1 text-sm"
                         />
                       </div>
@@ -558,10 +617,28 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                       ) : null}
                     </div>
                   </div>
+                ) : (order as { externalDeliveryContact?: string; externalDeliveryName?: string }).externalDeliveryContact ? (
+                  <div className="mt-3 flex items-center gap-3 rounded-xl bg-white p-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: "rgba(127,182,133,0.15)", color: "#5A9460" }}>
+                      <Phone className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-slate-900">
+                        {(order as { externalDeliveryName?: string }).externalDeliveryName ?? "External delivery"}
+                      </p>
+                      <a
+                        href={`tel:${(order as { externalDeliveryContact?: string }).externalDeliveryContact}`}
+                        className="block truncate text-xs font-semibold hover:underline"
+                        style={{ color: "#5A9460" }}
+                      >
+                        {(order as { externalDeliveryContact?: string }).externalDeliveryContact}
+                      </a>
+                    </div>
+                  </div>
                 ) : null}
 
-                {/* Live map */}
-                {liveCoords ? (
+                {/* Live map — shown whenever delivery OR buyer has shared coords */}
+                {(liveCoords || buyerCoords) ? (
                   <div className="mt-3 space-y-2">
                     <DeliveryMap
                       coords={liveCoords}
@@ -574,16 +651,28 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         {sharingLocation && (
                           <span className="inline-flex h-2 w-2 animate-ping rounded-full bg-green-500" />
                         )}
-                        {liveCoords.speed != null ? `${(liveCoords.speed).toFixed(1)} km/h · ` : ""}
-                        {liveCoords.heading != null ? `${headingToCompass(liveCoords.heading)} · ` : ""}
-                        {liveCoords.updatedAt ? `Updated ${formatRelativeDate(liveCoords.updatedAt)}` : "Live"}
+                        {liveCoords ? (
+                          <>
+                            {liveCoords.speed != null ? `${(liveCoords.speed).toFixed(1)} km/h · ` : ""}
+                            {liveCoords.heading != null ? `${headingToCompass(liveCoords.heading)} · ` : ""}
+                            {liveCoords.updatedAt ? `Updated ${formatRelativeDate(liveCoords.updatedAt)}` : "Live"}
+                          </>
+                        ) : (
+                          <span style={{ color: "#3B82F6" }}>Buyer location shared</span>
+                        )}
                       </span>
-                      <a href={`https://www.openstreetmap.org/?mlat=${liveCoords.lat}&mlon=${liveCoords.lng}&zoom=16`}
+                      <a
+                        href={`https://www.google.com/maps?q=${(liveCoords ?? buyerCoords)!.lat},${(liveCoords ?? buyerCoords)!.lng}`}
                         target="_blank" rel="noopener noreferrer"
                         className="flex items-center gap-1 hover:underline" style={{ color: "#5A9460" }}>
-                        <MapPin className="h-3 w-3" /> Open map ↗
+                        <MapPin className="h-3 w-3" /> Open in Maps ↗
                       </a>
                     </div>
+                    {!liveCoords && role !== "buyer" && (
+                      <p className="text-xs font-semibold" style={{ color: "#94A3B8" }}>
+                        Delivery person hasn&apos;t started live tracking yet.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="mt-3 text-sm font-semibold" style={{ color: "#5A9460" }}>
@@ -689,10 +778,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   <dt className="font-semibold text-slate-500">Item price</dt>
                   <dd className="font-black text-slate-950">{formatCurrency(order.product.price)}</dd>
                 </div>
-                {(order.totalAmount ?? 0) > 0 && order.totalAmount !== order.product.price ? (
+                {order.totalAmount != null && order.totalAmount > 0 && order.totalAmount !== order.product.price ? (
                   <div className="flex justify-between">
                     <dt className="font-semibold text-slate-500">Total paid</dt>
-                    <dd className="font-black text-slate-950">{formatCurrency(order.totalAmount!)}</dd>
+                    <dd className="font-black text-slate-950">{formatCurrency(order.totalAmount)}</dd>
                   </div>
                 ) : null}
                 {role === "seller" && (order.platformFee ?? 0) > 0 ? (

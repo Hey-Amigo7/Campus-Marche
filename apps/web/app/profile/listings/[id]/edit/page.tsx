@@ -61,7 +61,8 @@ function EditListingContent() {
       setDescription(product.description);
       setTags(Array.isArray(product.tags) ? product.tags.join(", ") : "");
       setNegotiable(product.negotiable);
-      if (product.imageUrl) {
+      // Only pre-fill if it's a fully-qualified URL — bad/relative stored values shouldn't poison the form
+      if (product.imageUrl && /^https?:\/\/.+/.test(product.imageUrl)) {
         setUploadedImageUrl(product.imageUrl);
       }
     }

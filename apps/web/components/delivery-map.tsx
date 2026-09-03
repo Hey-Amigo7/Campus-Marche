@@ -11,8 +11,8 @@ export interface DeliveryCoords {
 }
 
 interface DeliveryMapProps {
-  /** Delivery person's live position (green pulsing dot) */
-  coords: DeliveryCoords;
+  /** Delivery person's live position (green pulsing dot) — omit when only buyer location is known */
+  coords?: DeliveryCoords | null;
   /** Buyer's shared position (blue pin) */
   buyerCoords?: DeliveryCoords | null;
   destinationLabel?: string;
@@ -20,25 +20,21 @@ interface DeliveryMapProps {
   height?: string;
 }
 
-/**
- * Interactive Leaflet map — no API key required (OpenStreetMap tiles).
- * Shows a green pulsing dot for the delivery person and a blue pin for the buyer.
- * Must be loaded with `dynamic(..., { ssr: false })`.
- */
 export function DeliveryMap({ coords, buyerCoords, destinationLabel, height = "h-64" }: DeliveryMapProps) {
-  const containerRef    = useRef<HTMLDivElement>(null);
-  const mapRef          = useRef<import("leaflet").Map | null>(null);
-  const deliveryMarker  = useRef<import("leaflet").Marker | null>(null);
-  const buyerMarkerRef  = useRef<import("leaflet").Marker | null>(null);
+  const containerRef   = useRef<HTMLDivElement>(null);
+  const mapRef         = useRef<import("leaflet").Map | null>(null);
+  const deliveryMarker = useRef<import("leaflet").Marker | null>(null);
+  const buyerMarkerRef = useRef<import("leaflet").Marker | null>(null);
 
-  // Bootstrap map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+
+    const center = coords ?? buyerCoords;
+    if (!center) return;
 
     void (async () => {
       const L = (await import("leaflet")).default;
 
-      // Fix default icon path broken by webpack
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
@@ -48,7 +44,7 @@ export function DeliveryMap({ coords, buyerCoords, destinationLabel, height = "h
       });
 
       const map = L.map(containerRef.current!, {
-        center:          [coords.lat, coords.lng],
+        center:          [center.lat, center.lng],
         zoom:            16,
         zoomControl:     true,
         scrollWheelZoom: true,
@@ -60,31 +56,32 @@ export function DeliveryMap({ coords, buyerCoords, destinationLabel, height = "h
       }).addTo(map);
 
       // ── Delivery person — green pulsing dot ──
-      const deliveryIcon = L.divIcon({
-        html: `
-          <div style="
-            width:20px;height:20px;
-            background:#72CC23;
-            border:3px solid white;
-            border-radius:50%;
-            box-shadow:0 0 0 4px rgba(114,204,35,0.30);
-            animation:cm-pulse 2s ease-in-out infinite;
-          "></div>
-          <style>
-            @keyframes cm-pulse{
-              0%,100%{box-shadow:0 0 0 4px rgba(114,204,35,0.30)}
-              50%{box-shadow:0 0 0 10px rgba(114,204,35,0.10)}
-            }
-          </style>`,
-        className: "",
-        iconSize:   [20, 20],
-        iconAnchor: [10, 10],
-      });
+      if (coords) {
+        const deliveryIcon = L.divIcon({
+          html: `
+            <div style="
+              width:20px;height:20px;
+              background:#72CC23;
+              border:3px solid white;
+              border-radius:50%;
+              box-shadow:0 0 0 4px rgba(114,204,35,0.30);
+              animation:cm-pulse 2s ease-in-out infinite;
+            "></div>
+            <style>
+              @keyframes cm-pulse{
+                0%,100%{box-shadow:0 0 0 4px rgba(114,204,35,0.30)}
+                50%{box-shadow:0 0 0 10px rgba(114,204,35,0.10)}
+              }
+            </style>`,
+          className: "",
+          iconSize:   [20, 20],
+          iconAnchor: [10, 10],
+        });
 
-      const dMarker = L.marker([coords.lat, coords.lng], { icon: deliveryIcon })
-        .addTo(map)
-        .bindPopup("🛵 Delivery person");
-      deliveryMarker.current = dMarker;
+        deliveryMarker.current = L.marker([coords.lat, coords.lng], { icon: deliveryIcon })
+          .addTo(map)
+          .bindPopup("🛵 Delivery person");
+      }
 
       // ── Buyer — blue teardrop pin ──
       if (buyerCoords) {
@@ -103,17 +100,20 @@ export function DeliveryMap({ coords, buyerCoords, destinationLabel, height = "h
           iconAnchor: [10, 20],
         });
 
-        const bMarker = L.marker([buyerCoords.lat, buyerCoords.lng], { icon: buyerIcon })
+        buyerMarkerRef.current = L.marker([buyerCoords.lat, buyerCoords.lng], { icon: buyerIcon })
           .addTo(map)
           .bindPopup(`📍 ${destinationLabel ?? "Buyer location"}`);
-        buyerMarkerRef.current = bMarker;
 
-        // Fit both pins on the map
-        const bounds = L.latLngBounds(
-          [coords.lat,       coords.lng],
-          [buyerCoords.lat,  buyerCoords.lng],
-        );
-        map.fitBounds(bounds, { padding: [40, 40] });
+        if (coords) {
+          // Both pins — fit the map to show both
+          map.fitBounds(
+            L.latLngBounds([coords.lat, coords.lng], [buyerCoords.lat, buyerCoords.lng]),
+            { padding: [40, 40] },
+          );
+        } else {
+          // Buyer-only preview — centre on their pin
+          map.setView([buyerCoords.lat, buyerCoords.lng], 16);
+        }
       }
 
       mapRef.current = map;
@@ -121,21 +121,21 @@ export function DeliveryMap({ coords, buyerCoords, destinationLabel, height = "h
 
     return () => {
       mapRef.current?.remove();
-      mapRef.current       = null;
-      deliveryMarker.current = null;
+      mapRef.current        = null;
+      deliveryMarker.current  = null;
       buyerMarkerRef.current  = null;
     };
   }, []); // eslint-disable-line
 
-  // Move delivery person marker on coords change
+  // Move delivery person marker when coords change
   useEffect(() => {
-    if (!deliveryMarker.current || !mapRef.current) return;
+    if (!deliveryMarker.current || !mapRef.current || !coords) return;
     const latlng: [number, number] = [coords.lat, coords.lng];
     deliveryMarker.current.setLatLng(latlng);
     if (!buyerMarkerRef.current) {
       mapRef.current.setView(latlng, mapRef.current.getZoom(), { animate: true, duration: 1 });
     }
-  }, [coords.lat, coords.lng]);
+  }, [coords?.lat, coords?.lng]); // eslint-disable-line
 
   // Update buyer marker when buyerCoords change
   useEffect(() => {
@@ -157,19 +157,20 @@ export function DeliveryMap({ coords, buyerCoords, destinationLabel, height = "h
             .addTo(mapRef.current!)
             .bindPopup(`📍 ${destinationLabel ?? "Buyer location"}`);
         }
-        // Re-fit both pins
-        const bounds = L.latLngBounds(
-          [coords.lat, coords.lng],
-          latlng,
-        );
-        mapRef.current?.fitBounds(bounds, { padding: [40, 40] });
+        if (coords && deliveryMarker.current) {
+          mapRef.current?.fitBounds(
+            L.latLngBounds([coords.lat, coords.lng], latlng),
+            { padding: [40, 40] },
+          );
+        } else {
+          mapRef.current?.setView(latlng, mapRef.current.getZoom(), { animate: true, duration: 0.5 });
+        }
       }
     })();
   }, [buyerCoords?.lat, buyerCoords?.lng]); // eslint-disable-line
 
   return (
     <div ref={containerRef} className={`w-full overflow-hidden rounded-2xl ${height}`} style={{ minHeight: 200 }}>
-      {/* Legend */}
       <div
         style={{
           position: "absolute", bottom: 8, left: 8, zIndex: 1000,
@@ -179,8 +180,8 @@ export function DeliveryMap({ coords, buyerCoords, destinationLabel, height = "h
           boxShadow: "0 1px 6px rgba(0,0,0,0.12)",
         }}
       >
-        <span style={{ color: "#16A34A" }}>● Delivery</span>
-        {buyerCoords && <span style={{ color: "#3B82F6" }}>◆ You</span>}
+        {coords && <span style={{ color: "#16A34A" }}>● Delivery</span>}
+        {buyerCoords && <span style={{ color: "#3B82F6" }}>◆ {coords ? "You" : "Buyer"}</span>}
       </div>
     </div>
   );

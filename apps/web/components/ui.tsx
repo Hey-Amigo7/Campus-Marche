@@ -32,7 +32,7 @@ export function SectionHeading({
 }
 
 export function SellerBadge({
-  verified,
+  verified: _verified,
   premium,
   compact = false,
 }: {
@@ -40,21 +40,13 @@ export function SellerBadge({
   premium?: boolean;
   compact?: boolean;
 }) {
-  if (!verified && !premium) return null;
+  if (!premium) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1.5", compact && "gap-1")}>
-      {verified ? (
-        <span className="chip chip-sage">
-          <AnimatedBadgeCheck size={14} />
-          Verified
-        </span>
-      ) : null}
-      {premium ? (
-        <span className="chip chip-caramel">
-          <AnimatedCrown size={14} />
-          Premium
-        </span>
-      ) : null}
+      <span className="chip chip-caramel">
+        <AnimatedCrown size={14} />
+        Premium
+      </span>
     </span>
   );
 }

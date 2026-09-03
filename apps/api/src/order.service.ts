@@ -179,7 +179,7 @@ export class OrderService {
     return updated;
   }
 
-  async assignDeliveryPerson(orderId: string, requesterId: string, deliveryPersonId: string) {
+  async assignDeliveryPerson(orderId: string, requesterId: string, identifier: string, name?: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { product: { select: { sellerId: true } } },
@@ -189,15 +189,35 @@ export class OrderService {
     if (order.product.sellerId !== requesterId) throw new ForbiddenException('Only the seller can assign a delivery person');
     if (!['In progress'].includes(order.status)) throw new BadRequestException('Can only assign delivery for orders in progress');
 
-    const identifier = deliveryPersonId.trim();
-    const deliveryPerson = await this.prisma.user.findFirst({
-      where: { OR: [{ email: identifier.toLowerCase() }, { id: identifier }] },
-    });
-    if (!deliveryPerson) throw new NotFoundException('No account found with that email address');
+    const contact = identifier.trim();
 
+    // Try to find a registered Campus Marche user by email or phone
+    const registeredUser = await this.prisma.user.findFirst({
+      where: { OR: [{ email: contact.toLowerCase() }, { phone: contact }, { id: contact }] },
+    });
+
+    if (registeredUser) {
+      // Link to registered account — clears any previous external contact
+      return this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          deliveryPersonId:        registeredUser.id,
+          externalDeliveryName:    null,
+          externalDeliveryContact: null,
+          status: 'Out for delivery',
+        },
+      });
+    }
+
+    // External contact — store their info, no account required
     return this.prisma.order.update({
       where: { id: orderId },
-      data: { deliveryPersonId: deliveryPerson.id, status: 'Out for delivery' },
+      data: {
+        deliveryPersonId:        null,
+        externalDeliveryName:    name?.trim() || null,
+        externalDeliveryContact: contact,
+        status: 'Out for delivery',
+      },
     });
   }
 

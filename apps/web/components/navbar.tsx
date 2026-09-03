@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogIn, ChevronDown, LogOut, User, ShoppingBag,
   Package, Settings, MessageCircle, Heart, Bell,
-  BarChart2, Menu, X, Palette, ShoppingCart, Store, Wallet,
+  BarChart2, Menu, X, Palette, ShoppingCart, Store, Wallet, ReceiptText,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -128,6 +128,7 @@ function UserDropdown({
     { icon: Heart,         label: "Saved Items",   href: "/saved"            },
     { icon: MessageCircle, label: "Messages",      href: "/messages"         },
     { icon: ShoppingBag,   label: "My Orders",     href: "/orders"           },
+    { icon: ReceiptText,  label: "Transactions",   href: "/transactions"      },
     ...(hasBusiness && sellerId
       ? [
           { icon: Store,  label: "My Storefront",    href: `/store/${sellerId}` },
@@ -396,68 +397,87 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Mobile drawer */}
-        <AnimatePresence>
-          {menuOpen && (
-            <motion.div key="mobile-menu"
-              initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25, ease: "easeInOut" }}
-              className="overflow-hidden"
-              style={{ borderTop: "1px solid var(--border)", background: "var(--background)", boxShadow: "0 4px 16px rgba(9,9,11,0.06)" }}
-            >
-              <nav className="container-shell flex flex-col gap-1 py-4">
-                {NAV_LINKS.map((link) => {
-                  const active = pathname === link.href;
-                  return (
-                    <Link key={link.href} href={link.href}
-                      className={cn(
-                        "rounded-xl px-4 py-3 text-sm font-medium transition-colors",
-                        active ? "bg-[rgba(22,163,74,0.10)] text-[var(--green)]" : "text-[var(--muted)] hover:bg-[var(--surface-raised)]",
-                      )}
-                    >{link.label}</Link>
-                  );
-                })}
-                {/* Sell */}
-                <Link
-                  href={isAuthenticated ? "/sell" : "/register?next=/onboarding"}
-                  className={cn(
-                    "rounded-xl px-4 py-3 text-sm font-medium transition-colors",
-                    (pathname === "/sell" || pathname === "/onboarding")
-                      ? "bg-[rgba(22,163,74,0.10)] text-[var(--green)]"
-                      : "text-[var(--muted)] hover:bg-[var(--surface-raised)]",
-                  )}
-                >
-                  Sell
-                </Link>
+      </header>
 
-                <div className="mt-2 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-                  {isAuthenticated ? (
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-3 px-4 py-3">
-                        <UserAvatar avatar={profile?.avatar} name={profile?.name} size={36} />
-                        <div>
-                          <p className="text-sm font-bold" style={{ color: "var(--on-surface)" }}>{profile?.name}</p>
-                          <p className="text-xs" style={{ color: "var(--muted)" }}>{profile?.accountType ?? "Campus member"}</p>
-                        </div>
+      {/* Mobile side drawer — slides in from right, rendered outside header for correct z-index */}
+      <AnimatePresence>
+        {menuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="mobile-backdrop"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 md:hidden"
+              style={{ background: "rgba(9,9,11,0.45)", backdropFilter: "blur(2px)" }}
+              onClick={() => setMenuOpen(false)}
+            />
+            {/* Drawer panel */}
+            <motion.div
+              key="mobile-drawer"
+              initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 320, damping: 30 }}
+              className="fixed right-0 top-0 bottom-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto md:hidden"
+              style={{ background: "var(--surface)", borderLeft: "1px solid var(--border)", boxShadow: "-8px 0 32px rgba(9,9,11,0.10)" }}
+            >
+                {/* Drawer header */}
+                <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+                  <span className="text-base font-black" style={{ color: "var(--on-surface)" }}>Menu</span>
+                  <button type="button" onClick={() => setMenuOpen(false)}
+                    className="grid h-8 w-8 place-items-center rounded-xl hover:bg-[var(--surface-raised)]"
+                    style={{ color: "var(--muted)" }}>
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-1 px-3 py-3">
+                  {/* Navigation links not in bottom nav */}
+                  {[
+                    { href: "/categories", label: "Categories" },
+                    { href: "/events",     label: "Events"     },
+                  ].map((link) => {
+                    const active = pathname.startsWith(link.href);
+                    return (
+                      <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)}
+                        className={cn(
+                          "rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
+                          active ? "bg-[rgba(22,163,74,0.10)] text-[var(--green)]" : "text-[var(--muted)] hover:bg-[var(--surface-raised)]",
+                        )}
+                      >{link.label}</Link>
+                    );
+                  })}
+                </div>
+
+                {isAuthenticated ? (
+                  <>
+                    {/* User identity */}
+                    <div className="mx-3 mb-2 flex items-center gap-3 rounded-2xl px-4 py-3"
+                      style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
+                      <UserAvatar avatar={profile?.avatar} name={profile?.name} size={36} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold" style={{ color: "var(--on-surface)" }}>{profile?.name}</p>
+                        <p className="text-xs" style={{ color: "var(--muted)" }}>{profile?.accountType ?? "Campus member"}</p>
                       </div>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5 px-3 pb-3">
+                      {/* Account links — unique to drawer (not in bottom nav) */}
                       {[
-                        { icon: User,          label: "My Profile",     href: "/profile"                                       },
-                        { icon: Package,       label: "My Listings",    href: "/profile/listings"                              },
-                        { icon: Heart,         label: "Saved Items",    href: "/saved"                                         },
-                        { icon: MessageCircle, label: "Messages",       href: "/messages"                                      },
-                        { icon: ShoppingBag,   label: "My Orders",      href: "/orders"                                        },
-                        { icon: ShoppingCart,  label: "Cart",           href: "/cart"                                          },
-                        { icon: Store,         label: "Sell",           href: "/sell"                                          },
+                        { icon: User,        label: "My Profile",      href: "/profile"               },
+                        { icon: Package,     label: "My Listings",     href: "/profile/listings"      },
+                        { icon: Heart,       label: "Saved Items",     href: "/saved"                 },
+                        { icon: ShoppingBag, label: "My Orders",       href: "/orders"                },
+                        { icon: ReceiptText, label: "Transactions",    href: "/transactions"          },
                         ...(profile?.business && profile?.id
                           ? [
                               { icon: Store,  label: "My Storefront",   href: `/store/${profile.id}` },
                               { icon: Wallet, label: "Wallet & Payouts", href: "/wallet"              },
                             ]
                           : []),
-                        { icon: Bell,          label: "Notifications",  href: "/notifications"                                 },
-                        { icon: Settings,      label: "Settings",       href: "/settings"                                      },
+                        { icon: Bell,        label: "Notifications",   href: "/notifications"         },
+                        { icon: Settings,    label: "Settings",        href: "/settings"              },
                       ].map(({ icon: Icon, label, href }) => (
-                        <Link key={label} href={href}
+                        <Link key={label} href={href} onClick={() => setMenuOpen(false)}
                           className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-raised)]"
                           style={{ color: "var(--on-surface)" }}
                         >
@@ -467,31 +487,32 @@ export function Navbar() {
                             <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-black text-white"
                               style={{ background: "#72CC23" }}>{unreadCount}</span>
                           )}
-                          {label === "Cart" && cartCount > 0 && (
-                            <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-black text-white"
-                              style={{ background: "#72CC23" }}>{cartCount > 9 ? "9+" : cartCount}</span>
-                          )}
                         </Link>
                       ))}
-                      <button type="button" onClick={handleLogout}
-                        className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[rgba(239,68,68,0.05)]"
-                        style={{ color: "#EF4444" }}
-                      >
-                        <LogOut size={14} /> Sign Out
-                      </button>
+
+                      <div className="mt-2 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+                        <button type="button" onClick={() => { setMenuOpen(false); handleLogout(); }}
+                          className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[rgba(239,68,68,0.05)]"
+                          style={{ color: "#EF4444" }}
+                        >
+                          <LogOut size={14} /> Sign Out
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <Link href="/login" className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
-                      style={{ background: "#72CC23", color: "white" }}>
-                      <LogIn size={15} /> Sign In
+                  </>
+                ) : (
+                  <div className="px-3 pb-4">
+                    <Link href="/login" onClick={() => setMenuOpen(false)}
+                      className="flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white"
+                      style={{ background: "#72CC23" }}>
+                      <LogIn size={15} /> Sign In to your account
                     </Link>
-                  )}
-                </div>
-              </nav>
-            </motion.div>
+                  </div>
+                )}
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
-      </header>
 
       <div className="h-16" aria-hidden />
     </>

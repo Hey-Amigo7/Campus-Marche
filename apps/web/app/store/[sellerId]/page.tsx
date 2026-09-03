@@ -59,7 +59,7 @@ export default function StorefrontPage({ params }: { params: Promise<{ sellerId:
     setSaving(true);
     try {
       await api.saveBusiness({
-        name:        seller.banner || seller.name,
+        name:        editBanner.trim() || seller.banner || seller.name,
         type:        (seller.business?.type ?? "Student business") as Parameters<typeof api.saveBusiness>[0]["type"],
         location:    editLocation.trim() || seller.location,
         description: editBio.trim() || undefined,
