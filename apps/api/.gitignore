@@ -3,6 +3,10 @@
 /node_modules
 /build
 
+# TypeScript incremental build cache — committing this causes Render to skip
+# recompiling unchanged files (e.g. main.ts), resulting in a missing main.js
+*.tsbuildinfo
+
 # Logs
 logs
 *.log

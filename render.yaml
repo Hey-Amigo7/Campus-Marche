@@ -49,3 +49,7 @@ services:
         sync: false
       - key: ADMIN_SETUP_KEY
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
