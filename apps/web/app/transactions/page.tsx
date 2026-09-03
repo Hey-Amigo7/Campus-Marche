@@ -30,13 +30,15 @@ interface TxItem {
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
+const DEFAULT_STATUS_COLORS = { bg: "rgba(148,163,184,0.10)", text: "#64748B" };
+
 const PAYOUT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   PENDING:    { bg: "rgba(245,158,11,0.10)",  text: "#B45309" },
   APPROVED:   { bg: "rgba(59,130,246,0.10)",  text: "#1D4ED8" },
   PROCESSING: { bg: "rgba(14,165,233,0.10)",  text: "#0369A1" },
   COMPLETED:  { bg: "rgba(22,163,74,0.10)",   text: "#15803D" },
   FAILED:     { bg: "rgba(239,68,68,0.10)",   text: "#B91C1C" },
-  CANCELLED:  { bg: "rgba(148,163,184,0.10)", text: "#64748B" },
+  CANCELLED:  DEFAULT_STATUS_COLORS,
 };
 
 const ESCROW_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -150,8 +152,8 @@ function TxRow({ tx }: { tx: TxItem }) {
   const isPayout   = tx.type === "payout";
 
   const statusColors = isPayout
-    ? (PAYOUT_STATUS_COLORS[tx.status] ?? PAYOUT_STATUS_COLORS.CANCELLED)
-    : (ESCROW_STATUS_COLORS[tx.status] ?? ESCROW_STATUS_COLORS.PENDING_PAYMENT);
+    ? (PAYOUT_STATUS_COLORS[tx.status] ?? DEFAULT_STATUS_COLORS)
+    : (ESCROW_STATUS_COLORS[tx.status] ?? DEFAULT_STATUS_COLORS);
 
   const statusLabel = isPayout
     ? (PAYOUT_STATUS_LABELS[tx.status as keyof typeof PAYOUT_STATUS_LABELS] ?? tx.status)

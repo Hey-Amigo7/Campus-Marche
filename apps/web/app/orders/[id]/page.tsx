@@ -447,12 +447,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex justify-between border-t border-amber-200 pt-1.5">
                       <span className="font-black text-amber-900">Buyer pays (fees incl.)</span>
                       <span className="font-black text-amber-900">
-                        {formatCurrency(order.totalAmount > 0 ? order.totalAmount : Math.round(order.product.price * 1.025 * 100) / 100)}
+                        {formatCurrency((order.totalAmount ?? 0) > 0 ? (order.totalAmount ?? 0) : Math.round(order.product.price * 1.025 * 100) / 100)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-amber-800">You receive</span>
-                      <span className="font-semibold text-amber-900">{formatCurrency(order.sellerAmount > 0 ? order.sellerAmount : order.product.price)}</span>
+                      <span className="font-semibold text-amber-900">{formatCurrency((order.sellerAmount ?? 0) > 0 ? (order.sellerAmount ?? 0) : order.product.price)}</span>
                     </div>
                   </div>
                   <button
