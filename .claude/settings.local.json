@@ -19,7 +19,13 @@
       "Bash(mkdir -p \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\\\\apps\\\\api\\\\prisma\\\\migrations\\\\20260902000005_external_delivery_contact\")",
       "Bash(pnpm add *)",
       "Bash(npx tsc *)",
-      "Bash(npx prisma *)"
+      "Bash(npx prisma *)",
+      "Bash(mkdir -p \"apps/web/app/transactions\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:d.get\\(k\\) for k in ['name','scripts','main']}, indent=2\\)\\)\")",
+      "Bash(git rm *)",
+      "Bash(pnpm exec *)",
+      "Bash(cat nest-cli.json)",
+      "Bash(ls tsconfig*.json)"
     ]
   }
 }

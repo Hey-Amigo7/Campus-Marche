@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, CheckCircle2, Info, Loader2, Package, Plus, Tag, X } from "lucide-react";
+import { CalendarCheck, Camera, CheckCircle2, Info, Loader2, Package, Plus, Tag, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -116,7 +116,8 @@ function MultiImageUploader({ images, onAdd, onRemove, uploading, uploadError }:
   uploading: boolean;
   uploadError: string | null;
 }) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef  = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const canAddMore = images.length < MAX_IMAGES;
 
@@ -136,10 +137,11 @@ function MultiImageUploader({ images, onAdd, onRemove, uploading, uploadError }:
         </span>
       </div>
 
-      <label htmlFor="product-photo-input" className="sr-only">Upload product photo</label>
-      <input id="product-photo-input" ref={fileInputRef} type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only"
-        onChange={e => { const f = e.target.files?.[0]; if (f) onAdd(f); }} />
+      {/* Hidden inputs */}
+      <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) onAdd(f); e.target.value = ""; }} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+        className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) onAdd(f); e.target.value = ""; }} />
 
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         <AnimatePresence mode="popLayout">
@@ -169,7 +171,7 @@ function MultiImageUploader({ images, onAdd, onRemove, uploading, uploadError }:
         {canAddMore && (
           <motion.div key="upload-slot" layout initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }} transition={snap} className="aspect-square">
-            <button type="button" onClick={() => fileInputRef.current?.click()}
+            <button type="button" onClick={() => galleryRef.current?.click()}
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
@@ -183,8 +185,8 @@ function MultiImageUploader({ images, onAdd, onRemove, uploading, uploadError }:
                 : images.length === 0 ? (
                   <span className="flex flex-col items-center gap-1.5 p-2 text-center">
                     <AnimatedUploadCloud size={28} color="var(--green)" />
-                    <span className="text-[10px] font-black leading-tight" style={{ color: "var(--on-surface)" }}>Drop or click</span>
-                    <span className="text-[9px] font-semibold" style={{ color: "var(--subtle)" }}>JPEG · PNG · WebP</span>
+                    <span className="text-[10px] font-black leading-tight" style={{ color: "var(--on-surface)" }}>Gallery</span>
+                    <span className="text-[9px] font-semibold" style={{ color: "var(--subtle)" }}>or drop here</span>
                   </span>
                 ) : (
                   <span className="flex flex-col items-center gap-1">
@@ -195,11 +197,25 @@ function MultiImageUploader({ images, onAdd, onRemove, uploading, uploadError }:
             </button>
           </motion.div>
         )}
+
+        {/* Camera button — shown when space remains and no upload in progress */}
+        {canAddMore && !uploading && (
+          <motion.div key="camera-slot" layout initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }} transition={snap} className="aspect-square">
+            <button type="button" onClick={() => cameraRef.current?.click()}
+              className="grid h-full w-full place-items-center gap-1 rounded-xl border border-dashed transition-colors"
+              style={{ borderColor: "var(--border)", background: "var(--surface-raised)" }}
+            >
+              <Camera size={22} style={{ color: "var(--green)" }} />
+              <span className="text-[10px] font-black" style={{ color: "var(--on-surface)" }}>Camera</span>
+            </button>
+          </motion.div>
+        )}
       </div>
 
       {images.length === 0 && !uploading && (
         <p className="mt-2 text-xs" style={{ color: "var(--subtle)" }}>
-          Up to {MAX_IMAGES} photos. More photos = faster sales. Max 5 MB each.
+          Up to {MAX_IMAGES} photos · max 5 MB each · more photos = faster sales
         </p>
       )}
       {uploadError && <p className="mt-2 text-xs font-semibold" style={{ color: "#EF4444" }}>{uploadError}</p>}

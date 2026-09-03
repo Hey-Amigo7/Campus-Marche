@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Eye, Pencil, Pause, Play, Trash2,
-  MoreVertical, Package, AlertTriangle, Search,
+  MoreVertical, Package, AlertTriangle, Search, RefreshCw,
 } from "lucide-react";
 import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
@@ -111,15 +111,16 @@ function ListingRow({
   const cfg    = STATUS_CFG[status];
   const img    = product.imageUrl ?? product.imageUrls?.[0];
 
-  async function handleAction(type: "sold" | "archive" | "restore") {
+  async function handleAction(type: "sold" | "archive" | "restore" | "relist") {
     setLoading(type);
     try {
       if (type === "sold")    await api.markSold(product.id);
       if (type === "archive") await api.archiveListing(product.id);
-      if (type === "restore") await api.restoreListing(product.id);
+      if (type === "restore" || type === "relist") await api.restoreListing(product.id);
       success(
         type === "sold"    ? "Marked as sold."   :
         type === "archive" ? "Listing paused."   :
+        type === "relist"  ? "Listing relisted." :
         "Listing resumed.",
       );
       onRefresh();
@@ -254,6 +255,17 @@ function ListingRow({
                       style={{ color: "var(--on-surface)" }}
                     >
                       <Play size={14} /> Resume listing
+                    </button>
+                  )}
+                  {status === "sold" && (
+                    <button
+                      type="button"
+                      onClick={() => handleAction("relist")}
+                      disabled={!!loading}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-[var(--surface-raised)]"
+                      style={{ color: "var(--on-surface)" }}
+                    >
+                      <RefreshCw size={14} /> Relist item
                     </button>
                   )}
                   {status === "active" && (

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogIn, ChevronDown, LogOut, User, ShoppingBag,
   Package, Settings, MessageCircle, Heart, Bell,
-  BarChart2, Menu, X, Palette, ShoppingCart, Store, Wallet, ReceiptText,
+  BarChart2, X, Palette, ShoppingCart, Store, Wallet, ReceiptText,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -334,7 +334,7 @@ export function Navbar() {
 
             {/* Auth */}
             {isAuthenticated ? (
-              <div className="relative hidden sm:block">
+              <div className="relative hidden md:block">
                 <button type="button" onClick={() => setUserDropOpen((v) => !v)}
                   className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-[var(--surface-raised)]"
                 >
@@ -367,7 +367,7 @@ export function Navbar() {
               </div>
             ) : (
               <Link href="/login"
-                className="hidden items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors sm:flex"
+                className="hidden items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors md:flex"
                 style={{ background: "#72CC23", color: "white" }}
               >
                 <LogIn size={15} />
@@ -375,24 +375,14 @@ export function Navbar() {
               </Link>
             )}
 
-            {/* Mobile hamburger */}
+            {/* Mobile menu trigger — avatar if logged in, user icon if not; hidden on desktop */}
             <button type="button" onClick={() => setMenuOpen((v) => !v)}
-              className="grid h-9 w-9 place-items-center rounded-xl transition-colors hover:bg-[var(--surface-raised)] md:hidden"
-              style={{ color: "var(--on-surface)" }} aria-label="Toggle menu"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-colors hover:bg-[var(--surface-raised)] md:hidden"
+              aria-label="Open menu"
             >
-              <AnimatePresence mode="wait" initial={false}>
-                {menuOpen ? (
-                  <motion.span key="x" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }} transition={spring} style={{ display: "inline-flex" }}>
-                    <X size={20} />
-                  </motion.span>
-                ) : (
-                  <motion.span key="menu" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }} transition={spring} style={{ display: "inline-flex" }}>
-                    <Menu size={20} />
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              {isAuthenticated && profile
+                ? <UserAvatar avatar={profile.avatar} name={profile.name} size={28} />
+                : <User size={18} style={{ color: "var(--on-surface)" }} />}
             </button>
           </div>
         </div>
@@ -431,19 +421,29 @@ export function Navbar() {
                 </div>
 
                 <div className="flex flex-col gap-1 px-3 py-3">
-                  {/* Navigation links not in bottom nav */}
                   {[
-                    { href: "/categories", label: "Categories" },
-                    { href: "/events",     label: "Events"     },
-                  ].map((link) => {
-                    const active = pathname.startsWith(link.href);
+                    { href: "/products",   label: "Shop",       Icon: ShoppingBag   },
+                    { href: "/messages",   label: "Messages",   Icon: MessageCircle },
+                    { href: isAuthenticated ? "/sell" : "/register?next=/onboarding",
+                                           label: "Sell",       Icon: Package,       activeOn: "/sell" },
+                    { href: "/categories", label: "Categories", Icon: null          },
+                    { href: "/events",     label: "Events",     Icon: null          },
+                  ].map(({ href, label, Icon, activeOn }) => {
+                    const active = pathname.startsWith((activeOn ?? href).split("?")[0]!);
                     return (
-                      <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)}
+                      <Link key={label} href={href} onClick={() => setMenuOpen(false)}
                         className={cn(
-                          "rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
+                          "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
                           active ? "bg-[rgba(22,163,74,0.10)] text-[var(--green)]" : "text-[var(--muted)] hover:bg-[var(--surface-raised)]",
                         )}
-                      >{link.label}</Link>
+                      >
+                        {Icon && <Icon size={15} />}
+                        {label}
+                        {label === "Messages" && unreadCount > 0 && (
+                          <span className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-black text-white"
+                            style={{ background: "#72CC23" }}>{unreadCount}</span>
+                        )}
+                      </Link>
                     );
                   })}
                 </div>
@@ -519,55 +519,3 @@ export function Navbar() {
   );
 }
 
-/* ── Mobile bottom nav ──────────────────────────────────────── */
-export function MobileNav() {
-  const pathname = usePathname();
-  const router   = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const { data: profile } = useProfile();
-  const { setTheme }      = useTheme();
-
-  useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
-
-  function handleLogout() {
-    clearAuthToken(); setTheme("classic");
-    router.push("/");
-  }
-
-  const profileHref  = isAuthenticated ? "/profile" : "/login?next=/profile";
-  const profileLabel = isAuthenticated ? "Profile"  : "Log in";
-
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t px-2 py-2 md:hidden"
-      style={{ background: "var(--surface)", borderColor: "var(--border)", boxShadow: "0 -1px 12px rgba(0,0,0,0.06)" }}
-    >
-      <div className="grid grid-cols-4 gap-0.5">
-        {([
-          { href: "/products", label: "Shop",     Icon: ShoppingBag   },
-          { href: "/messages", label: "Messages", Icon: MessageCircle  },
-          { href: "/sell",     label: "Sell",     Icon: Package        },
-        ] as const).map(({ href, label, Icon }) => {
-          const active = pathname.startsWith(href);
-          return (
-            <Link key={href} href={href}
-              className="grid place-items-center gap-1 rounded-xl py-2 text-xs font-medium transition-all"
-              style={active ? { color: "var(--green)", background: "var(--green-surface)" } : { color: "var(--muted)" }}
-            >
-              <Icon size={20} />{label}
-            </Link>
-          );
-        })}
-        <Link href={profileHref}
-          className="grid place-items-center gap-1 rounded-xl py-2 text-xs font-medium transition-all"
-          style={pathname.startsWith("/profile") ? { color: "var(--green)", background: "var(--green-surface)" } : { color: "var(--muted)" }}
-        >
-          {isAuthenticated && profile
-            ? <UserAvatar avatar={profile.avatar} name={profile.name} size={22} />
-            : <User size={20} />}
-          {profileLabel}
-        </Link>
-      </div>
-      {isAuthenticated && <button type="button" className="sr-only" onClick={handleLogout}>Log out</button>}
-    </nav>
-  );
-}

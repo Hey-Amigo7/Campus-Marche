@@ -1,8 +1,9 @@
 "use client";
 
-import { ImagePlus, Loader2, Save, Tag, UploadCloud, X, ArrowLeft } from "lucide-react";
+import { Camera, Loader2, Save, Tag, UploadCloud, X, ArrowLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { useCategories, useProduct } from "@/hooks/use-api";
@@ -21,6 +22,7 @@ export default function EditListingPage() {
 function EditListingContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { mutate } = useSWRConfig();
   const { toast } = useToast();
   const { data: product, isLoading: productLoading } = useProduct(id);
   const { data: categoriesData } = useCategories();
@@ -39,7 +41,8 @@ function EditListingContent() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Pre-fill state from fetched product
   const [title, setTitle] = useState("");
@@ -49,7 +52,6 @@ function EditListingContent() {
   const [condition, setCondition] = useState<ProductCondition>("Good");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  const [manualImageUrl, setManualImageUrl] = useState("");
 
   useEffect(() => {
     if (product) {
@@ -127,10 +129,12 @@ function EditListingContent() {
         description: description.trim(),
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         negotiable,
-        imageUrl: uploadedImageUrl ?? (manualImageUrl.trim() || undefined),
+        imageUrl: uploadedImageUrl ?? undefined,
         imageStyle: (category || "other").toLowerCase(),
       });
       toast("Listing updated successfully.");
+      void mutate("my-listings");
+      void mutate(`product-${id}`);
       setTimeout(() => router.push("/profile/listings"), 800);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not update listing.");
@@ -276,13 +280,12 @@ function EditListingContent() {
           {/* Image upload */}
           <div className="md:col-span-2">
             <span className="text-sm font-black text-slate-950">Product image</span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
               className="sr-only"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); }}
-            />
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); e.currentTarget.value = ""; }} />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment"
+              className="sr-only"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); e.currentTarget.value = ""; }} />
             {currentImage ? (
               <div className="relative mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -331,17 +334,11 @@ function EditListingContent() {
             {uploadError && <p className="mt-2 text-xs font-semibold text-red-600">{uploadError}</p>}
 
             {!currentImage && (
-              <div className="mt-3">
-                <p className="text-xs font-semibold text-slate-500 mb-1">Or paste an image URL</p>
-                <input
-                  type="url"
-                  value={manualImageUrl}
-                  onChange={(e) => setManualImageUrl(e.target.value)}
-                  placeholder="https://example.com/photo.jpg"
-                  className="input-shell text-sm"
-                />
-                <ImagePlus className="sr-only" />
-              </div>
+              <button type="button" onClick={() => cameraInputRef.current?.click()}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-colors hover:bg-slate-100"
+                style={{ border: "1px solid rgba(226,232,240,0.80)", color: "#475569" }}>
+                <Camera size={15} /> Take a photo
+              </button>
             )}
           </div>
 
