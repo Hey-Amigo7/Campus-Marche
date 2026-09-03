@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { IsBoolean, IsIn, IsNotEmpty, IsString, Length } from 'class-validator';
 import { AdminService } from './admin.service';
+import { PaymentService } from './payment.service';
 import { AuthUser } from './auth/auth-user.decorator';
 import { AdminAuthGuard } from './auth/admin-auth.guard';
 import { EventsAuthGuard } from './auth/events-auth.guard';
@@ -54,7 +55,10 @@ export class AdminAuthController {
 @Controller('admin')
 @UseGuards(AdminAuthGuard)
 export class AdminController {
-  constructor(private adminService: AdminService) {}
+  constructor(
+    private adminService: AdminService,
+    private paymentService: PaymentService,
+  ) {}
 
   @Get('stats')
   @ApiOperation({ summary: 'Dashboard stats' })
@@ -213,6 +217,25 @@ export class AdminController {
     @AuthUser() admin: { id: string },
   ) {
     return this.adminService.broadcastMessage(admin.id, body.title, body.message, body.type ?? 'system');
+  }
+
+  @Get('orders')
+  @ApiOperation({ summary: 'List all orders with escrow and payment context' })
+  @ApiQuery({ name: 'skip', required: false })
+  @ApiQuery({ name: 'take', required: false })
+  @ApiQuery({ name: 'escrowStatus', required: false })
+  getOrders(
+    @Query('skip') skip = 0,
+    @Query('take') take = 50,
+    @Query('escrowStatus') escrowStatus?: string,
+  ) {
+    return this.paymentService.adminListOrders(+skip, +take, escrowStatus);
+  }
+
+  @Post('orders/:id/refund')
+  @ApiOperation({ summary: 'Trigger Paystack refund to buyer for an escrow-held order' })
+  refundOrder(@Param('id') id: string) {
+    return this.paymentService.adminRefundOrder(id);
   }
 
   @Get('logs')

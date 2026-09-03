@@ -501,6 +501,90 @@ export class PaymentService {
     await this.fundEscrow(reference, paid_at ?? new Date().toISOString(), sellerId);
   }
 
+  // ─── Admin: initiate Paystack refund to buyer ────────────────────────────────
+
+  async adminRefundOrder(orderId: string): Promise<{ message: string }> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        payments: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+
+    const terminal = ['REFUNDED', 'FAILED'] as string[];
+    if (terminal.includes(order.escrowStatus)) {
+      throw new BadRequestException(`Order is already ${order.escrowStatus.toLowerCase()}`);
+    }
+
+    const payment = order.payments[0];
+    if (!payment || payment.status !== 'Paid') {
+      throw new BadRequestException('No completed payment found for this order');
+    }
+
+    const secret = this.config.get<string>('PAYSTACK_SECRET_KEY');
+    if (!secret) throw new BadRequestException('Paystack not configured');
+
+    const res = await fetch('https://api.paystack.co/refund', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transaction: payment.reference }),
+    });
+
+    const data = (await res.json()) as { status: boolean; message: string };
+    if (!data.status) throw new BadRequestException(`Paystack refund failed: ${data.message}`);
+
+    // Optimistically update order — webhook will confirm final state
+    await this.prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { escrowStatus: EscrowStatus.REFUNDED, paymentStatus: 'Refunded', status: 'Refunded' },
+      });
+
+      if (order.sellerId && order.sellerAmount) {
+        const releasedToAvailable = ['RELEASE_PENDING', 'DELIVERED'].includes(order.escrowStatus);
+        if (releasedToAvailable) {
+          await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx);
+        } else if (order.escrowStatus === 'ESCROW_HELD') {
+          await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx);
+        }
+      }
+    });
+
+    this.chatGateway?.emitOrderUpdated(orderId, { escrowStatus: 'REFUNDED', paymentStatus: 'Refunded' });
+
+    this.logger.log(`Admin triggered refund for order ${orderId}`);
+    return { message: 'Refund initiated. Buyer will receive their money back within 5–10 business days.' };
+  }
+
+  // ─── Admin: list all orders with escrow context ───────────────────────────
+
+  async adminListOrders(skip = 0, take = 50, escrowStatus?: string) {
+    const where = escrowStatus ? { escrowStatus: escrowStatus as EscrowStatus } : {};
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        include: {
+          product: { select: { id: true, title: true, imageUrl: true, category: true } },
+          buyer: { select: { id: true, name: true, email: true } },
+          seller: { select: { id: true, name: true, email: true } },
+          payments: {
+            select: { reference: true, status: true, paidAt: true, amount: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          payouts: { select: { id: true, status: true, amount: true, completedAt: true }, take: 1 },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+    return { data: orders, total, skip, take };
+  }
+
   // ─── Private: handle Paystack refund ────────────────────────────────────────
 
   private async handleRefund(data: PaystackWebhookEvent['data']) {

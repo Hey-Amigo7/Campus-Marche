@@ -8,5 +8,6 @@ import { PayoutModule } from './payout.module';
   imports:     [WalletModule, PayoutModule],
   controllers: [PaymentController],
   providers:   [PaymentService],
+  exports:     [PaymentService],
 })
 export class PaymentModule {}

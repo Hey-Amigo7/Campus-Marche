@@ -1,4 +1,6 @@
 import type {
+  AdminOrder,
+  AdminPayout,
   ApiConversation,
   ApiMessage,
   MessageType,
@@ -716,18 +718,45 @@ export const api = {
         method: "PATCH", strict: true,
       }),
 
-    getAllPayouts: () =>
-      request<Payout[]>("/payouts/admin/pending", [], { strict: true }),
+    getAllPayouts: (status?: string, skip = 0, take = 50) => {
+      const params = new URLSearchParams({ skip: String(skip), take: String(take) });
+      if (status) params.set("status", status);
+      return request<{ data: AdminPayout[]; total: number; skip: number; take: number }>(
+        `/payouts/admin/pending?${params}`,
+        { data: [], total: 0, skip: 0, take: 50 },
+        { strict: true },
+      );
+    },
 
     approvePayout: (id: string) =>
-      request<Payout>(`/payouts/admin/${id}/approve`, {} as Payout, {
+      request<AdminPayout>(`/payouts/admin/${id}/approve`, {} as AdminPayout, {
         method: "POST", strict: true,
       }),
 
     cancelPayout: (id: string) =>
-      request<Payout>(`/payouts/admin/${id}/cancel`, {} as Payout, {
+      request<{ message: string }>(`/payouts/admin/${id}/cancel`, { message: "" }, {
         method: "POST", strict: true,
       }),
+
+    voidPayout: (id: string) =>
+      request<{ message: string }>(`/payouts/admin/${id}/void`, { message: "" }, {
+        method: "POST", strict: true,
+      }),
+
+    refundOrder: (orderId: string) =>
+      request<{ message: string }>(`/admin/orders/${orderId}/refund`, { message: "" }, {
+        method: "POST", strict: true,
+      }),
+
+    getOrders: (skip = 0, take = 50, escrowStatus?: string) => {
+      const params = new URLSearchParams({ skip: String(skip), take: String(take) });
+      if (escrowStatus) params.set("escrowStatus", escrowStatus);
+      return request<{ data: AdminOrder[]; total: number; skip: number; take: number }>(
+        `/admin/orders?${params}`,
+        { data: [], total: 0, skip: 0, take: 50 },
+        { strict: true },
+      );
+    },
 
     broadcast: (title: string, message: string) =>
       request<{ sent: number }>("/admin/broadcast", { sent: 0 }, {
