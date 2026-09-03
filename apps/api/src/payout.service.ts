@@ -444,9 +444,9 @@ export class PayoutService {
   ): Promise<string> {
     const normalizedPhone = phone.replace(/\D/g, '').replace(/^0/, '233');
 
-    // Check cached recipient for this seller+phone combo
+    // Check cache — include inactive records so we don't try to re-create a code Paystack already issued
     const existing = await this.prisma.transferRecipient.findFirst({
-      where: { sellerId, momoPhone: normalizedPhone, active: true },
+      where: { sellerId, momoPhone: normalizedPhone },
     });
     if (existing) return existing.recipientCode;
 
@@ -470,15 +470,17 @@ export class PayoutService {
 
     const recipientCode = data.data.recipient_code;
 
-    // Cache it
-    await this.prisma.transferRecipient.create({
-      data: {
+    // Upsert so a duplicate recipientCode (Paystack deduplicates on their end) never crashes
+    await this.prisma.transferRecipient.upsert({
+      where: { recipientCode },
+      create: {
         sellerId,
         recipientCode,
         type: 'mobile_money',
         momoPhone: normalizedPhone,
         momoNetwork: network,
       },
+      update: { sellerId, momoPhone: normalizedPhone, momoNetwork: network, active: true },
     });
 
     return recipientCode;

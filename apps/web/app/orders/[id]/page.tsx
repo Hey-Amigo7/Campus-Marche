@@ -383,52 +383,90 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* ── PAYMENT SECTION ── */}
             {!isPaid && isActive ? (
-              <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-                <h2 className="text-base font-black text-amber-900">Payment required</h2>
-                <p className="mt-1 text-sm font-semibold text-amber-700">
-                  Complete payment to move your order forward. Card and Mobile Money are accepted.
-                </p>
-                {/* Fee breakdown — uses stored DB values so this always matches what Paystack charges */}
-                {(() => {
-                  const base  = order.product.price;
-                  const fee   = (order.platformFee != null && order.platformFee > 0)
-                    ? order.platformFee
-                    : Math.round(base * 0.025 * 100) / 100;
-                  const total = (order.totalAmount != null && order.totalAmount > 0)
-                    ? order.totalAmount
-                    : Math.round((base + fee) * 100) / 100;
-                  const feePct = base > 0 ? +(fee / base * 100).toFixed(1) : 2.5;
-                  return (
-                    <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-amber-800">Item price</span>
-                        <span className="font-semibold text-amber-900">{formatCurrency(base)}</span>
+              role === "buyer" ? (
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                  <h2 className="text-base font-black text-amber-900">Payment required</h2>
+                  <p className="mt-1 text-sm font-semibold text-amber-700">
+                    Complete payment to move your order forward. Card and Mobile Money are accepted.
+                  </p>
+                  {(() => {
+                    const base  = order.product.price;
+                    const fee   = (order.platformFee != null && order.platformFee > 0)
+                      ? order.platformFee
+                      : Math.round(base * 0.025 * 100) / 100;
+                    const total = (order.totalAmount != null && order.totalAmount > 0)
+                      ? order.totalAmount
+                      : Math.round((base + fee) * 100) / 100;
+                    const feePct = base > 0 ? +(fee / base * 100).toFixed(1) : 2.5;
+                    return (
+                      <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-amber-800">Item price</span>
+                          <span className="font-semibold text-amber-900">{formatCurrency(base)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-amber-800">Service fee ({feePct}%)</span>
+                          <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-amber-200 pt-1.5">
+                          <span className="font-black text-amber-900">Total you pay</span>
+                          <span className="font-black text-amber-900">{formatCurrency(total)}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-amber-800">Service fee ({feePct}%)</span>
-                        <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-amber-200 pt-1.5">
-                        <span className="font-black text-amber-900">Total you pay</span>
-                        <span className="font-black text-amber-900">{formatCurrency(total)}</span>
-                      </div>
+                    );
+                  })()}
+                  <button
+                    onClick={handlePayment}
+                    disabled={initializingPayment}
+                    className="btn-primary mt-4 w-full justify-center disabled:opacity-50"
+                  >
+                    {initializingPayment
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Lock className="h-4 w-4" />}
+                    {initializingPayment ? "Redirecting to Paystack…" : "Pay securely now"}
+                  </button>
+                  <p className="mt-3 text-center text-xs text-amber-700">
+                    Powered by Paystack · Card, Mobile Money &amp; bank transfer accepted
+                  </p>
+                </section>
+              ) : (
+                /* Seller view — waiting for buyer to pay */
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+                    <h2 className="text-base font-black text-amber-900">Awaiting payment</h2>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-amber-700">
+                    {order.counterpart} hasn&apos;t paid yet. Share your order link to remind them.
+                  </p>
+                  <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-amber-800">Item price</span>
+                      <span className="font-semibold text-amber-900">{formatCurrency(order.product.price)}</span>
                     </div>
-                  );
-                })()}
-                <button
-                  onClick={handlePayment}
-                  disabled={initializingPayment}
-                  className="btn-primary mt-4 w-full justify-center disabled:opacity-50"
-                >
-                  {initializingPayment
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Lock className="h-4 w-4" />}
-                  {initializingPayment ? "Redirecting to Paystack…" : "Pay securely now"}
-                </button>
-                <p className="mt-3 text-center text-xs text-amber-700">
-                  Powered by Paystack · Card, Mobile Money &amp; bank transfer accepted
-                </p>
-              </section>
+                    <div className="flex justify-between border-t border-amber-200 pt-1.5">
+                      <span className="font-black text-amber-900">Buyer pays (fees incl.)</span>
+                      <span className="font-black text-amber-900">
+                        {formatCurrency(order.totalAmount > 0 ? order.totalAmount : Math.round(order.product.price * 1.025 * 100) / 100)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-amber-800">You receive</span>
+                      <span className="font-semibold text-amber-900">{formatCurrency(order.sellerAmount > 0 ? order.sellerAmount : order.product.price)}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(`${window.location.origin}/orders/${id}`).then(() => toast("Order link copied! Send it to the buyer."));
+                    }}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-white py-3 text-sm font-black text-amber-900 transition-colors hover:bg-amber-50"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy order link for buyer
+                  </button>
+                </section>
+              )
             ) : null}
 
             {/* ── DELIVERY DETAILS ── */}
