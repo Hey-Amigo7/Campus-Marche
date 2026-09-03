@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogIn, ChevronDown, LogOut, User, ShoppingBag,
   Package, Settings, MessageCircle, Heart, Bell,
-  BarChart2, Menu, X, Palette, ShoppingCart, Store, Wallet,
+  BarChart2, Menu, X, Palette, ShoppingCart, Store, Wallet, ReceiptText,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -128,6 +128,7 @@ function UserDropdown({
     { icon: Heart,         label: "Saved Items",   href: "/saved"            },
     { icon: MessageCircle, label: "Messages",      href: "/messages"         },
     { icon: ShoppingBag,   label: "My Orders",     href: "/orders"           },
+    { icon: ReceiptText,  label: "Transactions",   href: "/transactions"      },
     ...(hasBusiness && sellerId
       ? [
           { icon: Store,  label: "My Storefront",    href: `/store/${sellerId}` },
@@ -446,6 +447,7 @@ export function Navbar() {
                         { icon: Heart,         label: "Saved Items",    href: "/saved"                                         },
                         { icon: MessageCircle, label: "Messages",       href: "/messages"                                      },
                         { icon: ShoppingBag,   label: "My Orders",      href: "/orders"                                        },
+                        { icon: ReceiptText,   label: "Transactions",   href: "/transactions"                                  },
                         { icon: ShoppingCart,  label: "Cart",           href: "/cart"                                          },
                         { icon: Store,         label: "Sell",           href: "/sell"                                          },
                         ...(profile?.business && profile?.id
