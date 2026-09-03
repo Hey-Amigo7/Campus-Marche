@@ -349,21 +349,72 @@ export class PayoutService {
     return this.prisma.payout.findUnique({ where: { id: payoutId } });
   }
 
-  // ─── Admin: cancel pending payout ─────────────────────────────────────────
+  // ─── Admin: cancel/void a payout and restore seller balance ──────────────
 
   async adminCancelPayout(payoutId: string) {
     const payout = await this.prisma.payout.findUnique({ where: { id: payoutId } });
     if (!payout) throw new NotFoundException('Payout not found');
-    if (payout.status !== PayoutStatus.PENDING) {
-      throw new ForbiddenException('Only PENDING payouts can be cancelled');
+
+    const cancellable: PayoutStatus[] = [PayoutStatus.PENDING, PayoutStatus.PROCESSING];
+    if (!cancellable.includes(payout.status)) {
+      throw new ForbiddenException(`Cannot cancel a payout with status ${payout.status}`);
     }
 
-    await this.prisma.payout.update({
-      where: { id: payoutId },
-      data: { status: PayoutStatus.CANCELLED },
+    // PROCESSING means availableBalance was already debited — restore it
+    const needsRefund = payout.status === PayoutStatus.PROCESSING;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payout.update({
+        where: { id: payoutId },
+        data: {
+          status: PayoutStatus.CANCELLED,
+          failureReason: 'Cancelled by admin — balance restored',
+        },
+      });
+      if (needsRefund) {
+        await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx);
+      }
     });
 
-    return { message: 'Payout cancelled.' };
+    this.notificationService?.notify(
+      payout.sellerId,
+      'payout',
+      'Payout voided',
+      `Your payout of GHS ${payout.amount.toFixed(2)} was cancelled and your balance has been restored.`,
+    ).catch(() => undefined);
+
+    return { message: needsRefund ? 'Payout cancelled and balance restored.' : 'Payout cancelled.' };
+  }
+
+  // ─── Admin: manually void + refund a stuck PROCESSING payout ─────────────
+
+  async adminRefundPayout(payoutId: string) {
+    const payout = await this.prisma.payout.findUnique({ where: { id: payoutId } });
+    if (!payout) throw new NotFoundException('Payout not found');
+    if (payout.status !== PayoutStatus.PROCESSING) {
+      throw new BadRequestException(`Only PROCESSING payouts can be refunded this way — current status: ${payout.status}`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payout.update({
+        where: { id: payoutId },
+        data: {
+          status: PayoutStatus.FAILED,
+          failureReason: 'Manually voided by admin — OTP-blocked transfer refunded',
+        },
+      });
+      await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx);
+    });
+
+    this.notificationService?.notify(
+      payout.sellerId,
+      'payout',
+      'Payout refunded',
+      `Your payout of GHS ${payout.amount.toFixed(2)} could not be completed and your balance has been restored. Please request a new payout.`,
+    ).catch(() => undefined);
+
+    this.logger.log(`Payout ${payoutId} manually refunded by admin — GHS ${payout.amount}`);
+    return { message: 'Payout voided and balance restored to seller.' };
   }
 
   // ─── Private: broadcast to all admin users ────────────────────────────────
