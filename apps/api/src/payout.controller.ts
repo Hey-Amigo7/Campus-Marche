@@ -2,9 +2,8 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/co
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PayoutStatus } from '@prisma/client';
 import { AuthUser } from './auth/auth-user.decorator';
+import { AdminAuthGuard } from './auth/admin-auth.guard';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
-import { Roles } from './auth/roles.decorator';
-import { RolesGuard } from './auth/roles.guard';
 import { ApprovePayoutDto, RequestPayoutDto } from './dto/payout.dto';
 import { PayoutService } from './payout.service';
 
@@ -28,41 +27,37 @@ export class PayoutController {
     return this.payoutService.getSellerPayouts(user.id);
   }
 
-  // ── Admin endpoints — ADMIN role required ───────────────────────────────────
+  // ── Admin endpoints — AdminAuthGuard accepts both env-admin JWT and DB ADMIN role ──
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(AdminAuthGuard)
   @Get('admin/pending')
-  @ApiOperation({ summary: '[Admin] List all payouts (optionally filtered by status)' })
-  adminListPending(@Query('status') status?: string) {
+  @ApiOperation({ summary: '[Admin] List all payouts with full order context (optionally filtered by status)' })
+  adminListPending(@Query('status') status?: string, @Query('skip') skip = 0, @Query('take') take = 50) {
     return this.payoutService.listPayouts(
       status ? (status as PayoutStatus) : undefined,
-      0,
-      100,
+      +skip,
+      +take,
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(AdminAuthGuard)
   @Post('admin/:id/approve')
-  @ApiOperation({ summary: '[Admin] Approve a pending payout and initiate transfer' })
+  @ApiOperation({ summary: '[Admin] Approve a pending payout and initiate Paystack transfer immediately' })
   adminApprove(@Param('id') id: string, @Body() _dto: ApprovePayoutDto) {
     return this.payoutService.adminApprovePayout(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(AdminAuthGuard)
   @Post('admin/:id/cancel')
   @ApiOperation({ summary: '[Admin] Cancel a PENDING or PROCESSING payout and restore seller balance' })
   adminCancel(@Param('id') id: string) {
     return this.payoutService.adminCancelPayout(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @Post('admin/:id/refund')
-  @ApiOperation({ summary: '[Admin] Void a stuck PROCESSING payout and refund seller balance (e.g. OTP-blocked transfers)' })
-  adminRefund(@Param('id') id: string) {
+  @UseGuards(AdminAuthGuard)
+  @Post('admin/:id/void')
+  @ApiOperation({ summary: '[Admin] Void a stuck PROCESSING payout and restore seller balance (e.g. OTP-blocked transfers)' })
+  adminVoid(@Param('id') id: string) {
     return this.payoutService.adminRefundPayout(id);
   }
 }

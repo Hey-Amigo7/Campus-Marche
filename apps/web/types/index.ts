@@ -253,6 +253,60 @@ export type PaymentTransaction = {
   metadata?: string;
 };
 
+type AdminOrderProduct = { id: string; title: string; imageUrl: string | null; category: string | null };
+type AdminOrderParty  = { id: string; name: string; email: string };
+type AdminOrderPayment = { reference: string; status: string; paidAt: string | null; amount: number };
+
+export type AdminPayout = {
+  id: string;
+  sellerId: string;
+  orderId?: string | null;
+  amount: number;
+  payoutMethod: PayoutMethod;
+  transferCode?: string | null;
+  transferReference?: string | null;
+  status: PayoutStatus;
+  failureReason?: string | null;
+  approvedAt?: string | null;
+  processedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  seller?: AdminOrderParty | null;
+  order?: {
+    id: string;
+    status: string;
+    escrowStatus: string;
+    price: number;
+    totalAmount: number;
+    platformFee: number;
+    sellerAmount: number;
+    paymentReference: string | null;
+    deliveryConfirmedAt: string | null;
+    createdAt: string;
+    product: AdminOrderProduct | null;
+    buyer: AdminOrderParty | null;
+    payments: AdminOrderPayment[];
+  } | null;
+};
+
+export type AdminOrder = {
+  id: string;
+  status: string;
+  escrowStatus: string;
+  price: number;
+  totalAmount: number;
+  platformFee: number;
+  sellerAmount: number;
+  paymentReference: string | null;
+  deliveryConfirmedAt: string | null;
+  createdAt: string;
+  product: AdminOrderProduct | null;
+  buyer: AdminOrderParty | null;
+  seller: AdminOrderParty | null;
+  payments: AdminOrderPayment[];
+  payouts: { id: string; status: string; amount: number; completedAt: string | null }[];
+};
+
 export type CampusEvent = {
   id: string;
   title: string;

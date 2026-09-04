@@ -34,7 +34,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/hooks/use-api";
 import { api } from "@/lib/api";
-import { PAYOUT_METHOD_LABELS, PAYOUT_STATUS_LABELS, type Payout } from "@/types";
+import { PAYOUT_METHOD_LABELS, PAYOUT_STATUS_LABELS, type AdminPayout } from "@/types";
 import { isEnvAdminToken, clearAuthToken } from "@/lib/auth";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
 
@@ -1006,104 +1006,310 @@ function MessagesTab() {
 
 // ─── Payouts tab ──────────────────────────────────────────────────────────────
 
-const PAYOUT_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  PENDING:    { bg: "bg-amber-50",  text: "text-amber-800" },
-  APPROVED:   { bg: "bg-blue-50",   text: "text-blue-800" },
-  PROCESSING: { bg: "bg-sky-50",    text: "text-sky-800" },
-  COMPLETED:  { bg: "bg-emerald-50", text: "text-emerald-800" },
-  FAILED:     { bg: "bg-red-50",    text: "text-red-800" },
-  CANCELLED:  { bg: "bg-slate-100", text: "text-slate-600" },
+const PAYOUT_STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
+  PENDING:    { bg: "bg-amber-50",   text: "text-amber-800",   dot: "bg-amber-400" },
+  APPROVED:   { bg: "bg-blue-50",    text: "text-blue-800",    dot: "bg-blue-400" },
+  PROCESSING: { bg: "bg-sky-50",     text: "text-sky-800",     dot: "bg-sky-400" },
+  COMPLETED:  { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-400" },
+  FAILED:     { bg: "bg-red-50",     text: "text-red-800",     dot: "bg-red-400" },
+  CANCELLED:  { bg: "bg-slate-100",  text: "text-slate-600",   dot: "bg-slate-400" },
 };
 
-function PayoutsTab() {
-  const { data: payouts, isLoading, mutate } = useSWR<Payout[]>(
-    "admin-all-payouts",
-    api.admin.getAllPayouts,
-    { fallbackData: [], refreshInterval: 30_000 },
-  );
-  const [acting, setActing] = useState<string | null>(null);
+const ESCROW_STEP_LABELS: Record<string, string> = {
+  PENDING_PAYMENT:    "Awaiting payment",
+  PAYMENT_INITIALIZED:"Payment started",
+  PAYMENT_VERIFIED:   "Payment verified",
+  ESCROW_HELD:        "Funds in escrow",
+  SHIPPED:            "Item shipped",
+  DELIVERED:          "Item delivered",
+  RELEASE_PENDING:    "Awaiting release",
+  RELEASED:           "Funds released",
+  REFUNDED:           "Refunded to buyer",
+  FAILED:             "Payment failed",
+  DISPUTED:           "Under dispute",
+};
 
-  async function handleApprove(id: string) {
-    setActing(id);
-    try { await api.admin.approvePayout(id); await mutate(); } finally { setActing(null); }
+const ESCROW_DONE_STATES = new Set(["ESCROW_HELD", "SHIPPED", "DELIVERED", "RELEASE_PENDING", "RELEASED"]);
+
+const STATUS_FILTERS = ["All", "PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED"] as const;
+type StatusFilter = typeof STATUS_FILTERS[number];
+
+function PayoutsTab() {
+  const [filter, setFilter] = useState<StatusFilter>("All");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [acting, setActing] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ type: "approve" | "cancel" | "void" | "refund"; payoutId: string; orderId?: string } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const swrKey = `admin-payouts-${filter}`;
+  const { data: result, isLoading, mutate } = useSWR(
+    swrKey,
+    () => api.admin.getAllPayouts(filter === "All" ? undefined : filter, 0, 100),
+    { fallbackData: { data: [], total: 0, skip: 0, take: 100 }, refreshInterval: 30_000 },
+  );
+
+  const payouts: AdminPayout[] = result?.data ?? [];
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
   }
 
-  async function handleCancel(id: string) {
-    setActing(id);
-    try { await api.admin.cancelPayout(id); await mutate(); } finally { setActing(null); }
+  async function execute(type: "approve" | "cancel" | "void" | "refund", payoutId: string, orderId?: string) {
+    setActing(payoutId);
+    setConfirm(null);
+    try {
+      if (type === "approve")  await api.admin.approvePayout(payoutId);
+      if (type === "cancel")   await api.admin.cancelPayout(payoutId);
+      if (type === "void")     await api.admin.voidPayout(payoutId);
+      if (type === "refund" && orderId) await api.admin.refundOrder(orderId);
+      await mutate();
+      showToast(
+        type === "approve" ? "Payout approved — Paystack transfer initiated." :
+        type === "cancel"  ? "Payout cancelled. Seller balance restored." :
+        type === "void"    ? "Payout voided. Seller balance restored." :
+                             "Refund initiated. Buyer will be reimbursed within 5–10 business days.",
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Action failed.");
+    } finally {
+      setActing(null);
+    }
   }
 
   if (isLoading) {
     return (
       <div className="space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-slate-100" />)}
-      </div>
-    );
-  }
-
-  if (!payouts || payouts.length === 0) {
-    return (
-      <div className="rounded-2xl p-10 text-center" style={CARD}>
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-100">
-          <ArrowDownCircle className="h-7 w-7 text-slate-400" />
-        </div>
-        <p className="mt-4 text-sm font-black text-slate-800">No payouts yet</p>
-        <p className="mt-1 text-xs text-slate-400">All seller payout requests will appear here.</p>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+        ))}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Toast */}
+      {toast && (
+        <div className="rounded-2xl px-4 py-3 text-sm font-semibold text-emerald-800"
+          style={{ background: "rgba(209,250,229,0.90)", border: "1px solid rgba(52,211,153,0.40)" }}>
+          {toast}
+        </div>
+      )}
+
+      {/* Confirm dialog */}
+      {confirm && (
+        <div className="rounded-2xl p-4" style={{ ...CARD, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(254,242,242,0.95)" }}>
+          <p className="text-sm font-black text-red-800">
+            {confirm.type === "approve" && "Approve this payout? Paystack will transfer the money to the seller immediately."}
+            {confirm.type === "cancel"  && "Cancel this payout? The seller's wallet balance will be restored."}
+            {confirm.type === "void"    && "Void this stuck payout? The seller's balance will be restored. Use this for OTP-blocked transfers."}
+            {confirm.type === "refund"  && "Refund this order to the buyer? Paystack will reverse the payment. This cannot be undone."}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() => execute(confirm.type, confirm.payoutId, confirm.orderId)}
+              className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => setConfirm(null)}
+              className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Status filter tabs */}
+      <div className="flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((s) => (
+          <button
+            key={s}
+            onClick={() => setFilter(s)}
+            className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-colors ${
+              filter === s
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {s === "All" ? `All (${result?.total ?? 0})` : s.charAt(0) + s.slice(1).toLowerCase()}
+          </button>
+        ))}
+      </div>
+
+      {/* Empty state */}
+      {payouts.length === 0 && (
+        <div className="rounded-2xl p-10 text-center" style={CARD}>
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-100">
+            <ArrowDownCircle className="h-7 w-7 text-slate-400" />
+          </div>
+          <p className="mt-4 text-sm font-black text-slate-800">No payouts</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {filter === "All" ? "No payout requests have been made yet." : `No ${filter.toLowerCase()} payouts found.`}
+          </p>
+        </div>
+      )}
+
+      {/* Payout cards */}
       {payouts.map((payout) => {
         const isActing = acting === payout.id;
-        const style = PAYOUT_STATUS_STYLE[payout.status] ?? { bg: "bg-slate-100", text: "text-slate-600" };
+        const isExpanded = expanded === payout.id;
+        const style = PAYOUT_STATUS_STYLE[payout.status] ?? PAYOUT_STATUS_STYLE["CANCELLED"]!;
+        const order = payout.order;
+        const payment = order?.payments?.[0];
+        const escrowDone = order ? ESCROW_DONE_STATES.has(order.escrowStatus) : false;
+        const canRefundBuyer = order && !["REFUNDED", "FAILED", "RELEASED"].includes(order.escrowStatus) && !!payment;
+
         return (
-          <div key={payout.id} className="rounded-2xl p-4" style={CARD}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
+          <div key={payout.id} className="overflow-hidden rounded-2xl" style={CARD}>
+            {/* Header row */}
+            <button
+              type="button"
+              onClick={() => setExpanded(isExpanded ? null : payout.id)}
+              className="flex w-full items-start justify-between gap-4 p-4 text-left hover:bg-slate-50/60 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-black text-slate-800">{formatCurrency(payout.amount)}</p>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${style.bg} ${style.text}`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold ${style.bg} ${style.text}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                     {PAYOUT_STATUS_LABELS[payout.status] ?? payout.status}
                   </span>
-                  {payout.seller && (
-                    <span className="text-xs font-semibold text-slate-600">{payout.seller.name}</span>
+                  {order && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${escrowDone ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                      {ESCROW_STEP_LABELS[order.escrowStatus] ?? order.escrowStatus}
+                    </span>
                   )}
                 </div>
-                <p className="mt-0.5 text-xs font-semibold text-slate-400">
-                  {PAYOUT_METHOD_LABELS[payout.payoutMethod] ?? payout.payoutMethod}
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  {payout.seller?.name ?? "Unknown seller"}
                   {payout.seller?.email ? ` · ${payout.seller.email}` : ""}
-                  {payout.orderId ? ` · Order ${payout.orderId.slice(0, 8).toUpperCase()}` : ""}
+                  {" · "}{PAYOUT_METHOD_LABELS[payout.payoutMethod] ?? payout.payoutMethod}
                   {" · "}{formatRelativeDate(payout.createdAt)}
                 </p>
-                {payout.failureReason && (
-                  <p className="mt-1 text-xs font-semibold text-red-500">
-                    ✗ {payout.failureReason}
+                {order?.product && (
+                  <p className="mt-0.5 truncate text-xs text-slate-400">
+                    For: <span className="font-semibold text-slate-600">{order.product.title}</span>
+                    {order.buyer ? ` · Buyer: ${order.buyer.name}` : ""}
                   </p>
                 )}
+                {payout.failureReason && (
+                  <p className="mt-1 text-xs font-semibold text-red-500">✗ {payout.failureReason}</p>
+                )}
               </div>
-              {payout.status === "PENDING" && (
-                <div className="flex gap-2">
+              <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+            </button>
+
+            {/* Action buttons — always visible for PENDING */}
+            {payout.status === "PENDING" && (
+              <div className="flex gap-2 border-t border-slate-100 px-4 pb-3 pt-3">
+                <button
+                  onClick={() => setConfirm({ type: "approve", payoutId: payout.id })}
+                  disabled={isActing}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Approve &amp; Pay Seller
+                </button>
+                <button
+                  onClick={() => setConfirm({ type: "cancel", payoutId: payout.id })}
+                  disabled={isActing}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                  Cancel
+                </button>
+                {canRefundBuyer && (
                   <button
-                    onClick={() => handleApprove(payout.id)}
+                    onClick={() => setConfirm({ type: "refund", payoutId: payout.id, orderId: order!.id })}
                     disabled={isActing}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-black text-white disabled:opacity-50"
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
                   >
-                    {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                    Approve
+                    <ArrowDownCircle className="h-3 w-3" />
+                    Refund Buyer
                   </button>
-                  <button
-                    onClick={() => handleCancel(payout.id)}
-                    disabled={isActing}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    {isActing ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-                    Cancel
-                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Void button for stuck PROCESSING payouts */}
+            {payout.status === "PROCESSING" && (
+              <div className="flex gap-2 border-t border-slate-100 px-4 pb-3 pt-3">
+                <p className="flex-1 text-xs font-semibold text-sky-700">
+                  Transfer sent to Paystack — waiting for confirmation webhook.
+                  {payout.transferCode && <span className="ml-1 font-mono text-slate-400">{payout.transferCode}</span>}
+                </p>
+                <button
+                  onClick={() => setConfirm({ type: "void", payoutId: payout.id })}
+                  disabled={isActing}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Void (stuck)
+                </button>
+              </div>
+            )}
+
+            {/* Expanded order context */}
+            {isExpanded && order && (
+              <div className="border-t border-slate-100 bg-slate-50/60 px-4 pb-4 pt-3">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Escrow &amp; Transaction Detail</p>
+
+                {/* Amounts breakdown */}
+                <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                  {[
+                    { label: "Buyer paid", value: formatCurrency(order.totalAmount) },
+                    { label: "Platform fee", value: formatCurrency(order.platformFee) },
+                    { label: "Seller gets", value: formatCurrency(order.sellerAmount) },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-xl bg-white px-3 py-2" style={{ border: "1px solid rgba(226,232,240,0.70)" }}>
+                      <p className="text-[10px] font-semibold text-slate-400">{label}</p>
+                      <p className="mt-0.5 text-sm font-black text-slate-800">{value}</p>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
+
+                {/* Escrow journey */}
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Order placed", done: true, time: order.createdAt },
+                    { label: payment ? `Payment of ${formatCurrency(payment.amount / 100)} received` : "Payment pending", done: !!payment && payment.status === "Paid", time: payment?.paidAt ?? null },
+                    { label: "Funds held in escrow", done: ESCROW_DONE_STATES.has(order.escrowStatus), time: null },
+                    { label: "Buyer confirmed delivery", done: !!order.deliveryConfirmedAt, time: order.deliveryConfirmedAt },
+                    { label: "Payout sent to seller", done: payout.status === "COMPLETED", time: payout.completedAt ?? null },
+                  ].map(({ label, done, time }) => (
+                    <div key={label} className="flex items-center gap-2.5">
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${done ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"}`}>
+                        {done ? "✓" : "·"}
+                      </span>
+                      <span className={`text-xs font-semibold ${done ? "text-slate-700" : "text-slate-400"}`}>{label}</span>
+                      {time && <span className="ml-auto text-[10px] text-slate-400">{formatRelativeDate(time)}</span>}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Payment reference */}
+                {order.paymentReference && (
+                  <p className="mt-3 text-[10px] font-mono text-slate-400">
+                    Paystack ref: {order.paymentReference}
+                  </p>
+                )}
+
+                {/* Refund button inside expanded view for non-PENDING payouts */}
+                {canRefundBuyer && payout.status !== "PENDING" && (
+                  <button
+                    onClick={() => setConfirm({ type: "refund", payoutId: payout.id, orderId: order.id })}
+                    disabled={!!acting}
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    <ArrowDownCircle className="h-3.5 w-3.5" />
+                    Refund to Buyer
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -1255,12 +1461,12 @@ export default function AdminPage() {
   const router = useRouter();
 
   // Live pending payout count for sidebar badge
-  const { data: allPayouts } = useSWR<Payout[]>(
-    "admin-all-payouts",
-    api.admin.getAllPayouts,
-    { fallbackData: [], refreshInterval: 30_000 },
+  const { data: payoutResult } = useSWR(
+    "admin-payouts-PENDING",
+    () => api.admin.getAllPayouts("PENDING", 0, 100),
+    { fallbackData: { data: [], total: 0, skip: 0, take: 100 }, refreshInterval: 30_000 },
   );
-  const pendingPayoutCount = (allPayouts ?? []).filter((p) => p.status === "PENDING").length;
+  const pendingPayoutCount = payoutResult?.total ?? 0;
 
   function handleLogout() {
     clearAuthToken();

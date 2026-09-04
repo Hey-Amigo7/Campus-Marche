@@ -306,12 +306,35 @@ export class PayoutService {
 
   // ─── Admin: list pending payouts ───────────────────────────────────────────
 
-  async listPayouts(status?: PayoutStatus, skip = 0, take = 20) {
+  async listPayouts(status?: PayoutStatus, skip = 0, take = 50) {
     const where = status ? { status } : {};
     const [payouts, total] = await Promise.all([
       this.prisma.payout.findMany({
         where,
-        include: { seller: { select: { id: true, name: true, email: true } } },
+        include: {
+          seller: { select: { id: true, name: true, email: true } },
+          order: {
+            select: {
+              id: true,
+              status: true,
+              escrowStatus: true,
+              price: true,
+              totalAmount: true,
+              platformFee: true,
+              sellerAmount: true,
+              paymentReference: true,
+              deliveryConfirmedAt: true,
+              createdAt: true,
+              product: { select: { id: true, title: true, imageUrl: true, category: true } },
+              buyer: { select: { id: true, name: true, email: true } },
+              payments: {
+                select: { reference: true, status: true, paidAt: true, amount: true },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+              },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip,
         take,
