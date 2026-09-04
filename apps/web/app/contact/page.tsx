@@ -64,10 +64,25 @@ export default function ContactPage() {
             </div>
 
             {[
-              { icon: Mail, label: "Email", value: "campusmarche6@gmail.com" },
-              { icon: MapPin, label: "Location", value: "Ho Technical University, Ghana" },
-              { icon: MessageSquare, label: "Response time", value: "Within 24 hours (business days)" },
-            ].map(({ icon: Icon, label, value }) => (
+              {
+                icon: Mail,
+                label: "Email",
+                value: "campusmarche6@gmail.com",
+                href: "mailto:campusmarche6@gmail.com",
+              },
+              {
+                icon: MapPin,
+                label: "Location",
+                value: "Ho Technical University, Ghana",
+                href: "https://maps.google.com/?q=Ho+Technical+University,+Ho,+Ghana",
+                external: true,
+              },
+              {
+                icon: MessageSquare,
+                label: "Response time",
+                value: "Within 24 hours (business days)",
+              },
+            ].map(({ icon: Icon, label, value, href, external }) => (
               <div key={label} className="flex items-start gap-4">
                 <span
                   className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl"
@@ -77,7 +92,19 @@ export default function ContactPage() {
                 </span>
                 <div>
                   <p className="text-sm font-bold" style={{ color: "#1E293B" }}>{label}</p>
-                  <p className="mt-0.5 text-sm" style={{ color: "#64748B" }}>{value}</p>
+                  {href ? (
+                    <a
+                      href={href}
+                      target={external ? "_blank" : undefined}
+                      rel={external ? "noopener noreferrer" : undefined}
+                      className="mt-0.5 text-sm transition-colors hover:underline"
+                      style={{ color: "#5A9460" }}
+                    >
+                      {value}
+                    </a>
+                  ) : (
+                    <p className="mt-0.5 text-sm" style={{ color: "#64748B" }}>{value}</p>
+                  )}
                 </div>
               </div>
             ))}

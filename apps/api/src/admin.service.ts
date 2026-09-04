@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { NotificationService } from './notification.service';
+import { EmailService } from './email.service';
 
 @Injectable()
 export class AdminService {
@@ -11,6 +12,7 @@ export class AdminService {
     private jwtService: JwtService,
     private config: ConfigService,
     private notificationService: NotificationService,
+    private emailService: EmailService,
   ) {}
 
   private log(adminId: string, action: string, entity: string, entityId: string, details?: string) {
@@ -374,6 +376,23 @@ export class AdminService {
     });
   }
 
+  async replyContactMessage(adminId: string, id: string, reply: string) {
+    const msg = await this.prisma.contactMessage.findUnique({ where: { id } });
+    if (!msg) throw new NotFoundException('Message not found');
+
+    await this.emailService
+      .sendContactReply(msg.email, msg.name, msg.subject, reply)
+      .catch(() => undefined);
+
+    await this.prisma.contactMessage.update({
+      where: { id },
+      data: { status: 'replied' },
+    });
+
+    await this.log(adminId, 'REPLY_CONTACT', 'ContactMessage', id, reply.slice(0, 200));
+    return { id, replied: true };
+  }
+
   async broadcastMessage(adminId: string, title: string, body: string, type = 'system') {
     const users = await this.prisma.user.findMany({ select: { id: true } });
     await Promise.all(
@@ -381,5 +400,27 @@ export class AdminService {
     );
     await this.log(adminId, 'BROADCAST', 'Notification', 'all', `${title}: ${body.slice(0, 100)}`);
     return { sent: users.length };
+  }
+
+  // ─── Backfill: sync escrowStatus with order status for legacy orders ─────────
+  // Fixes orders created before escrow state was synced with delivery milestones.
+  async backfillEscrowStates() {
+    const [shipped, delivered] = await Promise.all([
+      // Orders showing "Out for delivery" but still stuck at ESCROW_HELD
+      this.prisma.order.updateMany({
+        where: { status: 'Out for delivery', escrowStatus: 'ESCROW_HELD' },
+        data:  { escrowStatus: 'SHIPPED' },
+      }),
+      // Orders showing "Delivered" but still stuck at ESCROW_HELD or SHIPPED
+      this.prisma.order.updateMany({
+        where: { status: 'Delivered', escrowStatus: { in: ['ESCROW_HELD', 'SHIPPED'] } },
+        data:  { escrowStatus: 'DELIVERED' },
+      }),
+    ]);
+
+    return {
+      fixed: { outForDelivery: shipped.count, delivered: delivered.count },
+      message: `Backfill complete — ${shipped.count + delivered.count} orders corrected.`,
+    };
   }
 }

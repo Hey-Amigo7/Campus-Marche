@@ -7,7 +7,7 @@ import Link from "next/link";
 import { GoogleLogin } from "@react-oauth/google";
 import { mutate } from "swr";
 import { api } from "@/lib/api";
-import { setAuthToken } from "@/lib/auth";
+import { setAuthToken, decodeJwtPayload } from "@/lib/auth";
 
 const GOOGLE_ENABLED = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
@@ -144,6 +144,12 @@ function SignInForm({ onSwitch }: { onSwitch: () => void }) {
       if (!result?.token) throw new Error("Login failed");
       setAuthToken(result.token);
       mutate("profile", result.user);
+      const payload = decodeJwtPayload(result.token);
+      if (payload?.verified === false) {
+        const params = new URLSearchParams({ email: identifier.includes("@") ? identifier : "" });
+        router.push(`/verify-email?${params.toString()}`);
+        return;
+      }
       const next = new URLSearchParams(window.location.search).get("next");
       router.push(next?.startsWith("/") ? next : "/");
     } catch (err) {

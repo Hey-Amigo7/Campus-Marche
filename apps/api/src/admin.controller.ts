@@ -38,6 +38,13 @@ class SendWarningDto {
   message: string;
 }
 
+class ReplyContactDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(10, 2000)
+  reply: string;
+}
+
 @ApiTags('admin')
 @Controller('admin/auth')
 export class AdminAuthController {
@@ -99,6 +106,16 @@ export class AdminController {
   @ApiOperation({ summary: 'Mark contact message as resolved' })
   resolveContactMessage(@Param('id') id: string) {
     return this.adminService.resolveContactMessage(id);
+  }
+
+  @Post('contact-messages/:id/reply')
+  @ApiOperation({ summary: 'Reply to a contact message via email' })
+  replyContactMessage(
+    @Param('id') id: string,
+    @Body() dto: ReplyContactDto,
+    @AuthUser() admin: { id: string },
+  ) {
+    return this.adminService.replyContactMessage(admin.id, id, dto.reply);
   }
 
   @Patch('users/:userId/role')
@@ -217,6 +234,12 @@ export class AdminController {
     @AuthUser() admin: { id: string },
   ) {
     return this.adminService.broadcastMessage(admin.id, body.title, body.message, body.type ?? 'system');
+  }
+
+  @Post('backfill-escrow-states')
+  @ApiOperation({ summary: 'One-time fix: sync escrowStatus with order status for legacy orders' })
+  backfillEscrowStates() {
+    return this.adminService.backfillEscrowStates();
   }
 
   @Get('orders')

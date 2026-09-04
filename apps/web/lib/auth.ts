@@ -13,14 +13,16 @@ export function hasAuthToken() {
 
 export function setAuthToken(token: string) {
   window.sessionStorage.setItem(TOKEN_KEY, token);
-  // Keep localStorage in sync so existing logged-in sessions survive a refresh
-  // on tabs that had localStorage set before this change.
   try { window.localStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
+  // Write cookie so Next.js middleware can read it server-side for route protection
+  const maxAge = 60 * 60 * 24 * 30; // 30 days
+  document.cookie = `cm_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
 export function clearAuthToken() {
   window.sessionStorage.removeItem(TOKEN_KEY);
   try { window.localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  document.cookie = 'cm_token=; path=/; max-age=0; SameSite=Lax';
 }
 
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
+import { setAuthToken } from "@/lib/auth";
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
@@ -80,7 +81,8 @@ function VerifyEmailContent() {
     setError(null);
     setLoading(true);
     try {
-      await api.auth.verifyEmailOtp(code);
+      const result = await api.auth.verifyEmailOtp(code);
+      if (result?.token) setAuthToken(result.token);
       await Promise.all([mutate("profile"), mutate("notifications")]);
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);

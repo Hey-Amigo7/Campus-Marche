@@ -172,6 +172,30 @@ export class EmailService {
     await this.send(this.contactEmail, `[Contact] ${subject} — from ${senderName}`, html);
   }
 
+  async sendContactReply(to: string, recipientName: string, originalSubject: string, replyText: string) {
+    const safeReply = replyText
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+
+    const html = baseLayout(`
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:${BRAND.navy}">We got back to you</h2>
+      <p style="margin:0 0 20px;font-size:15px;color:${BRAND.muted};line-height:1.6">
+        Hi <strong>${recipientName}</strong>, here is our response to your message about <em>${originalSubject}</em>:
+      </p>
+      <div style="background:${BRAND.bg};border-left:3px solid ${BRAND.green};padding:16px 20px;border-radius:0 10px 10px 0;margin-bottom:24px">
+        <p style="margin:0;white-space:pre-wrap;color:#334155;line-height:1.7;font-size:14px">${safeReply}</p>
+      </div>
+      <p style="margin:0;font-size:13px;color:${BRAND.muted};line-height:1.6">
+        If you have follow-up questions, reply to this email or contact us again via the
+        <a href="https://campusmarche.com/contact" style="color:${BRAND.green}">contact page</a>.
+      </p>
+    `);
+
+    await this.send(to, `Re: ${originalSubject} — Campus Marche`, html);
+  }
+
   private async send(to: string, subject: string, html: string) {
     if (!this.transporter) {
       this.logger.log(`[DEV EMAIL] To: ${to} | Subject: ${subject}`);

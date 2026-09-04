@@ -157,6 +157,52 @@ export class PayoutService {
       return;
     }
 
+    // ── Test-mode bypass: skip ALL Paystack API calls to avoid "starter business" error ──
+    // Recipient creation also hits Paystack and would appear as pending in dashboard.
+    if (secret.startsWith('sk_test_')) {
+      const testRef  = `TEST-CM-PAYOUT-${payoutId.slice(-8)}-${Date.now()}`;
+      const testCode = `TEST_TRANSFER_${payoutId.slice(-8)}`;
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payout.update({
+          where: { id: payoutId },
+          data: {
+            status: PayoutStatus.COMPLETED,
+            transferCode: testCode,
+            transferReference: testRef,
+            processedAt: new Date(),
+            completedAt: new Date(),
+          },
+        });
+
+        await this.walletService.debitAvailable(payout.sellerId, payout.amount, tx);
+        await this.walletService.finalizeWithdrawal(payout.sellerId, payout.amount, tx);
+
+        if (payout.orderId) {
+          await tx.order.updateMany({
+            where: { id: payout.orderId, escrowStatus: 'RELEASE_PENDING' },
+            data: { escrowStatus: 'RELEASED', status: 'Completed' },
+          });
+        }
+      });
+
+      if (payout.orderId) {
+        this.chatGateway?.emitOrderUpdated(payout.orderId, { escrowStatus: 'RELEASED', paymentStatus: 'Paid' });
+      }
+
+      this.notificationService?.notify(
+        payout.sellerId,
+        'payout',
+        'Payout sent (test mode)',
+        `GHS ${payout.amount.toFixed(2)} simulated — no real transfer in Paystack test mode.`,
+      ).catch(() => undefined);
+
+      this.logger.log(`[TEST MODE] Payout ${payoutId} simulated as COMPLETED — GHS ${payout.amount}`);
+      return;
+    }
+
+    // ── Live mode: real Paystack calls below ───────────────────────────────
+
     // Determine MoMo phone
     const phone = momoPhone ?? payout.seller.business?.momoPhone;
     if (!phone && payout.payoutMethod !== 'BANK_TRANSFER') {
@@ -368,7 +414,21 @@ export class PayoutService {
       data: { status: PayoutStatus.APPROVED, approvedAt: new Date() },
     });
 
-    await this.processPayout(payoutId);
+    try {
+      await this.processPayout(payoutId);
+    } catch (err) {
+      // Roll back to PENDING so admin can investigate and retry
+      await this.prisma.payout.update({
+        where: { id: payoutId },
+        data: {
+          status: PayoutStatus.PENDING,
+          approvedAt: null,
+          failureReason: err instanceof Error ? err.message : String(err),
+        },
+      }).catch(() => null);
+      throw err;
+    }
+
     return this.prisma.payout.findUnique({ where: { id: payoutId } });
   }
 

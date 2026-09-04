@@ -390,24 +390,34 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     Complete payment to move your order forward. Card and Mobile Money are accepted.
                   </p>
                   {(() => {
-                    const base  = order.product.price;
-                    const fee   = (order.platformFee != null && order.platformFee > 0)
-                      ? order.platformFee
-                      : Math.round(base * 0.025 * 100) / 100;
-                    const total = (order.totalAmount != null && order.totalAmount > 0)
-                      ? order.totalAmount
-                      : Math.round((base + fee) * 100) / 100;
-                    const feePct = base > 0 ? +(fee / base * 100).toFixed(1) : 2.5;
+                    const base       = order.product.price;
+                    const storedFee  = order.platformFee ?? 0;
+                    const storedTotal = order.totalAmount ?? 0;
+
+                    // Use stored fee; fall back to deriving from totalAmount diff for legacy orders
+                    const fee = storedFee > 0
+                      ? storedFee
+                      : storedTotal > base
+                        ? Math.round((storedTotal - base) * 100) / 100
+                        : 0;
+
+                    const total = storedTotal > 0 ? storedTotal : base + fee;
+                    const feePct = base > 0 && fee > 0 ? +(fee / base * 100).toFixed(1) : null;
+
                     return (
                       <div className="mt-4 space-y-1.5 rounded-xl bg-amber-100/60 p-3 text-sm">
                         <div className="flex justify-between">
                           <span className="text-amber-800">Item price</span>
                           <span className="font-semibold text-amber-900">{formatCurrency(base)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-amber-800">Service fee ({feePct}%)</span>
-                          <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
-                        </div>
+                        {fee > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-amber-800">
+                              Service fee{feePct !== null ? ` (${feePct}%)` : ""}
+                            </span>
+                            <span className="font-semibold text-amber-900">{formatCurrency(fee)}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between border-t border-amber-200 pt-1.5">
                           <span className="font-black text-amber-900">Total you pay</span>
                           <span className="font-black text-amber-900">{formatCurrency(total)}</span>
@@ -784,18 +794,30 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <dd className="font-black text-slate-950">{formatCurrency(order.totalAmount)}</dd>
                   </div>
                 ) : null}
-                {role === "seller" && (order.platformFee ?? 0) > 0 ? (
-                  <>
-                    <div className="flex justify-between">
-                      <dt className="font-semibold text-slate-500">Platform fee</dt>
-                      <dd className="font-semibold text-red-500">−{formatCurrency(order.platformFee!)}</dd>
-                    </div>
-                    <div className="flex justify-between border-t border-slate-100 pt-3">
-                      <dt className="font-semibold text-slate-500">You receive</dt>
-                      <dd className="font-black text-green-700">{formatCurrency(order.sellerAmount ?? 0)}</dd>
-                    </div>
-                  </>
-                ) : null}
+                {role === "seller" && (() => {
+                  const storedFee = order.platformFee ?? 0;
+                  const storedTotal = order.totalAmount ?? 0;
+                  const base = order.product.price;
+                  const fee = storedFee > 0
+                    ? storedFee
+                    : storedTotal > base
+                      ? Math.round((storedTotal - base) * 100) / 100
+                      : 0;
+                  const sellerReceives = order.sellerAmount ?? (fee > 0 ? base : storedTotal > 0 ? storedTotal : base);
+                  if (fee <= 0) return null;
+                  return (
+                    <>
+                      <div className="flex justify-between">
+                        <dt className="font-semibold text-slate-500">Platform fee</dt>
+                        <dd className="font-semibold text-red-500">−{formatCurrency(fee)}</dd>
+                      </div>
+                      <div className="flex justify-between border-t border-slate-100 pt-3">
+                        <dt className="font-semibold text-slate-500">You receive</dt>
+                        <dd className="font-black text-green-700">{formatCurrency(sellerReceives)}</dd>
+                      </div>
+                    </>
+                  );
+                })()}
                 <div className="flex justify-between">
                   <dt className="font-semibold text-slate-500">Status</dt>
                   <dd>
