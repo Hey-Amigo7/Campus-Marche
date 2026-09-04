@@ -12,6 +12,7 @@ import { PrismaService } from './prisma.service';
 type JwtPayload = {
   sub: string;
   email: string;
+  verified: boolean;
 };
 
 const DUMMY_PASSWORD_HASH = '$2b$12$6ydFQYfPmr67mq8Dmb2Ave/2kknjwM0dUGhD3A8WwW7jAj5mYADBW';
@@ -79,8 +80,8 @@ export class AuthService {
     };
   }
 
-  private signToken(user: { id: string; email: string }) {
-    const payload: JwtPayload = { sub: user.id, email: user.email };
+  private signToken(user: { id: string; email: string; verified: boolean }) {
+    const payload: JwtPayload = { sub: user.id, email: user.email, verified: user.verified };
     return this.jwtService.signAsync(payload);
   }
 
@@ -167,7 +168,13 @@ export class AuthService {
       this.prisma.user.update({ where: { id: userId }, data: { verified: true } }),
     ]);
 
-    return { message: 'Email verified successfully' };
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: USER_SELECT,
+    });
+
+    const token = await this.signToken(user);
+    return { message: 'Email verified successfully', token, user: this.sanitizeUser(user) };
   }
 
   async resendEmailOtp(userId: string) {
@@ -289,7 +296,7 @@ export class AuthService {
     for (const candidate of candidates) {
       const match = await bcrypt.compare(password, candidate.password ?? DUMMY_PASSWORD_HASH);
       if (match) {
-        const token = await this.signToken(candidate);
+        const token = await this.signToken({ id: candidate.id, email: candidate.email, verified: Boolean(candidate.verified) });
         this.logger.log(`[AUTH] Login success: ${candidate.email}`);
         return { user: this.sanitizeUser(candidate as Parameters<typeof this.sanitizeUser>[0]), token };
       }

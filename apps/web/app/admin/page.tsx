@@ -24,6 +24,7 @@ import {
   Package,
   Plus,
   Search,
+  Send,
   Shield,
   ShieldOff,
   Trash2,
@@ -905,11 +906,20 @@ function EventsTab() {
 
 // ─── Messages tab ─────────────────────────────────────────────────────────────
 
+const MSG_STATUS_STYLE: Record<string, { bg: string; color: string }> = {
+  new:      { bg: "rgba(127,182,133,0.12)", color: "#7FB685" },
+  replied:  { bg: "rgba(99,102,241,0.10)",  color: "#6366F1" },
+  resolved: { bg: "#F1F5F9",               color: "#94A3B8" },
+};
+
 function MessagesTab() {
   const [skip, setSkip] = useState(0);
   const take = 20;
   const [expanded, setExpanded] = useState<string | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<Record<string, string>>({});
+  const [replying, setReplying] = useState<string | null>(null);
+  const [replyDone, setReplyDone] = useState<Set<string>>(new Set());
 
   const { data, isLoading, mutate } = useSWR(
     ["admin-contact-messages", skip],
@@ -927,6 +937,20 @@ function MessagesTab() {
       await mutate();
     } finally {
       setResolving(null);
+    }
+  }
+
+  async function sendReply(id: string) {
+    const text = replyText[id]?.trim();
+    if (!text) return;
+    setReplying(id);
+    try {
+      await api.admin.replyContactMessage(id, text);
+      setReplyDone((prev) => new Set(prev).add(id));
+      setReplyText((prev) => ({ ...prev, [id]: "" }));
+      await mutate();
+    } finally {
+      setReplying(null);
     }
   }
 
@@ -948,54 +972,81 @@ function MessagesTab() {
             <p className="mt-1 text-sm text-slate-400">Contact form submissions will appear here.</p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div key={msg.id} className="overflow-hidden rounded-2xl" style={CARD}>
-              <button
-                className="flex w-full items-start gap-4 p-4 text-left transition-colors hover:bg-slate-50"
-                onClick={() => setExpanded(expanded === msg.id ? null : msg.id)}
-              >
-                <div
-                  className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-                  style={{ background: msg.status === "new" ? "rgba(127,182,133,0.12)" : "#F1F5F9" }}
+          messages.map((msg) => {
+            const statusStyle = MSG_STATUS_STYLE[msg.status] ?? { bg: "#F1F5F9", color: "#94A3B8" };
+            return (
+              <div key={msg.id} className="overflow-hidden rounded-2xl" style={CARD}>
+                <button
+                  className="flex w-full items-start gap-4 p-4 text-left transition-colors hover:bg-slate-50"
+                  onClick={() => setExpanded(expanded === msg.id ? null : msg.id)}
                 >
-                  <Inbox className="h-4 w-4" style={{ color: msg.status === "new" ? "#7FB685" : "#94A3B8" }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className="rounded-full px-2.5 py-0.5 text-[10px] font-black capitalize"
-                      style={{
-                        background: msg.status === "new" ? "rgba(127,182,133,0.12)" : "#F1F5F9",
-                        color: msg.status === "new" ? "#7FB685" : "#94A3B8",
-                      }}
-                    >
-                      {msg.status}
-                    </span>
-                    <span className="truncate font-bold text-slate-800">{msg.subject}</span>
+                  <div
+                    className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl"
+                    style={{ background: statusStyle.bg }}
+                  >
+                    <Inbox className="h-4 w-4" style={{ color: statusStyle.color }} />
                   </div>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    {msg.name} · {msg.email} · {formatRelativeDate(msg.createdAt)}
-                  </p>
-                </div>
-              </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className="rounded-full px-2.5 py-0.5 text-[10px] font-black capitalize"
+                        style={{ background: statusStyle.bg, color: statusStyle.color }}
+                      >
+                        {msg.status}
+                      </span>
+                      <span className="truncate font-bold text-slate-800">{msg.subject}</span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {msg.name} · {msg.email} · {formatRelativeDate(msg.createdAt)}
+                    </p>
+                  </div>
+                </button>
 
-              {expanded === msg.id && (
-                <div className="border-t border-slate-100 px-4 pb-4 pt-3">
-                  <p className="text-sm leading-6 text-slate-600 whitespace-pre-wrap">{msg.message}</p>
-                  {msg.status !== "resolved" && (
-                    <button
-                      onClick={() => resolve(msg.id)}
-                      disabled={resolving === msg.id}
-                      className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 disabled:opacity-60"
-                    >
-                      {resolving === msg.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Mark resolved
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))
+                {expanded === msg.id && (
+                  <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-3">
+                    <p className="text-sm leading-6 text-slate-600 whitespace-pre-wrap">{msg.message}</p>
+
+                    {/* Reply box */}
+                    {msg.status !== "resolved" && (
+                      <div className="space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs font-bold text-slate-500">
+                          Reply to {msg.name} ({msg.email})
+                        </p>
+                        <textarea
+                          value={replyText[msg.id] ?? ""}
+                          onChange={(e) => setReplyText((prev) => ({ ...prev, [msg.id]: e.target.value }))}
+                          placeholder="Type your reply… it will be emailed directly to the user."
+                          rows={3}
+                          className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        />
+                        {replyDone.has(msg.id) && (
+                          <p className="text-xs font-semibold text-emerald-600">Reply sent ✓</p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => sendReply(msg.id)}
+                            disabled={replying === msg.id || !replyText[msg.id]?.trim()}
+                            className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 disabled:opacity-50"
+                          >
+                            {replying === msg.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                            Send reply
+                          </button>
+                          <button
+                            onClick={() => resolve(msg.id)}
+                            disabled={resolving === msg.id}
+                            className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 disabled:opacity-60"
+                          >
+                            {resolving === msg.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            Mark resolved
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 

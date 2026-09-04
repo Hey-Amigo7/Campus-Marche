@@ -61,6 +61,15 @@ export class UploadController {
     return this.config.get<string>('API_URL') ?? 'http://localhost:3002';
   }
 
+  private async ensureBucket(bucket: string): Promise<void> {
+    if (!this.supabase) return;
+    const { error } = await this.supabase.storage.createBucket(bucket, { public: true });
+    // "already exists" is not a real error
+    if (error && !error.message.toLowerCase().includes('already exists')) {
+      this.logger.warn(`Could not create bucket "${bucket}": ${error.message}`);
+    }
+  }
+
   // Upload a buffer to Supabase Storage and return the public URL
   private async uploadToSupabase(bucket: string, filename: string, buffer: Buffer, mimetype: string): Promise<string> {
     if (!this.supabase) throw new Error('Supabase not configured');
@@ -69,7 +78,18 @@ export class UploadController {
       .from(bucket)
       .upload(filename, buffer, { contentType: mimetype, upsert: false });
 
-    if (error) throw new Error(`Supabase upload failed: ${error.message}`);
+    if (error) {
+      if (error.message === 'Bucket not found') {
+        // Bucket doesn't exist yet — create it and retry once
+        await this.ensureBucket(bucket);
+        const { error: retryErr } = await this.supabase.storage
+          .from(bucket)
+          .upload(filename, buffer, { contentType: mimetype, upsert: false });
+        if (retryErr) throw new Error(`Supabase upload failed: ${retryErr.message}`);
+      } else {
+        throw new Error(`Supabase upload failed: ${error.message}`);
+      }
+    }
 
     const { data } = this.supabase.storage.from(bucket).getPublicUrl(filename);
     return data.publicUrl;

@@ -343,7 +343,8 @@ export class PaymentService {
 
     if (!order) throw new NotFoundException('Order not found');
     if (order.buyerId !== userId) throw new ForbiddenException('Only the buyer can confirm delivery');
-    if (order.escrowStatus !== EscrowStatus.ESCROW_HELD) {
+    const releasableStates: EscrowStatus[] = [EscrowStatus.ESCROW_HELD, EscrowStatus.SHIPPED, EscrowStatus.DELIVERED];
+    if (!releasableStates.includes(order.escrowStatus as EscrowStatus)) {
       throw new BadRequestException(`Cannot release escrow — current status is ${order.escrowStatus}`);
     }
 

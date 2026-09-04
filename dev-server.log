@@ -1,0 +1,42 @@
+
+> web@0.1.0 dev C:\Users\Hey Amigo\Github\campus-marche\apps\web
+> next dev --port 3000
+
+▲ Next.js 16.2.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.20.10.2:3000
+- Environments: .env.local, .env
+✓ Ready in 722ms
+Creating turbopack project {
+  dir: 'C:\\Users\\Hey Amigo\\Github\\campus-marche\\apps\\web',
+  testMode: true
+}
+
+(node:17056) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ GET / 200 in 3.2s (next.js: 492ms, application-code: 2.7s)
+ GET /admin/login 200 in 1381ms (next.js: 190ms, application-code: 1191ms)
+
+<--- Last few GCs --->
+
+[16148:0000025431B46000]  1921883 ms: Mark-Compact (reduce) 7506.8 (8090.8) -> 7506.7 (8027.8) MB, pooled: 0.0 MB, 23541.12 / 0.00 ms (average mu = 0.016, current mu = 0.001) last resort; GC in old space requested
+[16148:0000025431B46000]  1942358 ms: Mark-Compact (reduce) 7506.7 (8027.8) -> 7506.7 (8026.8) MB, pooled: 0.0 MB, 20465.06 / 0.00 ms (average mu = 0.009, current mu = 0.000) last resort; GC in old space requested
+
+FATAL ERROR: CALL_AND_RETRY_LAST Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF63F134519 node::OnFatalError+1289
+ 2: 00007FF63D96BF1A v8::Function::NewInstance+522
+ 3: 00007FF63D783745 X509_STORE_set_cleanup+693
+ 4: 00007FF63D793206 X509_CRL_set_meth_data+27574
+ 5: 00007FF63D7AE08E X509_CRL_set_meth_data+137790
+ 6: 00007FF63D7AE025 X509_CRL_set_meth_data+137685
+ 7: 00007FF63D4AC73B v8::RegExp::GetFlags+16219
+ 8: 00007FF63D4AC092 v8::RegExp::GetFlags+14514
+ 9: 00007FF63D4AD0A8 v8::RegExp::GetFlags+18632
+10: 00007FF63D38C7E3 v8::CodeEvent::GetFunctionName+192131
+11: 000002545A27F43A 
+[?25h
+C:\Users\Hey Amigo\Github\campus-marche\apps\web:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  web@0.1.0 dev: `next dev --port 3000`
+Exit status 134

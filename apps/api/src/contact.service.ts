@@ -20,6 +20,25 @@ export class ContactService {
       .sendContactMessage(data.name, data.email, data.subject, data.message)
       .catch((err) => this.logger.error(`Forward contact email failed: ${String(err)}`));
 
+    // If the subject is a bug report, mirror it into the Reports tab for visibility
+    if (data.subject.toLowerCase().includes('bug')) {
+      const user = await this.prisma.user.findFirst({
+        where: { email: { equals: data.email, mode: 'insensitive' } },
+        select: { id: true },
+      }).catch(() => null);
+
+      if (user) {
+        await this.prisma.report.create({
+          data: {
+            reason: 'Bug report',
+            description: `[Via contact form] ${data.message}`,
+            status: 'pending',
+            reporterId: user.id,
+          },
+        }).catch((err) => this.logger.warn(`Could not create report from bug contact: ${String(err)}`));
+      }
+    }
+
     return { id: record.id, message: 'Thank you! Your message has been received. We will get back to you within 24 hours.' };
   }
 

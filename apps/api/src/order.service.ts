@@ -168,7 +168,17 @@ export class OrderService {
       );
     }
 
-    const updated = await this.prisma.order.update({ where: { id }, data: { status: newStatus } });
+    // Sync escrow state with delivery milestones so the timeline advances correctly
+    const escrowSync: Partial<Record<string, EscrowStatus>> = {
+      'Out for delivery': EscrowStatus.SHIPPED,
+      'Delivered':        EscrowStatus.DELIVERED,
+    };
+    const newEscrow = escrowSync[newStatus];
+
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: { status: newStatus, ...(newEscrow ? { escrowStatus: newEscrow } : {}) },
+    });
 
     const notifyId = isBuyer ? order.product.sellerId : order.buyerId;
     const actor = isBuyer ? 'Buyer' : 'Seller';

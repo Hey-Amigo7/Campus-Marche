@@ -229,9 +229,9 @@ export const api = {
       ),
 
     verifyEmailOtp: (code: string) =>
-      request<{ message: string }>(
+      request<{ message: string; token: string; user: { id: string; email: string } }>(
         "/auth/verify-otp",
-        { message: "" },
+        { message: "", token: "", user: { id: "", email: "" } },
         { method: "POST", body: JSON.stringify({ code }), strict: true },
       ),
 
@@ -718,6 +718,11 @@ export const api = {
         method: "PATCH", strict: true,
       }),
 
+    replyContactMessage: (id: string, reply: string) =>
+      request<{ id: string; replied: boolean }>(`/admin/contact-messages/${id}/reply`, {} as never, {
+        method: "POST", body: JSON.stringify({ reply }), strict: true,
+      }),
+
     getAllPayouts: (status?: string, skip = 0, take = 50) => {
       const params = new URLSearchParams({ skip: String(skip), take: String(take) });
       if (status) params.set("status", status);
@@ -762,5 +767,12 @@ export const api = {
       request<{ sent: number }>("/admin/broadcast", { sent: 0 }, {
         method: "POST", body: JSON.stringify({ title, message }), strict: true,
       }),
+
+    backfillEscrowStates: () =>
+      request<{ fixed: { outForDelivery: number; delivered: number }; message: string }>(
+        "/admin/backfill-escrow-states",
+        { fixed: { outForDelivery: 0, delivered: 0 }, message: "" },
+        { method: "POST", strict: true },
+      ),
   },
 };

@@ -78,7 +78,27 @@ export function Footer() {
           style={{ borderColor: "var(--border)", color: "var(--subtle)" }}
         >
           <span>© {new Date().getFullYear()} Campus Marche. All rights reserved.</span>
-          <span>Built for HTU students, by HTU students. 🇬🇭</span>
+          <span className="flex flex-wrap items-center gap-3">
+            <a
+              href="mailto:campusmarche6@gmail.com"
+              className="transition-colors hover:text-[#72CC23]"
+              style={{ color: "var(--subtle)" }}
+            >
+              campusmarche6@gmail.com
+            </a>
+            <span>·</span>
+            <a
+              href="https://maps.google.com/?q=Ho+Technical+University,+Ho,+Ghana"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-[#72CC23]"
+              style={{ color: "var(--subtle)" }}
+            >
+              Ho Technical University
+            </a>
+            <span>·</span>
+            <span>Built for HTU students, by HTU students. 🇬🇭</span>
+          </span>
         </div>
       </div>
     </footer>
