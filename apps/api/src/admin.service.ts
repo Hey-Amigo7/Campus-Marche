@@ -548,9 +548,7 @@ export class AdminService {
     const msg = await this.prisma.contactMessage.findUnique({ where: { id } });
     if (!msg) throw new NotFoundException('Message not found');
 
-    await this.emailService
-      .sendContactReply(msg.email, msg.name, msg.subject, reply)
-      .catch(() => undefined);
+    await this.emailService.sendContactReply(msg.email, msg.name, msg.subject, reply);
 
     await this.prisma.contactMessage.update({
       where: { id },

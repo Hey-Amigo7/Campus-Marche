@@ -345,8 +345,20 @@ export const api = {
       { method: "POST", body: JSON.stringify({ recipientId, productId }), strict: true },
     ),
 
-  getMessages: (conversationId: string) =>
-    request<ApiMessage[]>(`/conversations/${conversationId}/messages`, []),
+  getMessages: (conversationId: string, opts?: { before?: string; take?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.before) params.set("before", opts.before);
+    if (opts?.take)   params.set("take",   String(opts.take));
+    const qs = params.toString();
+    return request<ApiMessage[]>(
+      `/conversations/${conversationId}/messages${qs ? `?${qs}` : ""}`, [],
+    );
+  },
+
+  searchMessages: (conversationId: string, q: string) =>
+    request<ApiMessage[]>(
+      `/conversations/${conversationId}/messages/search?q=${encodeURIComponent(q)}`, [],
+    ),
 
   markConversationRead: (conversationId: string) =>
     request<{ ok: boolean }>(
@@ -355,11 +367,11 @@ export const api = {
       { method: "POST", strict: true },
     ),
 
-  sendMessage: (conversationId: string, content: string) =>
+  sendMessage: (conversationId: string, content: string, replyToId?: string) =>
     request<ApiMessage>(
       `/conversations/${conversationId}/messages`,
       {} as ApiMessage,
-      { method: "POST", body: JSON.stringify({ content }), strict: true },
+      { method: "POST", body: JSON.stringify({ content, replyToId }), strict: true },
     ),
 
   sendRichMessage: (
@@ -378,12 +390,58 @@ export const api = {
       viewOnce?: boolean;
       duration?: number;
       callStatus?: string;
+      replyToId?: string;
     },
   ) =>
     request<ApiMessage>(
       `/conversations/${conversationId}/messages/rich`,
       {} as ApiMessage,
       { method: "POST", body: JSON.stringify(data), strict: true },
+    ),
+
+  editMessage: (conversationId: string, messageId: string, content: string) =>
+    request<ApiMessage>(
+      `/conversations/${conversationId}/messages/${messageId}`,
+      {} as ApiMessage,
+      { method: "PATCH", body: JSON.stringify({ content }), strict: true },
+    ),
+
+  deleteMessage: (conversationId: string, messageId: string, mode: "me" | "everyone") =>
+    request<{ ok: boolean }>(
+      `/conversations/${conversationId}/messages/${messageId}`,
+      { ok: false },
+      { method: "DELETE", body: JSON.stringify({ mode }), strict: true },
+    ),
+
+  reactToMessage: (conversationId: string, messageId: string, emoji: string) =>
+    request<{ id: string; emoji: string }>(
+      `/conversations/${conversationId}/messages/${messageId}/react`,
+      {} as never,
+      { method: "POST", body: JSON.stringify({ emoji }), strict: true },
+    ),
+
+  removeReaction: (conversationId: string, messageId: string) =>
+    request<{ ok: boolean }>(
+      `/conversations/${conversationId}/messages/${messageId}/react`,
+      { ok: false },
+      { method: "DELETE", strict: true },
+    ),
+
+  forwardMessage: (conversationId: string, messageId: string, targetConversationId: string) =>
+    request<ApiMessage>(
+      `/conversations/${conversationId}/messages/${messageId}/forward`,
+      {} as ApiMessage,
+      { method: "POST", body: JSON.stringify({ targetConversationId }), strict: true },
+    ),
+
+  setConvPreference: (
+    conversationId: string,
+    prefs: { muted?: boolean; pinned?: boolean; archived?: boolean },
+  ) =>
+    request<{ id: string }>(
+      `/conversations/${conversationId}/preferences`,
+      {} as never,
+      { method: "PATCH", body: JSON.stringify(prefs), strict: true },
     ),
 
   markMessageViewed: (conversationId: string, messageId: string) =>

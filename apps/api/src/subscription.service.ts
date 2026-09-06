@@ -91,9 +91,10 @@ export class SubscriptionService {
 
     const meta = result.data.metadata;
     if (meta?.type !== 'subscription') throw new BadRequestException('Reference is not a subscription payment');
+    if (meta.userId && meta.userId !== userId) throw new BadRequestException('Payment reference does not belong to your account');
 
     const plan = (meta.plan ?? 'pro') as PlanKey;
-    const targetUserId = meta.userId ?? userId;
+    const targetUserId = userId;
 
     await this.activateFromPayment(targetUserId, plan, reference);
     return { success: true, plan, features: PLANS[plan] };
