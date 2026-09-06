@@ -773,6 +773,7 @@ function MessagesContent() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callStatus,   setCallStatus]   = useState("Calling…");
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
@@ -827,6 +828,7 @@ function MessagesContent() {
     }
     function handleCallAnswer(raw: unknown) {
       const data = raw as { answer: RTCSessionDescriptionInit };
+      if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
       void pcRef.current?.setRemoteDescription(data.answer);
       setCallStatus("Connected");
       setCallState("in-call");
@@ -1004,6 +1006,12 @@ function MessagesContent() {
     setCallState("calling");
     setCallStatus("Calling…");
 
+    // Auto-end after 30 s if recipient doesn't answer
+    callTimeoutRef.current = setTimeout(() => {
+      endCall(true);
+      setCallStatus("No answer");
+    }, 30000);
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setLocalStream(stream);
@@ -1023,12 +1031,14 @@ function MessagesContent() {
 
       await sendRich({ type: "VIDEO_CALL", callStatus: "pending" });
     } catch {
+      if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
       setCallState("idle");
     }
   }
 
   async function acceptCall() {
     if (!incomingCall) return;
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     setCallState("in-call");
     setCallStatus("Connected");
 
@@ -1060,6 +1070,7 @@ function MessagesContent() {
   }
 
   function endCall(notifyOther = true) {
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     if (notifyOther && otherUserId && active) {
       socketRef.current?.emit("call:end", { to: otherUserId, conversationId: active.id });
     }

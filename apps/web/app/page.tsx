@@ -39,7 +39,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
 
 const MARQUEE_ITEMS = [
   "Electronics", "Textbooks", "Fashion", "Services", "Furniture",
-  "Sports", "Notes", "Stationery", "Free listings", "Campus meetup",
+  "Sports", "Notes", "Stationery", "Safe escrow", "Campus meetup",
   "Escrow protected", "Student verified",
 ];
 
@@ -71,8 +71,8 @@ const COLLECTION_GRID = [
 const FEATURES = [
   {
     Icon: ShoppingBag,
-    title: "Free to list",
-    description: "No platform fees, no commission. List your product or service and keep 100% of what you earn.",
+    title: "Simple to start",
+    description: "Create an account and list your first products for free. Sellers always receive their full listed price.",
   },
   {
     Icon: Truck,
@@ -150,7 +150,7 @@ function Hero() {
             style={{ color: "var(--muted)" }}
           >
             Buy gadgets, textbooks, fashion, and room essentials from verified HTU students.
-            No fees. No friction. All on campus.
+            Simple. Secure. All on campus.
           </p>
         </FadeUp>
 
@@ -182,7 +182,7 @@ function Hero() {
                   color:       "var(--on-surface)",
                 }}
               >
-                Start selling free
+                Start selling
               </Link>
             </MotionButton>
           </div>
@@ -573,7 +573,7 @@ function EditorialSplit() {
           </h2>
           <p className="mb-8 text-sm leading-7" style={{ color: "var(--muted)" }}>
             We believe every student deserves access to affordable campus essentials —
-            and every seller deserves a fair deal. No hidden fees. No friction.
+            and every seller deserves a fair deal. Payments protected by escrow.
             Just your campus, your market.
           </p>
           <div className="flex flex-wrap gap-3">
