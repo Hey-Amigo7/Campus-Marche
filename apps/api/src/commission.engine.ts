@@ -1,3 +1,11 @@
+import { randomBytes } from 'node:crypto';
+
+/** Generates a 6-character alphanumeric verification code (no ambiguous chars). */
+export function generateVerificationCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from(randomBytes(6)).map(b => chars[b % chars.length]).join('');
+}
+
 export type CommissionResult = {
   totalAmount: number;
   platformFee: number;

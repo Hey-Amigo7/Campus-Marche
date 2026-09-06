@@ -5,9 +5,11 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import {
   AssignDeliveryPersonDto,
   CreateOrderDto,
+  DisputeOrderDto,
   SetDeliveryDetailsDto,
   UpdateLocationDto,
   UpdateOrderStatusDto,
+  VerifyCodeDto,
 } from './dto/order.dto';
 import { OrderService } from './order.service';
 
@@ -90,5 +92,35 @@ export class OrderController {
     @AuthUser() user: { id: string },
   ) {
     return this.orderService.updateBuyerLocation(id, user.id, body.latitude, body.longitude);
+  }
+
+  @Post(':id/verify-pickup')
+  @ApiOperation({ summary: 'Delivery person enters the pickup code to confirm collection from seller' })
+  verifyPickupCode(
+    @Param('id') id: string,
+    @Body() body: VerifyCodeDto,
+    @AuthUser() user: { id: string },
+  ) {
+    return this.orderService.verifyPickupCode(id, user.id, body.code);
+  }
+
+  @Post(':id/verify-delivery')
+  @ApiOperation({ summary: 'Delivery person enters the buyer\'s delivery code to confirm handoff and release escrow' })
+  verifyDeliveryCode(
+    @Param('id') id: string,
+    @Body() body: VerifyCodeDto,
+    @AuthUser() user: { id: string },
+  ) {
+    return this.orderService.verifyDeliveryCode(id, user.id, body.code);
+  }
+
+  @Post(':id/dispute')
+  @ApiOperation({ summary: 'Raise a dispute on a paid order (buyer or seller)' })
+  disputeOrder(
+    @Param('id') id: string,
+    @Body() body: DisputeOrderDto,
+    @AuthUser() user: { id: string },
+  ) {
+    return this.orderService.disputeOrder(id, user.id, body.reason);
   }
 }

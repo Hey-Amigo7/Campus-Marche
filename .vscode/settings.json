@@ -1,4 +1,4 @@
 {
-    "claudeCodeChat.permissions.yoloMode": false,
+    "claudeCodeChat.permissions.yoloMode": true,
     "terminal.integrated.accessibleViewFocusOnCommandExecution": true
 }
