@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 const BRAND = {
   navy: '#0F172A',
@@ -51,19 +53,31 @@ function primaryButton(text: string, href: string) {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly apiKey: string | undefined;
+  private readonly transporter: nodemailer.Transporter | null;
   private readonly fromAddress: string;
   private readonly contactEmail: string;
 
   constructor(private config: ConfigService) {
-    this.apiKey = config.get<string>('ARKESEL_API_KEY');
-    this.fromAddress = config.get<string>('EMAIL_FROM') ?? 'campusmarche6@gmail.com';
+    const smtpHost = config.get<string>('SMTP_HOST');
+    const smtpUser = config.get<string>('SMTP_USER');
+    const smtpPass = config.get<string>('SMTP_PASS');
+
+    this.fromAddress = config.get<string>('SMTP_FROM') ?? config.get<string>('EMAIL_FROM') ?? 'campusmarche6@gmail.com';
     this.contactEmail = config.get<string>('CONTACT_EMAIL') ?? this.fromAddress;
 
-    if (this.apiKey) {
-      this.logger.log(`Email transport: Arkesel API (from: ${this.fromAddress})`);
+    if (smtpHost && smtpUser && smtpPass) {
+      const port = config.get<number>('SMTP_PORT') ?? 587;
+      const options: SMTPTransport.Options = {
+        host: smtpHost,
+        port,
+        secure: port === 465,
+        auth: { user: smtpUser, pass: smtpPass },
+      };
+      this.transporter = nodemailer.createTransport(options);
+      this.logger.log(`Email transport: SMTP ${smtpHost}:${port} (from: ${this.fromAddress})`);
     } else {
-      this.logger.warn('ARKESEL_API_KEY not set — emails will only be logged to console');
+      this.transporter = null;
+      this.logger.warn('SMTP_HOST / SMTP_USER / SMTP_PASS not set — emails will only be logged to console');
     }
   }
 
@@ -175,36 +189,24 @@ export class EmailService {
   }
 
   private async send(to: string, subject: string, html: string) {
-    if (!this.apiKey) {
+    if (!this.transporter) {
       this.logger.log(`[DEV EMAIL] To: ${to} | Subject: ${subject}`);
       this.logger.log(`[DEV EMAIL] ${html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300)}`);
       return;
     }
 
-    const body = JSON.stringify({
-      from: this.fromAddress,
-      to: [to],
-      subject,
-      html,
-    });
-
-    const response = await fetch('https://email.arkesel.com/api/v2/emails/send', {
-      method: 'POST',
-      headers: {
-        'api-key': this.apiKey,
-        'Content-Type': 'application/json',
-      },
-      body,
-    });
-
-    const result = await response.json().catch(() => ({})) as { status?: string; message?: string; code?: string };
-
-    if (!response.ok || result.status === 'error') {
-      const detail = result.message ?? `HTTP ${response.status}`;
-      this.logger.error(`Arkesel email failed to ${to}: ${detail}`);
+    try {
+      const info = await this.transporter.sendMail({
+        from: this.fromAddress,
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Email sent to ${to} — messageId: ${info.messageId}`);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      this.logger.error(`SMTP send failed to ${to}: ${detail}`);
       throw new Error(`Email delivery failed: ${detail}`);
     }
-
-    this.logger.log(`Email sent to ${to} via Arkesel — subject: "${subject}"`);
   }
 }

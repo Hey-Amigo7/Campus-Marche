@@ -135,9 +135,11 @@ export class AuthService {
 
     const code = this.generateOtpCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const saltRounds = this.config.getOrThrow<number>('BCRYPT_SALT_ROUNDS');
+    const hashedCode = await bcrypt.hash(code, saltRounds);
 
     await this.prisma.otpVerification.create({
-      data: { userId, code, purpose: 'email', expiresAt },
+      data: { userId, code: hashedCode, purpose: 'email', expiresAt },
     });
 
     await this.emailService.sendOtpEmail(email, code);
@@ -154,7 +156,8 @@ export class AuthService {
     if (record.expiresAt < new Date()) throw new BadRequestException('Verification code has expired');
     if (record.attempts >= 5) throw new BadRequestException('Too many incorrect attempts. Please request a new code.');
 
-    if (record.code !== code.trim()) {
+    const codeMatches = await bcrypt.compare(code.trim(), record.code);
+    if (!codeMatches) {
       await this.prisma.otpVerification.update({
         where: { id: record.id },
         data: { attempts: { increment: 1 } },
@@ -198,6 +201,15 @@ export class AuthService {
   async sendPhoneOtp(userId: string, phone: string): Promise<{ message: string; devCode?: string }> {
     const normalizedPhone = this.smsService.normalizeGhanaPhone(phone);
 
+    // Rate-limit: at most one OTP per 60 seconds
+    const recent = await this.prisma.otpVerification.findFirst({
+      where: { userId, purpose: 'phone', used: false },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (recent && recent.createdAt > new Date(Date.now() - 60 * 1000)) {
+      throw new BadRequestException('Please wait at least 60 seconds before requesting a new code');
+    }
+
     await this.prisma.user.update({ where: { id: userId }, data: { phone: normalizedPhone } });
 
     await this.prisma.otpVerification.updateMany({
@@ -207,9 +219,11 @@ export class AuthService {
 
     const code = this.generateOtpCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const saltRounds = this.config.getOrThrow<number>('BCRYPT_SALT_ROUNDS');
+    const hashedCode = await bcrypt.hash(code, saltRounds);
 
     await this.prisma.otpVerification.create({
-      data: { userId, code, purpose: 'phone', expiresAt },
+      data: { userId, code: hashedCode, purpose: 'phone', expiresAt },
     });
 
     let smsSent = false;
@@ -240,7 +254,8 @@ export class AuthService {
     if (record.expiresAt < new Date()) throw new BadRequestException('Verification code has expired');
     if (record.attempts >= 5) throw new BadRequestException('Too many attempts. Please request a new code.');
 
-    if (record.code !== code.trim()) {
+    const codeMatches = await bcrypt.compare(code.trim(), record.code);
+    if (!codeMatches) {
       await this.prisma.otpVerification.update({
         where: { id: record.id },
         data: { attempts: { increment: 1 } },

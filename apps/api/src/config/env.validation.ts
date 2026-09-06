@@ -37,6 +37,9 @@ export type ApiEnv = {
   // Supabase Storage
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  // SMS / Arkesel
+  ARKESEL_API_KEY?: string;
+  SMS_SENDER_ID?: string;
 };
 
 const DEFAULT_ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001';
@@ -96,6 +99,8 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     GOOGLE_CLIENT_ID: config.GOOGLE_CLIENT_ID,
     SUPABASE_URL: config.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: config.SUPABASE_SERVICE_ROLE_KEY,
+    ARKESEL_API_KEY: config.ARKESEL_API_KEY,
+    SMS_SENDER_ID: config.SMS_SENDER_ID,
   };
 }
 
