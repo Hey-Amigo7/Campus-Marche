@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { ConditionalShell } from "@/components/conditional-shell";
 import { SystemStatusBanner } from "@/components/system-status-banner";
@@ -7,6 +7,7 @@ import { CartProvider } from "@/providers/cart-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { LenisProvider } from "@/providers/lenis-provider";
 import { GoogleProvider } from "@/providers/google-provider";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -20,6 +21,14 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = {
+  themeColor: "#223A6A",
+  colorScheme: "light",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: {
@@ -62,6 +71,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://accounts.google.com" />
       </head>
       <body className="min-h-full font-sans">
+        <PwaRegister />
         <GoogleProvider>
           <LenisProvider>
             <ThemeProvider>
