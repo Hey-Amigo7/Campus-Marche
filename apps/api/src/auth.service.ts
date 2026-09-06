@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -6,8 +6,15 @@ import * as crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { AccountType, AuthenticatedUser } from './auth/auth-user.decorator';
 import { EmailService } from './email.service';
-import { SmsService } from './sms.service';
 import { PrismaService } from './prisma.service';
+
+function normalizeGhanaPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('233') && digits.length === 12) return `+${digits}`;
+  if (digits.startsWith('0') && digits.length === 10) return `+233${digits.slice(1)}`;
+  if (digits.length === 9) return `+233${digits}`;
+  return `+${digits}`;
+}
 
 type JwtPayload = {
   sub: string;
@@ -50,7 +57,6 @@ export class AuthService {
     private jwtService: JwtService,
     private config: ConfigService,
     private emailService: EmailService,
-    private smsService: SmsService,
   ) {}
 
   private getAccountType(email: string): AccountType {
@@ -85,10 +91,6 @@ export class AuthService {
     return this.jwtService.signAsync(payload);
   }
 
-  private generateOtpCode(): string {
-    return String(crypto.randomInt(100000, 999999));
-  }
-
   async register(email: string, name: string, password: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedName = name.trim();
@@ -112,163 +114,7 @@ export class AuthService {
     });
 
     const token = await this.signToken(user);
-
-    // Send OTP to verify email
-    let devCode: string | undefined;
-    const otpCode = await this.sendEmailOtp(user.id, user.email).catch((err) => {
-      this.logger.error(`Failed to send registration OTP: ${err instanceof Error ? err.message : String(err)}`);
-      return undefined;
-    });
-
-    if (this.config.get('NODE_ENV') !== 'production' && otpCode) {
-      devCode = otpCode;
-    }
-
-    return { user: this.sanitizeUser(user), token, requiresOtp: true, devCode };
-  }
-
-  async sendEmailOtp(userId: string, email: string): Promise<string> {
-    await this.prisma.otpVerification.updateMany({
-      where: { userId, purpose: 'email', used: false },
-      data: { used: true },
-    });
-
-    const code = this.generateOtpCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    const saltRounds = this.config.getOrThrow<number>('BCRYPT_SALT_ROUNDS');
-    const hashedCode = await bcrypt.hash(code, saltRounds);
-
-    await this.prisma.otpVerification.create({
-      data: { userId, code: hashedCode, purpose: 'email', expiresAt },
-    });
-
-    await this.emailService.sendOtpEmail(email, code);
-    return code;
-  }
-
-  async verifyEmailOtp(userId: string, code: string) {
-    const record = await this.prisma.otpVerification.findFirst({
-      where: { userId, purpose: 'email', used: false },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!record) throw new BadRequestException('No pending verification code found');
-    if (record.expiresAt < new Date()) throw new BadRequestException('Verification code has expired');
-    if (record.attempts >= 5) throw new BadRequestException('Too many incorrect attempts. Please request a new code.');
-
-    const codeMatches = await bcrypt.compare(code.trim(), record.code);
-    if (!codeMatches) {
-      await this.prisma.otpVerification.update({
-        where: { id: record.id },
-        data: { attempts: { increment: 1 } },
-      });
-      const remaining = 4 - record.attempts;
-      throw new BadRequestException(`Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.otpVerification.update({ where: { id: record.id }, data: { used: true } }),
-      this.prisma.user.update({ where: { id: userId }, data: { verified: true } }),
-    ]);
-
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: USER_SELECT,
-    });
-
-    const token = await this.signToken(user);
-    return { message: 'Email verified successfully', token, user: this.sanitizeUser(user) };
-  }
-
-  async resendEmailOtp(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-    if (user.verified) throw new BadRequestException('Email is already verified');
-
-    const recent = await this.prisma.otpVerification.findFirst({
-      where: { userId, purpose: 'email', used: false },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (recent && recent.createdAt > new Date(Date.now() - 60 * 1000)) {
-      throw new BadRequestException('Please wait at least 60 seconds before requesting a new code');
-    }
-
-    await this.sendEmailOtp(userId, user.email);
-    return { message: 'A new verification code has been sent to your email' };
-  }
-
-  async sendPhoneOtp(userId: string, phone: string): Promise<{ message: string; devCode?: string }> {
-    const normalizedPhone = this.smsService.normalizeGhanaPhone(phone);
-
-    // Rate-limit: at most one OTP per 60 seconds
-    const recent = await this.prisma.otpVerification.findFirst({
-      where: { userId, purpose: 'phone', used: false },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (recent && recent.createdAt > new Date(Date.now() - 60 * 1000)) {
-      throw new BadRequestException('Please wait at least 60 seconds before requesting a new code');
-    }
-
-    await this.prisma.user.update({ where: { id: userId }, data: { phone: normalizedPhone } });
-
-    await this.prisma.otpVerification.updateMany({
-      where: { userId, purpose: 'phone', used: false },
-      data: { used: true },
-    });
-
-    const code = this.generateOtpCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    const saltRounds = this.config.getOrThrow<number>('BCRYPT_SALT_ROUNDS');
-    const hashedCode = await bcrypt.hash(code, saltRounds);
-
-    await this.prisma.otpVerification.create({
-      data: { userId, code: hashedCode, purpose: 'phone', expiresAt },
-    });
-
-    let smsSent = false;
-    try {
-      await this.smsService.sendOtp(normalizedPhone, code);
-      smsSent = true;
-    } catch (err) {
-      this.logger.error(`SMS failed for ${normalizedPhone}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    const devCode = this.config.get('NODE_ENV') !== 'production' ? code : undefined;
-
-    return {
-      message: smsSent
-        ? 'Verification code sent to your phone'
-        : 'SMS delivery failed — check server logs for the code (dev mode)',
-      devCode,
-    };
-  }
-
-  async verifyPhoneOtp(userId: string, code: string) {
-    const record = await this.prisma.otpVerification.findFirst({
-      where: { userId, purpose: 'phone', used: false },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!record) throw new BadRequestException('No pending phone verification found');
-    if (record.expiresAt < new Date()) throw new BadRequestException('Verification code has expired');
-    if (record.attempts >= 5) throw new BadRequestException('Too many attempts. Please request a new code.');
-
-    const codeMatches = await bcrypt.compare(code.trim(), record.code);
-    if (!codeMatches) {
-      await this.prisma.otpVerification.update({
-        where: { id: record.id },
-        data: { attempts: { increment: 1 } },
-      });
-      throw new BadRequestException('Incorrect code');
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.otpVerification.update({ where: { id: record.id }, data: { used: true } }),
-      this.prisma.user.update({ where: { id: userId }, data: { phoneVerified: true } }),
-    ]);
-
-    return { message: 'Phone number verified successfully' };
+    return { user: this.sanitizeUser(user), token };
   }
 
   async login(identifier: string, password: string) {
@@ -287,7 +133,7 @@ export class AuthService {
     } else if (/^(\+?233|0)\d{8,9}$/.test(raw.replace(/\s/g, ''))) {
       // Looks like a Ghana phone number
       try {
-        const normalizedPhone = this.smsService.normalizeGhanaPhone(raw);
+        const normalizedPhone = normalizeGhanaPhone(raw);
         const user = await this.prisma.user.findFirst({
           where: { phone: normalizedPhone },
           select: { ...USER_SELECT, password: true },
@@ -457,44 +303,6 @@ export class AuthService {
     ]);
 
     return { message: 'Password updated successfully' };
-  }
-
-  async requestEmailVerification(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-    if (user.verified) throw new BadRequestException('Email is already verified');
-
-    await this.prisma.emailVerification.updateMany({
-      where: { userId, used: false },
-      data: { used: true },
-    });
-
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    await this.prisma.emailVerification.create({
-      data: { token: rawToken, userId, expiresAt },
-    });
-
-    const verifyUrl = `${this.config.get<string>('API_URL', 'http://localhost:3002')}/auth/verify-email/${rawToken}`;
-    await this.emailService.sendEmailVerification(user.email, verifyUrl);
-
-    return { message: 'Verification email sent' };
-  }
-
-  async verifyEmail(token: string) {
-    const record = await this.prisma.emailVerification.findUnique({ where: { token } });
-
-    if (!record || record.used || record.expiresAt < new Date()) {
-      throw new BadRequestException('Invalid or expired verification link');
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: record.userId }, data: { verified: true } }),
-      this.prisma.emailVerification.update({ where: { token }, data: { used: true } }),
-    ]);
-
-    return { message: 'Email verified successfully' };
   }
 
   async googleSignIn(credential: string) {

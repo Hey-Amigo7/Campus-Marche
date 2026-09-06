@@ -331,18 +331,12 @@ function SettingsContent() {
                     {profile?.verified ? "Your campus email is confirmed" : "Verify your email to build trust"}
                   </p>
                 </div>
-                {profile?.verified ? (
-                  <span className="ml-auto rounded-full px-2.5 py-1 text-[10px] font-black"
-                    style={{ background: "rgba(22,163,74,0.10)", color: "var(--green)" }}>
-                    ✓ Verified
-                  </span>
-                ) : (
-                  <Link href={`/verify-email?email=${encodeURIComponent(profile?.email ?? "")}`}
-                    className="ml-auto rounded-full px-2.5 py-1 text-[10px] font-black"
-                    style={{ background: "rgba(217,119,6,0.10)", color: "var(--caramel)" }}>
-                    Verify →
-                  </Link>
-                )}
+                <span className="ml-auto rounded-full px-2.5 py-1 text-[10px] font-black"
+                  style={profile?.verified
+                    ? { background: "rgba(22,163,74,0.10)", color: "var(--green)" }
+                    : { background: "rgba(100,116,139,0.10)", color: "var(--muted)" }}>
+                  {profile?.verified ? "✓ Verified" : "Unverified"}
+                </span>
               </div>
             </div>
           </SectionCard>
@@ -352,8 +346,7 @@ function SettingsContent() {
         <FadeUp delay={0.12}>
           <SectionCard title="Account">
             <LinkRow label="Edit Profile"      desc="Update your name, avatar, and bio"    href="/profile/edit"    />
-            <LinkRow label="Wallet & Payouts"  desc="Balance, MoMo payouts, history"       href="/wallet"          />
-            <LinkRow label="Verify Phone"      desc="Add phone verification"               href="/verify-phone"    last />
+            <LinkRow label="Wallet & Payouts"  desc="Balance, MoMo payouts, history"       href="/wallet"          last />
           </SectionCard>
         </FadeUp>
 

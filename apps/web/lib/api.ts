@@ -194,7 +194,7 @@ export const api = {
 
   auth: {
     register: (payload: { email: string; name: string; password: string }) =>
-      request<{ user: { id: string; email: string; name: string }; token: string; requiresOtp?: boolean; devCode?: string }>(
+      request<{ user: { id: string; email: string; name: string }; token: string }>(
         "/auth/register",
         { user: { id: "", email: "", name: "" }, token: "" },
         { method: "POST", body: JSON.stringify(payload), strict: true },
@@ -226,34 +226,6 @@ export const api = {
         "/auth/reset-password",
         { message: "" },
         { method: "POST", body: JSON.stringify({ token, password }), strict: true },
-      ),
-
-    verifyEmailOtp: (code: string) =>
-      request<{ message: string; token: string; user: { id: string; email: string } }>(
-        "/auth/verify-otp",
-        { message: "", token: "", user: { id: "", email: "" } },
-        { method: "POST", body: JSON.stringify({ code }), strict: true },
-      ),
-
-    resendEmailOtp: () =>
-      request<{ message: string }>(
-        "/auth/resend-otp",
-        { message: "" },
-        { method: "POST", strict: true },
-      ),
-
-    sendPhoneOtp: (phone: string) =>
-      request<{ message: string; devCode?: string }>(
-        "/auth/send-phone-otp",
-        { message: "" },
-        { method: "POST", body: JSON.stringify({ phone }), strict: true },
-      ),
-
-    verifyPhoneOtp: (code: string) =>
-      request<{ message: string }>(
-        "/auth/verify-phone-otp",
-        { message: "" },
-        { method: "POST", body: JSON.stringify({ code }), strict: true },
       ),
 
     googleSignIn: (credential: string) =>
@@ -538,13 +510,6 @@ export const api = {
       "/reports",
       {} as never,
       { method: "POST", body: JSON.stringify(payload), strict: true },
-    ),
-
-  requestEmailVerification: () =>
-    request<{ message: string }>(
-      "/auth/send-verification",
-      { message: "" },
-      { method: "POST", strict: true },
     ),
 
   deleteAccount: () =>

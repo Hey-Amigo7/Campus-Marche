@@ -7,7 +7,6 @@ import { AdminAuthGuard } from './auth/admin-auth.guard';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { EmailService } from './email.service';
-import { SmsService } from './sms.service';
 
 /**
  * Global auth module — owns JWT setup.
@@ -28,7 +27,7 @@ import { SmsService } from './sms.service';
     }),
   ],
   controllers: [AuthController],
-  providers:   [AuthService, EmailService, SmsService, JwtAuthGuard, RolesGuard, AdminAuthGuard],
-  exports:     [AuthService, EmailService, SmsService, JwtAuthGuard, RolesGuard, AdminAuthGuard, JwtModule],
+  providers:   [AuthService, EmailService, JwtAuthGuard, RolesGuard, AdminAuthGuard],
+  exports:     [AuthService, EmailService, JwtAuthGuard, RolesGuard, AdminAuthGuard, JwtModule],
 })
 export class AuthModule {}

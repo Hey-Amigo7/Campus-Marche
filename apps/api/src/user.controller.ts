@@ -118,9 +118,7 @@ export class UserController {
       // Wipe private records
       this.prisma.savedItem.deleteMany({ where: { userId: user.id } }),
       this.prisma.notification.deleteMany({ where: { userId: user.id } }),
-      this.prisma.otpVerification.deleteMany({ where: { userId: user.id } }),
       this.prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),
-      this.prisma.emailVerification.deleteMany({ where: { userId: user.id } }),
     ]);
 
     return { message: 'Account deleted. Your personal data has been removed.' };

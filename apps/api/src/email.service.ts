@@ -81,22 +81,6 @@ export class EmailService {
     }
   }
 
-  async sendOtpEmail(to: string, code: string) {
-    const html = baseLayout(`
-      <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:${BRAND.navy}">Verify your account</h2>
-      <p style="margin:0 0 24px;font-size:15px;color:${BRAND.muted};line-height:1.6">
-        Enter this code to complete your Campus Marche verification. It expires in <strong>10 minutes</strong>.
-      </p>
-      <div style="background:${BRAND.bg};border:2px solid ${BRAND.green};border-radius:12px;padding:28px;text-align:center;margin-bottom:24px">
-        <span style="font-size:44px;font-weight:900;letter-spacing:14px;color:${BRAND.navy};font-family:monospace">${code}</span>
-      </div>
-      <p style="margin:0;font-size:13px;color:${BRAND.muted}">
-        If you did not create an account on Campus Marche, you can safely ignore this email.
-      </p>
-    `);
-    await this.send(to, 'Your Campus Marche verification code', html);
-  }
-
   async sendPasswordReset(to: string, resetUrl: string) {
     const html = baseLayout(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:${BRAND.navy}">Reset your password</h2>
@@ -114,21 +98,6 @@ export class EmailService {
       </p>
     `);
     await this.send(to, 'Reset your Campus Marche password', html);
-  }
-
-  async sendEmailVerification(to: string, verifyUrl: string) {
-    const html = baseLayout(`
-      <h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:${BRAND.navy}">Confirm your email</h2>
-      <p style="margin:0 0 4px;font-size:15px;color:${BRAND.muted};line-height:1.6">
-        Thanks for joining Campus Marche! Click the button below to verify your email address.
-        This link expires in <strong>24 hours</strong>.
-      </p>
-      ${primaryButton('Verify my email', verifyUrl)}
-      <p style="margin:28px 0 0;font-size:13px;color:${BRAND.muted}">
-        If you did not create an account, you can safely ignore this email.
-      </p>
-    `);
-    await this.send(to, 'Verify your Campus Marche email', html);
   }
 
   async sendContactMessage(senderName: string, senderEmail: string, subject: string, message: string) {

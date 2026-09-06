@@ -77,8 +77,6 @@ model User {
   reportedIn         Report[]              @relation("Reported")
   adminLogs          AdminLog[]
   passwordResets     PasswordResetToken[]
-  emailVerifications EmailVerification[]
-  otpVerifications   OtpVerification[]
   sentMessages       Message[]             @relation("SentMessages")
   conversationsAsA   Conversation[]        @relation("ConversationParticipantA")
   conversationsAsB   Conversation[]        @relation("ConversationParticipantB")
@@ -510,36 +508,6 @@ model PasswordResetToken {
 
   @@index([token])
   @@index([userId])
-}
-
-model EmailVerification {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([token])
-  @@index([userId])
-}
-
-model OtpVerification {
-  id        String   @id @default(cuid())
-  code      String
-  purpose   String   @default("email")
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([purpose])
 }
 
 // ─── Delivery & Contact ───────────────────────────────────────────────────────
