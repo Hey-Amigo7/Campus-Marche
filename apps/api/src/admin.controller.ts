@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { IsBoolean, IsIn, IsNotEmpty, IsString, Length } from 'class-validator';
 import { AdminService } from './admin.service';
 import { PaymentService } from './payment.service';
@@ -80,6 +81,12 @@ export class AdminController {
   @ApiQuery({ name: 'q', required: false })
   getUsers(@Query('skip') skip = 0, @Query('take') take = 50, @Query('q') q?: string) {
     return this.adminService.getUsers(+skip, +take, q);
+  }
+
+  @Delete('users/:id')
+  @ApiOperation({ summary: 'Delete (anonymize) a user account' })
+  deleteUser(@Param('id') id: string, @AuthUser() admin: { id: string }) {
+    return this.adminService.deleteUser(id, admin.id);
   }
 
   @Patch('users/:id/suspend')
@@ -240,6 +247,26 @@ export class AdminController {
   @ApiOperation({ summary: 'One-time fix: sync escrowStatus with order status for legacy orders' })
   backfillEscrowStates() {
     return this.adminService.backfillEscrowStates();
+  }
+
+  @Get('export/csv')
+  @ApiOperation({ summary: 'Export users as CSV' })
+  async exportCsv(@Res() res: Response) {
+    const buf = await this.adminService.exportCsv();
+    const filename = `campus-marche-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.end(buf);
+  }
+
+  @Get('export/xlsx')
+  @ApiOperation({ summary: 'Export users, products, and orders as Excel workbook' })
+  async exportXlsx(@Res() res: Response) {
+    const buf = await this.adminService.exportXlsx();
+    const filename = `campus-marche-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.end(buf);
   }
 
   @Get('orders')

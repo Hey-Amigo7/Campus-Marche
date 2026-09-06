@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import * as XLSX from 'xlsx';
 import { PrismaService } from './prisma.service';
 import { NotificationService } from './notification.service';
 import { EmailService } from './email.service';
@@ -67,7 +70,7 @@ export class AdminService {
 
   async getDashboardStats() {
     const [users, products, orders, reports, revenue] = await Promise.all([
-      this.prisma.user.count(),
+      this.prisma.user.count({ where: { deletedAt: null } }),
       this.prisma.product.count({ where: { active: true } }),
       this.prisma.order.count(),
       this.prisma.report.count({ where: { status: 'pending' } }),
@@ -82,14 +85,16 @@ export class AdminService {
   async getUsers(skip = 0, take = 50, q?: string) {
     take = Math.min(take, 50);
 
+    const baseWhere: Record<string, unknown> = { deletedAt: null };
     const where = q
       ? {
+          ...baseWhere,
           OR: [
             { name: { contains: q, mode: 'insensitive' as const } },
             { email: { contains: q, mode: 'insensitive' as const } },
           ],
         }
-      : {};
+      : baseWhere;
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -113,6 +118,169 @@ export class AdminService {
       this.prisma.user.count({ where }),
     ]);
     return { users, total };
+  }
+
+  async deleteUser(targetUserId: string, adminId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, role: true, deletedAt: true, email: true },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+    if (user.deletedAt !== null) throw new BadRequestException('Account is already deleted');
+    if (user.role === 'ADMIN') throw new BadRequestException('Cannot delete an administrator account');
+
+    const pendingOrders = await this.prisma.order.count({
+      where: {
+        OR: [{ buyerId: targetUserId }, { sellerId: targetUserId }],
+        status: { notIn: ['Completed', 'Cancelled'] },
+      },
+    });
+
+    if (pendingOrders > 0) {
+      throw new BadRequestException(
+        `User has ${pendingOrders} active order(s). Resolve them before deleting the account.`,
+      );
+    }
+
+    const ghostEmail = `deleted_${user.id}_${Date.now()}@campusmarche.invalid`;
+    const ghostPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: targetUserId },
+        data: {
+          name: 'Deleted User',
+          email: ghostEmail,
+          password: ghostPassword,
+          avatar: '?',
+          phone: null,
+          phoneVerified: false,
+          verified: false,
+          premium: false,
+          deletedAt: new Date(),
+        },
+      }),
+      this.prisma.product.updateMany({
+        where: { sellerId: targetUserId, active: true },
+        data: { active: false },
+      }),
+      this.prisma.savedItem.deleteMany({ where: { userId: targetUserId } }),
+      this.prisma.notification.deleteMany({ where: { userId: targetUserId } }),
+      this.prisma.passwordResetToken.deleteMany({ where: { userId: targetUserId } }),
+    ]);
+
+    await this.log(adminId, 'DELETE_USER', 'User', targetUserId, `Deleted account (was: ${user.email})`);
+    return { message: 'Account deleted and anonymized.' };
+  }
+
+  async exportCsv(): Promise<Buffer> {
+    const users = await this.prisma.user.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        verified: true,
+        premium: true,
+        createdAt: true,
+        _count: { select: { products: true, orders: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const header = 'id,name,email,role,verified,premium,products,orders,joined\n';
+    const rows = users.map((u) => {
+      const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+      return [
+        escape(u.id),
+        escape(u.name),
+        escape(u.email),
+        escape(u.role),
+        u.verified ? 'yes' : 'no',
+        u.premium ? 'yes' : 'no',
+        u._count.products,
+        u._count.orders,
+        escape(u.createdAt.toISOString()),
+      ].join(',');
+    });
+
+    return Buffer.from(header + rows.join('\n'), 'utf-8');
+  }
+
+  async exportXlsx(): Promise<Buffer> {
+    const [users, products, orders] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { deletedAt: null },
+        select: {
+          id: true, name: true, email: true, role: true,
+          verified: true, premium: true, createdAt: true,
+          _count: { select: { products: true, orders: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.product.findMany({
+        where: { active: true },
+        select: {
+          id: true, title: true, price: true, category: true,
+          views: true, createdAt: true,
+          seller: { select: { name: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+      }),
+      this.prisma.order.findMany({
+        select: {
+          id: true, status: true, price: true, escrowStatus: true, createdAt: true,
+          buyer: { select: { name: true } },
+          product: { select: { title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+      }),
+    ]);
+
+    const wb = XLSX.utils.book_new();
+
+    const usersSheet = XLSX.utils.json_to_sheet(users.map((u) => ({
+      ID: u.id,
+      Name: u.name,
+      Email: u.email,
+      Role: u.role,
+      Verified: u.verified ? 'Yes' : 'No',
+      Premium: u.premium ? 'Yes' : 'No',
+      Products: u._count.products,
+      Orders: u._count.orders,
+      Joined: u.createdAt.toISOString(),
+    })));
+    XLSX.utils.book_append_sheet(wb, usersSheet, 'Users');
+
+    const productsSheet = XLSX.utils.json_to_sheet(products.map((p) => ({
+      ID: p.id,
+      Title: p.title,
+      'Price (GHS)': p.price,
+      Category: p.category,
+      Views: p.views,
+      Seller: p.seller.name,
+      'Seller Email': p.seller.email,
+      Listed: p.createdAt.toISOString(),
+    })));
+    XLSX.utils.book_append_sheet(wb, productsSheet, 'Products');
+
+    const ordersSheet = XLSX.utils.json_to_sheet(orders.map((o) => ({
+      ID: o.id,
+      Product: o.product?.title ?? '(deleted)',
+      Buyer: o.buyer?.name ?? '(unknown)',
+      'Price (GHS)': o.price,
+      Status: o.status,
+      'Escrow Status': o.escrowStatus ?? '',
+      Date: o.createdAt.toISOString(),
+    })));
+    XLSX.utils.book_append_sheet(wb, ordersSheet, 'Orders');
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return buf as Buffer;
   }
 
   async setUserRole(adminId: string, targetUserId: string, role: string) {

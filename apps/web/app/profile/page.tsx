@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Package, ShoppingBag,
   Edit3, Settings, LogOut, MapPin, Calendar, Plus,
-  Star, ShieldCheck, Heart, Store, ExternalLink,
+  Star, Heart, Store, ExternalLink,
 } from "lucide-react";
 import { clearAuthToken } from "@/lib/auth";
 import { formatCurrency, formatRelativeDate } from "@/lib/format";
@@ -490,7 +490,6 @@ export default function ProfilePage() {
                   { icon: ShoppingBag, label: "My Orders",        href: "/orders",           desc: "Track your purchases and escrow status"   },
                   { icon: Star,        label: "Wallet & Payouts", href: "/wallet",           desc: "Balance, MoMo payouts, and history"       },
                   { icon: Settings,    label: "Settings",         href: "/settings",         desc: "Appearance, notifications, security"      },
-                  { icon: ShieldCheck, label: "Verify Phone",     href: "/verify-phone",     desc: "Add phone verification to your account"   },
                 ].map(({ icon: Icon, label, href, desc }) => (
                   <Link
                     key={label}

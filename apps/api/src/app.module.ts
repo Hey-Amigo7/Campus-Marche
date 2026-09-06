@@ -8,7 +8,7 @@ import { AppService } from './app.service';
 import { HealthController } from './health.controller';
 // ── Global infrastructure ─────────────────────────────────────────────────────
 import { PrismaModule } from './prisma.module';
-import { AuthModule } from './auth.module';         // JWT + guards + EmailService + SmsService
+import { AuthModule } from './auth.module';         // JWT + guards + EmailService
 import { ChatModule } from './chat.module';          // ChatGateway (WebSocket)
 import { NotificationModule } from './notification.module';
 // ── Feature modules ───────────────────────────────────────────────────────────

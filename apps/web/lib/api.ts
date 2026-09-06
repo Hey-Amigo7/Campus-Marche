@@ -194,7 +194,7 @@ export const api = {
 
   auth: {
     register: (payload: { email: string; name: string; password: string }) =>
-      request<{ user: { id: string; email: string; name: string }; token: string; requiresOtp?: boolean; devCode?: string }>(
+      request<{ user: { id: string; email: string; name: string }; token: string }>(
         "/auth/register",
         { user: { id: "", email: "", name: "" }, token: "" },
         { method: "POST", body: JSON.stringify(payload), strict: true },
@@ -226,34 +226,6 @@ export const api = {
         "/auth/reset-password",
         { message: "" },
         { method: "POST", body: JSON.stringify({ token, password }), strict: true },
-      ),
-
-    verifyEmailOtp: (code: string) =>
-      request<{ message: string; token: string; user: { id: string; email: string } }>(
-        "/auth/verify-otp",
-        { message: "", token: "", user: { id: "", email: "" } },
-        { method: "POST", body: JSON.stringify({ code }), strict: true },
-      ),
-
-    resendEmailOtp: () =>
-      request<{ message: string }>(
-        "/auth/resend-otp",
-        { message: "" },
-        { method: "POST", strict: true },
-      ),
-
-    sendPhoneOtp: (phone: string) =>
-      request<{ message: string; devCode?: string }>(
-        "/auth/send-phone-otp",
-        { message: "" },
-        { method: "POST", body: JSON.stringify({ phone }), strict: true },
-      ),
-
-    verifyPhoneOtp: (code: string) =>
-      request<{ message: string }>(
-        "/auth/verify-phone-otp",
-        { message: "" },
-        { method: "POST", body: JSON.stringify({ code }), strict: true },
       ),
 
     googleSignIn: (credential: string) =>
@@ -540,13 +512,6 @@ export const api = {
       { method: "POST", body: JSON.stringify(payload), strict: true },
     ),
 
-  requestEmailVerification: () =>
-    request<{ message: string }>(
-      "/auth/send-verification",
-      { message: "" },
-      { method: "POST", strict: true },
-    ),
-
   deleteAccount: () =>
     request<{ message: string }>(
       "/users/account",
@@ -660,6 +625,9 @@ export const api = {
         { strict: true },
       );
     },
+
+    deleteUser: (userId: string) =>
+      request<{ message: string }>(`/admin/users/${userId}`, { message: "" }, { method: "DELETE", strict: true }),
 
     suspendUser: (userId: string) =>
       request<{ id: string }>(`/admin/users/${userId}/suspend`, {} as never, { method: "PATCH", strict: true }),
@@ -795,5 +763,25 @@ export const api = {
         { fixed: { outForDelivery: 0, delivered: 0 }, message: "" },
         { method: "POST", strict: true },
       ),
+
+    downloadExport: async (format: "csv" | "xlsx") => {
+      const { getAuthToken } = await import("@/lib/auth");
+      const token = getAuthToken();
+      const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
+      const res = await fetch(`${API_URL}/admin/export/${format}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `campus-marche-export-${date}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
   },
 };
