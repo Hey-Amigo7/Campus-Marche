@@ -82,6 +82,11 @@ export class CreateProductDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({ enum: ['PUBLISHED', 'DRAFT'] })
+  @IsOptional()
+  @IsIn(['PUBLISHED', 'DRAFT'])
+  status?: string;
 }
 
 export class UpdateProductDto {

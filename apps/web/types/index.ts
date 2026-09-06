@@ -79,6 +79,8 @@ export type Product = {
   boosted: boolean;
   negotiable: boolean;
   active?: boolean;
+  status?: "PUBLISHED" | "DRAFT" | "ARCHIVED" | "SOLD";
+  soldAt?: string | null;
   listingType?: string;
   tags: string[];
   imageStyle: string;
@@ -326,6 +328,8 @@ export type CampusEvent = {
   registrationLink?: string | null;
   imageUrl?: string | null;
   featured?: boolean;
+  status?: string;
+  creatorId?: string | null;
 };
 
 export type Message = {

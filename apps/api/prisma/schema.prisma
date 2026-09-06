@@ -67,6 +67,7 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   products           Product[]
+  createdEvents      CampusEvent[]         @relation("EventCreator")
   orders             Order[]
   deliveries         Order[]               @relation("DeliveryPerson")
   reviews            Review[]
@@ -122,6 +123,7 @@ model Product {
   boosted     Boolean   @default(false)
   negotiable  Boolean   @default(false)
   active      Boolean   @default(true)
+  status      String    @default("PUBLISHED")
   category    String?
   listingType String    @default("product")
   soldAt      DateTime?
@@ -480,9 +482,16 @@ model CampusEvent {
   registrationLink String?
   imageUrl         String?
   featured    Boolean  @default(false)
+  status      String   @default("PUBLISHED")
   publishedAt DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  creatorId String?
+  creator   User?   @relation("EventCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([creatorId])
 }
 
 // ─── Notifications, Reports, Logs ─────────────────────────────────────────────

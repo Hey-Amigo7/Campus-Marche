@@ -228,7 +228,9 @@ export default function SellPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [boostOpen, setBoostOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const [listingType, setListingType] = useState<"product" | "service">("product");
   const [negotiable, setNegotiable] = useState(true);
   const [rawPrice, setRawPrice] = useState("");
@@ -306,31 +308,51 @@ export default function SellPage() {
     setUploadedImageUrls(prev => prev.filter((_, i) => i !== index));
   }
 
+  function readFormPayload(form: FormData, status: "PUBLISHED" | "DRAFT") {
+    return {
+      title: String(form.get("title")),
+      price: Number(form.get("price")),
+      category: String(form.get("category")) as never,
+      location: String(form.get("location")),
+      description: String(form.get("description")),
+      condition: listingType === "product" ? String(form.get("condition")) as never : undefined,
+      tags: String(form.get("tags")).split(",").map(t => t.trim()).filter(Boolean),
+      negotiable,
+      listingType,
+      imageUrls: uploadedImageUrls.length > 0 ? uploadedImageUrls : undefined,
+      imageUrl: uploadedImageUrls[0] ?? undefined,
+      imageStyle: String(form.get("category") || "Other").toLowerCase(),
+      status,
+    };
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     const form = new FormData(event.currentTarget);
     try {
-      await api.createProduct({
-        title: String(form.get("title")),
-        price: Number(form.get("price")),
-        category: String(form.get("category")) as never,
-        location: String(form.get("location")),
-        description: String(form.get("description")),
-        condition: listingType === "product" ? String(form.get("condition")) as never : undefined,
-        tags: String(form.get("tags")).split(",").map(t => t.trim()).filter(Boolean),
-        negotiable,
-        listingType,
-        imageUrls: uploadedImageUrls.length > 0 ? uploadedImageUrls : undefined,
-        imageUrl: uploadedImageUrls[0] ?? undefined,
-        imageStyle: String(form.get("category") || "Other").toLowerCase(),
-      } as never);
+      await api.createProduct(readFormPayload(form, "PUBLISHED") as never);
       toast("Listing published! Redirecting to marketplace…");
       setTimeout(() => router.push("/products"), 900);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not publish listing.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSaveDraft() {
+    if (!formRef.current) return;
+    setSavingDraft(true);
+    const form = new FormData(formRef.current);
+    try {
+      await api.createProduct(readFormPayload(form, "DRAFT") as never);
+      toast("Draft saved. Find it in My Listings.");
+      setTimeout(() => router.push("/profile/listings"), 900);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not save draft.");
+    } finally {
+      setSavingDraft(false);
     }
   }
 
@@ -469,7 +491,7 @@ export default function SellPage() {
                     </div>
                   </div>
 
-                  <form onSubmit={handleSubmit} className="p-5 space-y-5">
+                  <form ref={formRef} onSubmit={handleSubmit} className="p-5 space-y-5">
                     {/* Seller-pays-nothing notice */}
                     <div className="flex gap-3 rounded-xl p-3.5"
                       style={{ background: "rgba(114,204,35,0.08)", border: "1px solid rgba(114,204,35,0.25)" }}>
@@ -607,19 +629,28 @@ export default function SellPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-3">
-                      <motion.button type="submit" disabled={loading}
+                    <div className="space-y-2.5">
+                      <div className="flex gap-3">
+                        <motion.button type="submit" disabled={loading || savingDraft}
+                          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} transition={snap}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white disabled:opacity-50"
+                          style={{ background: "var(--green)" }}>
+                          {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                          Publish listing
+                        </motion.button>
+                        <motion.button type="button" onClick={() => setBoostOpen(true)}
+                          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} transition={snap}
+                          className="rounded-2xl px-5 text-sm font-bold transition-colors"
+                          style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--on-surface)" }}>
+                          Boost
+                        </motion.button>
+                      </div>
+                      <motion.button type="button" onClick={handleSaveDraft} disabled={loading || savingDraft}
                         whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} transition={snap}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white disabled:opacity-50"
-                        style={{ background: "var(--green)" }}>
-                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                        Publish listing
-                      </motion.button>
-                      <motion.button type="button" onClick={() => setBoostOpen(true)}
-                        whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} transition={snap}
-                        className="rounded-2xl px-5 text-sm font-bold transition-colors"
-                        style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", color: "var(--on-surface)" }}>
-                        Boost
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold disabled:opacity-50 transition-colors"
+                        style={{ border: "1px solid var(--border)", color: "var(--muted)", background: "var(--surface-raised)" }}>
+                        {savingDraft ? <Loader2 size={14} className="animate-spin" /> : null}
+                        Save as draft
                       </motion.button>
                     </div>
                   </form>

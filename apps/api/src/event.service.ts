@@ -7,6 +7,7 @@ export class EventService {
 
   getUpcoming() {
     return this.prisma.campusEvent.findMany({
+      where: { status: 'PUBLISHED' },
       orderBy: { eventDate: 'asc' },
     });
   }

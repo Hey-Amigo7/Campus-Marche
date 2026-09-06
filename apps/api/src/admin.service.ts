@@ -430,8 +430,17 @@ export class AdminService {
     return { data, total, page, pages: Math.ceil(total / limit) };
   }
 
-  async getEvents(skip = 0, take = 50) {
-    return this.prisma.campusEvent.findMany({ orderBy: { eventDate: 'desc' }, skip, take });
+  async getEvents(skip = 0, take = 50, user?: { id: string; role?: string; canEditEvents?: boolean }) {
+    const isFullAdmin = !user || user.id === 'ENV_ADMIN' || user.role === 'ADMIN';
+    const where = isFullAdmin
+      ? {}
+      : {
+          OR: [
+            { status: 'PUBLISHED' },
+            { creatorId: user.id },
+          ],
+        };
+    return this.prisma.campusEvent.findMany({ where, orderBy: { eventDate: 'desc' }, skip, take });
   }
 
   async createEvent(data: {
@@ -441,9 +450,19 @@ export class AdminService {
     eventDate: Date;
     category: string;
     opportunity?: string;
+    registrationLink?: string;
     imageUrl?: string;
+    status?: string;
+    creatorId?: string | null;
   }) {
-    return this.prisma.campusEvent.create({ data });
+    const { creatorId, ...rest } = data;
+    return this.prisma.campusEvent.create({
+      data: {
+        ...rest,
+        status: rest.status ?? 'PUBLISHED',
+        ...(creatorId ? { creator: { connect: { id: creatorId } } } : {}),
+      },
+    });
   }
 
   async updateEvent(
@@ -455,8 +474,10 @@ export class AdminService {
       eventDate: Date;
       category: string;
       opportunity: string;
+      registrationLink: string;
       imageUrl: string;
       featured: boolean;
+      status: string;
     }>,
   ) {
     return this.prisma.campusEvent.update({ where: { id }, data });
