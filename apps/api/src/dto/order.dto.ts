@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 const ORDER_STATUSES = [
   'Awaiting payment',
@@ -47,6 +47,21 @@ export class AssignDeliveryPersonDto {
   @IsOptional()
   @IsString()
   name?: string;
+}
+
+export class VerifyCodeDto {
+  @ApiProperty({ example: 'XK7M2P' })
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+}
+
+export class DisputeOrderDto {
+  @ApiProperty({ example: 'I received a completely different item from what was listed.' })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
+  reason!: string;
 }
 
 export class UpdateLocationDto {

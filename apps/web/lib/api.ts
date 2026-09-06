@@ -428,6 +428,27 @@ export const api = {
       { method: "POST", body: JSON.stringify({ latitude, longitude }), strict: true },
     ),
 
+  verifyPickupCode: (orderId: string, code: string) =>
+    request<{ id: string; status: string; pickupVerifiedAt: string }>(
+      `/orders/${orderId}/verify-pickup`,
+      {} as never,
+      { method: "POST", body: JSON.stringify({ code }), strict: true },
+    ),
+
+  verifyDeliveryCode: (orderId: string, code: string) =>
+    request<{ message: string }>(
+      `/orders/${orderId}/verify-delivery`,
+      { message: "" },
+      { method: "POST", body: JSON.stringify({ code }), strict: true },
+    ),
+
+  disputeOrder: (orderId: string, reason: string) =>
+    request<{ id: string; escrowStatus: string; status: string }>(
+      `/orders/${orderId}/dispute`,
+      {} as never,
+      { method: "POST", body: JSON.stringify({ reason }), strict: true },
+    ),
+
   updateLiveLocation: (conversationId: string, latitude: number, longitude: number) =>
     request<{ ok: boolean }>(
       `/conversations/${conversationId}/live-location`,

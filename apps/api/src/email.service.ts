@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createTransport, type Transporter } from 'nodemailer';
 
 const BRAND = {
   navy: '#0F172A',
@@ -19,20 +18,17 @@ function baseLayout(content: string) {
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px">
     <tr><td align="center">
       <table width="100%" style="max-width:520px;border-radius:16px;overflow:hidden;border:1px solid ${BRAND.border}">
-        <!-- Header -->
         <tr>
           <td style="background:linear-gradient(135deg,${BRAND.navy} 0%,#102542 55%,#1a3a2a 100%);padding:28px 32px">
             <p style="margin:0;font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.3px">Campus Marche</p>
             <p style="margin:4px 0 0;font-size:12px;font-weight:600;color:${BRAND.green}">Student Marketplace · Ho Technical University</p>
           </td>
         </tr>
-        <!-- Body -->
         <tr>
           <td style="background:#fff;padding:32px">
             ${content}
           </td>
         </tr>
-        <!-- Footer -->
         <tr>
           <td style="background:${BRAND.bg};padding:20px 32px;border-top:1px solid ${BRAND.border}">
             <p style="margin:0;font-size:12px;color:${BRAND.muted};text-align:center">
@@ -55,36 +51,19 @@ function primaryButton(text: string, href: string) {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly transporter: Transporter | null;
+  private readonly apiKey: string | undefined;
   private readonly fromAddress: string;
   private readonly contactEmail: string;
 
   constructor(private config: ConfigService) {
-    const host = config.get<string>('SMTP_HOST');
-    const port = config.get<number>('SMTP_PORT') ?? 587;
-    const user = config.get<string>('SMTP_USER');
-    const pass = config.get<string>('SMTP_PASS');
-    this.fromAddress = config.get<string>('SMTP_FROM') ?? 'noreply@campusmarche.com';
+    this.apiKey = config.get<string>('ARKESEL_API_KEY');
+    this.fromAddress = config.get<string>('EMAIL_FROM') ?? 'campusmarche6@gmail.com';
     this.contactEmail = config.get<string>('CONTACT_EMAIL') ?? this.fromAddress;
 
-    if (host && user && pass) {
-      const isGmail = host.toLowerCase().includes('gmail');
-      this.transporter = createTransport(
-        isGmail
-          ? { service: 'gmail', auth: { user, pass } }
-          : {
-              host,
-              port,
-              secure: port === 465,
-              requireTLS: port !== 465,
-              auth: { user, pass },
-              tls: { minVersion: 'TLSv1.2' },
-            },
-      );
-      this.logger.log(`Email transport configured (${isGmail ? 'Gmail service' : `${host}:${port}`})`);
+    if (this.apiKey) {
+      this.logger.log(`Email transport: Arkesel API (from: ${this.fromAddress})`);
     } else {
-      this.transporter = null;
-      this.logger.warn('SMTP not configured — emails will be logged to console only');
+      this.logger.warn('ARKESEL_API_KEY not set — emails will only be logged to console');
     }
   }
 
@@ -168,7 +147,6 @@ export class EmailService {
       </p>
     `);
 
-    // Send to the configured admin/contact inbox
     await this.send(this.contactEmail, `[Contact] ${subject} — from ${senderName}`, html);
   }
 
@@ -188,7 +166,7 @@ export class EmailService {
         <p style="margin:0;white-space:pre-wrap;color:#334155;line-height:1.7;font-size:14px">${safeReply}</p>
       </div>
       <p style="margin:0;font-size:13px;color:${BRAND.muted};line-height:1.6">
-        If you have follow-up questions, reply to this email or contact us again via the
+        If you have follow-up questions, contact us again via the
         <a href="https://campusmarche.com/contact" style="color:${BRAND.green}">contact page</a>.
       </p>
     `);
@@ -197,18 +175,36 @@ export class EmailService {
   }
 
   private async send(to: string, subject: string, html: string) {
-    if (!this.transporter) {
+    if (!this.apiKey) {
       this.logger.log(`[DEV EMAIL] To: ${to} | Subject: ${subject}`);
       this.logger.log(`[DEV EMAIL] ${html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300)}`);
       return;
     }
 
-    try {
-      const info = await this.transporter.sendMail({ from: this.fromAddress, to, subject, html });
-      this.logger.log(`Email sent to ${to} — messageId: ${info.messageId}`);
-    } catch (err) {
-      this.logger.error(`Failed to send email to ${to}: ${String(err)}`);
-      throw err;
+    const body = JSON.stringify({
+      from: this.fromAddress,
+      to: [to],
+      subject,
+      html,
+    });
+
+    const response = await fetch('https://email.arkesel.com/api/v2/emails/send', {
+      method: 'POST',
+      headers: {
+        'api-key': this.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body,
+    });
+
+    const result = await response.json().catch(() => ({})) as { status?: string; message?: string; code?: string };
+
+    if (!response.ok || result.status === 'error') {
+      const detail = result.message ?? `HTTP ${response.status}`;
+      this.logger.error(`Arkesel email failed to ${to}: ${detail}`);
+      throw new Error(`Email delivery failed: ${detail}`);
     }
+
+    this.logger.log(`Email sent to ${to} via Arkesel — subject: "${subject}"`);
   }
 }

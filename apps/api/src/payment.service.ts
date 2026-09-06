@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EscrowStatus, PayoutMethod } from '@prisma/client';
-import { calculateCommission, escrowToStatus, isEscrowPaid } from './commission.engine';
+import { calculateCommission, escrowToStatus, generateVerificationCode, isEscrowPaid } from './commission.engine';
 import type { NotificationService } from './notification.service';
 import type { ChatGateway } from './chat.gateway';
 import { PayoutService } from './payout.service';
@@ -329,6 +329,15 @@ export class PaymentService {
   // ─── Buyer confirms delivery → release escrow ─────────────────────────────
 
   async releaseEscrow(orderId: string, userId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.buyerId !== userId) throw new ForbiddenException('Only the buyer can confirm delivery');
+    return this.releaseEscrowInternal(orderId);
+  }
+
+  // ─── Internal release (called by delivery code verification) ─────────────
+
+  async releaseEscrowInternal(orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -342,7 +351,6 @@ export class PaymentService {
     });
 
     if (!order) throw new NotFoundException('Order not found');
-    if (order.buyerId !== userId) throw new ForbiddenException('Only the buyer can confirm delivery');
     const releasableStates: EscrowStatus[] = [EscrowStatus.ESCROW_HELD, EscrowStatus.SHIPPED, EscrowStatus.DELIVERED];
     if (!releasableStates.includes(order.escrowStatus as EscrowStatus)) {
       throw new BadRequestException(`Cannot release escrow — current status is ${order.escrowStatus}`);
@@ -370,16 +378,13 @@ export class PaymentService {
           deliveryConfirmedAt: new Date(),
         },
       });
-
-      // Move seller balance: pending → available
       await this.walletService.pendingToAvailable(sellerId, sellerAmount, tx);
     });
 
-    // Create payout outside the main transaction (triggers Paystack if auto-approve on)
     await this.payoutService.createEscrowPayout(sellerId, orderId, sellerAmount, payoutMethod, momoPhone);
 
     this.notificationService?.notify(
-      userId, 'escrow', 'Delivery confirmed', 'Thank you! Funds are being released to the seller.',
+      order.buyerId, 'escrow', 'Delivery confirmed', 'Thank you! Funds are being released to the seller.',
     ).catch(() => undefined);
     this.notificationService?.notify(
       sellerId, 'escrow', '🎉 Payment incoming', 'The buyer confirmed delivery. Your payout is being processed.',
@@ -654,18 +659,22 @@ export class PaymentService {
         data: { status: 'Paid', paidAt: new Date(paidAt), verifiedAt: new Date() },
       });
 
-      // 2. Update order: ESCROW_HELD + financial fields
+      // 2. Update order: ESCROW_HELD + financial fields + delivery code
+      const deliveryCode = generateVerificationCode();
+      const deliveryCodeExpires = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72h
       await tx.order.update({
         where: { id: order.id },
         data: {
-          escrowStatus:     EscrowStatus.ESCROW_HELD,
-          status:           escrowToStatus(EscrowStatus.ESCROW_HELD),
-          paymentStatus:    'Paid',
-          paymentReference: reference,
-          totalAmount:      commission.totalAmount,
-          platformFee:      commission.platformFee,
-          sellerAmount:     commission.sellerAmount,
-          sellerId:         sellerId,
+          escrowStatus:       EscrowStatus.ESCROW_HELD,
+          status:             escrowToStatus(EscrowStatus.ESCROW_HELD),
+          paymentStatus:      'Paid',
+          paymentReference:   reference,
+          totalAmount:        commission.totalAmount,
+          platformFee:        commission.platformFee,
+          sellerAmount:       commission.sellerAmount,
+          sellerId:           sellerId,
+          deliveryCode,
+          deliveryCodeExpires,
         },
       });
 

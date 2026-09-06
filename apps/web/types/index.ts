@@ -197,6 +197,14 @@ export type Order = {
   deliveryPersonId?: string | null;
   deliveryPerson?: { id: string; name: string; avatar: string; phone?: string | null } | null;
   tracking?: DeliveryTracking | null;
+  pickupCode?: string | null;
+  pickupCodeExpires?: string | null;
+  pickupVerifiedAt?: string | null;
+  deliveryCode?: string | null;
+  deliveryCodeExpires?: string | null;
+  deliveryVerifiedAt?: string | null;
+  disputeReason?: string | null;
+  disputedAt?: string | null;
 };
 
 export type Wallet = {

@@ -186,6 +186,16 @@ model Order {
   // External delivery person (not a registered user)
   externalDeliveryName     String?
   externalDeliveryContact  String?
+  // Secure verification codes
+  pickupCode           String?
+  pickupCodeExpires    DateTime?
+  pickupVerifiedAt     DateTime?
+  deliveryCode         String?
+  deliveryCodeExpires  DateTime?
+  deliveryVerifiedAt   DateTime?
+  // Dispute
+  disputeReason        String?
+  disputedAt           DateTime?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 

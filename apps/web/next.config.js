@@ -19,6 +19,14 @@ const nextConfig = {
 
   async headers() {
     return [
+      // Service worker must never be cached — browser must always revalidate
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
@@ -29,7 +37,8 @@ const nextConfig = {
           // Stop referrer leaking across origins
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // Restrict browser features
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // geolocation=(self) — delivery tracking uses navigator.geolocation
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
           // HSTS — only active in production (dev uses http)
           ...(isDev
             ? []

@@ -5,15 +5,20 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState, type FormEvent } from "react";
 import dynamic from "next/dynamic";
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Eye,
+  EyeOff,
+  KeyRound,
   Lock,
   Loader2,
   MapPin,
   MessageCircle,
   Navigation,
   Phone,
+  Shield,
   Square,
   Truck,
   User,
@@ -212,6 +217,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   // Escrow release
   const [releasingEscrow, setReleasingEscrow] = useState(false);
 
+  // Verification codes
+  const [showDeliveryCode, setShowDeliveryCode]   = useState(false);
+  const [pickupCodeInput, setPickupCodeInput]     = useState("");
+  const [verifyingPickup, setVerifyingPickup]     = useState(false);
+  const [deliveryCodeInput, setDeliveryCodeInput] = useState("");
+  const [verifyingDelivery, setVerifyingDelivery] = useState(false);
+
+  // Dispute
+  const [showDispute, setShowDispute]     = useState(false);
+  const [disputeReason, setDisputeReason] = useState("");
+  const [submittingDispute, setSubmittingDispute] = useState(false);
+
   // Status update
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -263,6 +280,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const escrowLabel = ESCROW_LABELS[escrow] ?? order.status;
   const statusClass = ESCROW_COLORS[escrow] ?? "bg-slate-100 text-slate-700";
 
+  // Code-based verification state
+  const hasRegisteredDelivery = !!order.deliveryPersonId;
+  const pickupPending = hasRegisteredDelivery && !!order.pickupCode && !order.pickupVerifiedAt;
+  const deliveryPending = hasRegisteredDelivery && !!order.deliveryCode && !order.deliveryVerifiedAt && isPaid;
+  // Buyer sees old confirm button only if no registered delivery person is assigned
+  const showOldConfirmButton = role === "buyer" && !hasRegisteredDelivery && ["ESCROW_HELD", "PROCESSING", "SHIPPED", "DELIVERED"].includes(escrow);
+  const isDisputed = escrow === "DISPUTED";
+
   // Seller can update delivery stage; buyer confirms delivery via releaseEscrow
   const SELLER_TRANSITIONS: Record<string, string[]> = {
     "Awaiting payment": ["Cancelled"],
@@ -292,7 +317,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     try {
       await api.assignDeliveryPerson(id, deliveryContact.trim(), deliveryContactName.trim() || undefined);
       await mutate();
-      toast("Delivery person assigned. Order is now Out for delivery.");
+      toast("Delivery person assigned. Share the pickup code with them.");
       setDeliveryContact("");
       setDeliveryContactName("");
     } catch (err) {
@@ -341,6 +366,52 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       toast(err instanceof Error ? err.message : "Could not update order status.");
     } finally {
       setUpdatingStatus(false);
+    }
+  }
+
+  async function handleVerifyPickup(e: FormEvent) {
+    e.preventDefault();
+    setVerifyingPickup(true);
+    try {
+      await api.verifyPickupCode(id, pickupCodeInput.trim());
+      await mutate();
+      toast("Pickup verified! Order is now out for delivery.");
+      setPickupCodeInput("");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Invalid pickup code.");
+    } finally {
+      setVerifyingPickup(false);
+    }
+  }
+
+  async function handleVerifyDelivery(e: FormEvent) {
+    e.preventDefault();
+    setVerifyingDelivery(true);
+    try {
+      await api.verifyDeliveryCode(id, deliveryCodeInput.trim());
+      await mutate();
+      toast("Delivery confirmed! Payment is being released to the seller.");
+      setDeliveryCodeInput("");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Invalid delivery code.");
+    } finally {
+      setVerifyingDelivery(false);
+    }
+  }
+
+  async function handleDispute(e: FormEvent) {
+    e.preventDefault();
+    setSubmittingDispute(true);
+    try {
+      await api.disputeOrder(id, disputeReason.trim());
+      await mutate();
+      toast("Dispute raised. Our team will review it shortly.");
+      setShowDispute(false);
+      setDisputeReason("");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not raise dispute.");
+    } finally {
+      setSubmittingDispute(false);
     }
   }
 
@@ -750,8 +821,141 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </section>
             ) : null}
 
-            {/* ── ESCROW RELEASE ── */}
-            {role === "buyer" && ["ESCROW_HELD", "PROCESSING", "SHIPPED", "DELIVERED"].includes(escrow) ? (
+            {/* ── BUYER DELIVERY CODE ── */}
+            {role === "buyer" && isPaid && order.deliveryCode && !order.deliveryVerifiedAt ? (
+              <section className="rounded-2xl p-5" style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.25)" }}>
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" style={{ color: "#6366F1" }} />
+                  <h2 className="text-base font-black" style={{ color: "#312E81" }}>Your delivery code</h2>
+                </div>
+                <p className="mt-1 text-sm font-semibold" style={{ color: "#4338CA" }}>
+                  Show this code to the delivery person when they arrive. They will enter it in their app to confirm handoff and release your payment.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 rounded-xl px-4 py-3 text-center font-mono text-2xl font-black tracking-widest" style={{ background: "rgba(99,102,241,0.10)", color: "#3730A3", letterSpacing: "0.3em" }}>
+                    {showDeliveryCode ? order.deliveryCode : "••••••"}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeliveryCode(v => !v)}
+                    className="rounded-xl p-3 transition-colors hover:bg-indigo-100"
+                    style={{ color: "#6366F1" }}
+                    aria-label={showDeliveryCode ? "Hide code" : "Reveal code"}
+                  >
+                    {showDeliveryCode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(order.deliveryCode ?? "").then(() => toast("Code copied!"))}
+                    className="rounded-xl p-3 transition-colors hover:bg-indigo-100"
+                    style={{ color: "#6366F1" }}
+                    aria-label="Copy code"
+                  >
+                    <Copy className="h-5 w-5" />
+                  </button>
+                </div>
+                <p className="mt-2 text-xs font-semibold" style={{ color: "#6366F1" }}>
+                  Keep this private — only share with the delivery person at handoff.
+                </p>
+              </section>
+            ) : null}
+
+            {/* ── BUYER DELIVERY CONFIRMED (code already verified) ── */}
+            {role === "buyer" && order.deliveryVerifiedAt ? (
+              <section className="rounded-2xl p-4" style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.30)" }}>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5" style={{ color: "#5A9460" }} />
+                  <p className="text-sm font-black" style={{ color: "#14532D" }}>Delivery verified — funds released to seller</p>
+                </div>
+              </section>
+            ) : null}
+
+            {/* ── SELLER PICKUP CODE ── */}
+            {role === "seller" && pickupPending ? (
+              <section className="rounded-2xl p-5" style={{ background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.30)" }}>
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5" style={{ color: "#D97706" }} />
+                  <h2 className="text-base font-black" style={{ color: "#78350F" }}>Pickup code for delivery person</h2>
+                </div>
+                <p className="mt-1 text-sm font-semibold" style={{ color: "#92400E" }}>
+                  Share this code with your delivery person. They must enter it in their Campus Marche app to confirm pickup and start delivery.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 rounded-xl px-4 py-3 text-center font-mono text-2xl font-black tracking-widest" style={{ background: "rgba(245,158,11,0.12)", color: "#78350F", letterSpacing: "0.3em" }}>
+                    {order.pickupCode}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(order.pickupCode ?? "").then(() => toast("Pickup code copied!"))}
+                    className="rounded-xl p-3 transition-colors hover:bg-amber-100"
+                    style={{ color: "#D97706" }}
+                    aria-label="Copy pickup code"
+                  >
+                    <Copy className="h-5 w-5" />
+                  </button>
+                </div>
+                {order.pickupCodeExpires ? (
+                  <p className="mt-2 text-xs font-semibold" style={{ color: "#D97706" }}>
+                    Expires {new Date(order.pickupCodeExpires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Re-assign to regenerate
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
+            {/* ── DELIVERY PERSON: PICKUP CODE ENTRY ── */}
+            {role === "delivery" && !order.pickupVerifiedAt && order.status === "In progress" ? (
+              <section className="rounded-2xl p-5" style={{ background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.30)" }}>
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5" style={{ color: "#D97706" }} />
+                  <h2 className="text-base font-black" style={{ color: "#78350F" }}>Enter pickup code</h2>
+                </div>
+                <p className="mt-1 text-sm font-semibold" style={{ color: "#92400E" }}>
+                  Ask the seller for the 6-character pickup code to confirm you have collected the item.
+                </p>
+                <form onSubmit={handleVerifyPickup} className="mt-4 flex gap-2">
+                  <input
+                    value={pickupCodeInput}
+                    onChange={(e) => setPickupCodeInput(e.target.value.toUpperCase())}
+                    placeholder="e.g. XK7M2P"
+                    maxLength={6}
+                    required
+                    className="input-shell flex-1 font-mono text-lg tracking-widest uppercase"
+                  />
+                  <button type="submit" disabled={verifyingPickup || pickupCodeInput.length !== 6} className="btn-primary px-5 disabled:opacity-50">
+                    {verifyingPickup ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  </button>
+                </form>
+              </section>
+            ) : null}
+
+            {/* ── DELIVERY PERSON: DELIVERY CODE ENTRY ── */}
+            {role === "delivery" && !order.deliveryVerifiedAt && isOutForDelivery ? (
+              <section className="rounded-2xl p-5" style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.25)" }}>
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" style={{ color: "#6366F1" }} />
+                  <h2 className="text-base font-black" style={{ color: "#312E81" }}>Enter delivery code</h2>
+                </div>
+                <p className="mt-1 text-sm font-semibold" style={{ color: "#4338CA" }}>
+                  At the delivery point, ask the buyer for their 6-character delivery code. Entering it confirms handoff and releases payment to the seller.
+                </p>
+                <form onSubmit={handleVerifyDelivery} className="mt-4 flex gap-2">
+                  <input
+                    value={deliveryCodeInput}
+                    onChange={(e) => setDeliveryCodeInput(e.target.value.toUpperCase())}
+                    placeholder="e.g. XK7M2P"
+                    maxLength={6}
+                    required
+                    className="input-shell flex-1 font-mono text-lg tracking-widest uppercase"
+                  />
+                  <button type="submit" disabled={verifyingDelivery || deliveryCodeInput.length !== 6} className="btn-primary px-5 disabled:opacity-50">
+                    {verifyingDelivery ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  </button>
+                </form>
+              </section>
+            ) : null}
+
+            {/* ── ESCROW RELEASE (self-delivery / no registered delivery person) ── */}
+            {showOldConfirmButton ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.30)" }}>
                 <h2 className="text-base font-black text-green-900">Confirm delivery</h2>
                 <p className="mt-1 text-sm text-green-700">
@@ -767,6 +971,78 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   {releasingEscrow ? <Loader2 className="inline h-4 w-4 animate-spin" /> : <CheckCircle2 className="inline h-4 w-4" />}
                   {" "}Confirm delivery &amp; release payment
                 </button>
+              </section>
+            ) : null}
+
+            {/* ── DISPUTE ── */}
+            {isPaid && isActive && !isDisputed && (role === "buyer" || role === "seller") ? (
+              <section className="rounded-2xl p-5" style={{ background: "rgba(239,68,68,0.04)", border: "1px solid rgba(239,68,68,0.20)" }}>
+                {showDispute ? (
+                  <form onSubmit={handleDispute} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                      <h2 className="text-base font-black text-red-900">Raise a dispute</h2>
+                    </div>
+                    <p className="text-sm text-red-700">
+                      Describe what went wrong. Our team will review and mediate. Funds remain held until resolved.
+                    </p>
+                    <textarea
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                      placeholder="e.g. The item was damaged on arrival / I never received the package"
+                      rows={3}
+                      minLength={10}
+                      maxLength={500}
+                      required
+                      className="input-shell text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setShowDispute(false); setDisputeReason(""); }}
+                        className="flex-1 rounded-xl border px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                        style={{ borderColor: "rgba(226,232,240,0.70)" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submittingDispute || disputeReason.trim().length < 10}
+                        className="flex-1 rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        style={{ background: "#DC2626" }}
+                      >
+                        {submittingDispute ? <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> : null}
+                        {submittingDispute ? " Submitting…" : "Submit dispute"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowDispute(true)}
+                    className="flex w-full items-center gap-2 text-sm font-bold"
+                    style={{ color: "#DC2626" }}
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                    Something went wrong? Raise a dispute
+                  </button>
+                )}
+              </section>
+            ) : null}
+
+            {/* ── DISPUTED STATE ── */}
+            {isDisputed ? (
+              <section className="rounded-2xl p-5" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.25)" }}>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <h2 className="text-base font-black text-red-900">Order under dispute</h2>
+                </div>
+                <p className="mt-2 text-sm text-red-700">
+                  Funds are held. Our team will contact both parties to resolve this.
+                </p>
+                {order.disputeReason ? (
+                  <p className="mt-2 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-800">"{order.disputeReason}"</p>
+                ) : null}
               </section>
             ) : null}
 
