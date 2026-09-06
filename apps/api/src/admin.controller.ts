@@ -6,7 +6,6 @@ import { AdminService } from './admin.service';
 import { PaymentService } from './payment.service';
 import { AuthUser } from './auth/auth-user.decorator';
 import { AdminAuthGuard } from './auth/admin-auth.guard';
-import { EventsAuthGuard } from './auth/events-auth.guard';
 
 class SetRoleDto {
   @IsString()
@@ -188,50 +187,6 @@ export class AdminController {
     @AuthUser() admin: { id: string },
   ) {
     return this.adminService.resolveReport(admin.id, id, body.status);
-  }
-
-  @Get('events')
-  @UseGuards(EventsAuthGuard)
-  @ApiOperation({ summary: 'List events (admin view)' })
-  @ApiQuery({ name: 'skip', required: false })
-  @ApiQuery({ name: 'take', required: false })
-  getEvents(@Query('skip') skip = 0, @Query('take') take = 50) {
-    return this.adminService.getEvents(+skip, +take);
-  }
-
-  @Post('events')
-  @UseGuards(EventsAuthGuard)
-  @ApiOperation({ summary: 'Create event' })
-  createEvent(
-    @Body()
-    body: {
-      title: string;
-      description: string;
-      location: string;
-      eventDate: string;
-      category: string;
-      opportunity?: string;
-      registrationLink?: string;
-      imageUrl?: string;
-    },
-  ) {
-    return this.adminService.createEvent({ ...body, eventDate: new Date(body.eventDate) });
-  }
-
-  @Patch('events/:id')
-  @UseGuards(EventsAuthGuard)
-  @ApiOperation({ summary: 'Update event' })
-  updateEvent(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    const data = { ...body };
-    if (data['eventDate']) data['eventDate'] = new Date(data['eventDate'] as string);
-    return this.adminService.updateEvent(id, data as Parameters<AdminService['updateEvent']>[1]);
-  }
-
-  @Delete('events/:id')
-  @UseGuards(EventsAuthGuard)
-  @ApiOperation({ summary: 'Delete event' })
-  deleteEvent(@Param('id') id: string) {
-    return this.adminService.deleteEvent(id);
   }
 
   @Post('broadcast')

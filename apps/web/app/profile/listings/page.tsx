@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Eye, Pencil, Pause, Play, Trash2,
-  MoreVertical, Package, AlertTriangle, Search, RefreshCw,
+  MoreVertical, Package, AlertTriangle, Search, RefreshCw, Rocket,
 } from "lucide-react";
 import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
@@ -17,20 +17,22 @@ import type { Product } from "@/types";
 
 const spring = { type: "spring", stiffness: 300, damping: 26 } as const;
 
-type FilterStatus = "all" | "active" | "archived" | "sold";
+type FilterStatus = "all" | "active" | "archived" | "sold" | "draft";
 
 type ExtProduct = Product & { active?: boolean; soldAt?: string | null };
 
-function deriveStatus(p: ExtProduct): "active" | "archived" | "sold" {
-  if ((p as ExtProduct).soldAt) return "sold";
-  if (p.active === false)       return "archived";
+function deriveStatus(p: ExtProduct): "active" | "archived" | "sold" | "draft" {
+  if (p.status === "DRAFT")     return "draft";
+  if (p.status === "SOLD" || p.soldAt) return "sold";
+  if (p.status === "ARCHIVED" || p.active === false) return "archived";
   return "active";
 }
 
-const STATUS_CFG: Record<"active" | "archived" | "sold", { label: string; color: string; bg: string }> = {
+const STATUS_CFG: Record<"active" | "archived" | "sold" | "draft", { label: string; color: string; bg: string }> = {
   active:   { label: "Active",   color: "#72CC23", bg: "rgba(114,204,35,0.12)"  },
   archived: { label: "Paused",   color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
   sold:     { label: "Sold",     color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
+  draft:    { label: "Draft",    color: "#94A3B8", bg: "rgba(148,163,184,0.12)" },
 };
 
 /* ── Delete confirm modal ───────────────────────────────── */
@@ -111,21 +113,23 @@ function ListingRow({
   const cfg    = STATUS_CFG[status];
   const img    = product.imageUrl ?? product.imageUrls?.[0];
 
-  async function handleAction(type: "sold" | "archive" | "restore" | "relist") {
+  async function handleAction(type: "sold" | "archive" | "restore" | "relist" | "publish") {
     setLoading(type);
     try {
       if (type === "sold")    await api.markSold(product.id);
       if (type === "archive") await api.archiveListing(product.id);
       if (type === "restore" || type === "relist") await api.restoreListing(product.id);
+      if (type === "publish") await api.publishListing(product.id);
       success(
-        type === "sold"    ? "Marked as sold."   :
-        type === "archive" ? "Listing paused."   :
-        type === "relist"  ? "Listing relisted." :
+        type === "sold"    ? "Marked as sold."      :
+        type === "archive" ? "Listing paused."      :
+        type === "relist"  ? "Listing relisted."    :
+        type === "publish" ? "Listing published!"   :
         "Listing resumed.",
       );
       onRefresh();
-    } catch {
-      toastError("Action failed. Please try again.");
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Action failed. Please try again.");
     } finally {
       setLoading(null);
       setMenuOpen(false);
@@ -235,6 +239,17 @@ function ListingRow({
                     boxShadow:   "0 12px 32px rgba(0,0,0,0.10)",
                   }}
                 >
+                  {status === "draft" && (
+                    <button
+                      type="button"
+                      onClick={() => handleAction("publish")}
+                      disabled={!!loading}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--surface-raised)]"
+                      style={{ color: "var(--green)" }}
+                    >
+                      <Rocket size={14} /> Publish listing
+                    </button>
+                  )}
                   {status === "active" && (
                     <button
                       type="button"
@@ -323,6 +338,7 @@ function ListingsContent() {
     active:   typed.filter((l) => deriveStatus(l) === "active").length,
     archived: typed.filter((l) => deriveStatus(l) === "archived").length,
     sold:     typed.filter((l) => deriveStatus(l) === "sold").length,
+    draft:    typed.filter((l) => deriveStatus(l) === "draft").length,
   };
 
   const shown = typed
@@ -360,7 +376,7 @@ function ListingsContent() {
           className="flex gap-1 rounded-2xl p-1"
           style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         >
-          {(["all", "active", "archived", "sold"] as const).map((f) => (
+          {(["all", "active", "draft", "archived", "sold"] as const).map((f) => (
             <button
               key={f}
               type="button"

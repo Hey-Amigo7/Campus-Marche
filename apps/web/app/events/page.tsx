@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays, ChevronLeft, ChevronRight,
   Edit3, ExternalLink, Loader2, MapPin,
-  Megaphone, Plus, Tag, Trash2, X,
+  Megaphone, Plus, Tag, Trash2, X, Upload, Image as ImageIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useProfile } from "@/hooks/use-api";
@@ -53,28 +53,91 @@ const EMPTY: EventFormData = {
 };
 const CATEGORIES = ["Campus update", "Academic", "Social", "Career", "Sports"];
 
+/* ── single image uploader ────────────────────────────────────────── */
+function EventImageUploader({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith("image/")) { setErr("Image files only."); return; }
+    if (file.size > 5 * 1024 * 1024) { setErr("Max 5 MB."); return; }
+    setErr(null); setUploading(true);
+    try {
+      const { url } = await api.uploadImage(file);
+      onChange(url);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed"); }
+    finally { setUploading(false); }
+  }
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-black uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+        Event flyer
+        <span className="ml-1.5 normal-case font-medium" style={{ color: "var(--subtle)" }}>(optional)</span>
+      </label>
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ""; }} />
+      {value ? (
+        <div className="relative overflow-hidden rounded-xl" style={{ border: "1px solid var(--border)" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={value} alt="Event flyer" className="h-40 w-full object-cover" />
+          <div className="absolute inset-0 flex items-end gap-2 p-3">
+            <button type="button" onClick={() => inputRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white"
+              style={{ background: "rgba(0,0,0,0.60)", backdropFilter: "blur(6px)" }}>
+              <Upload size={12} /> Replace
+            </button>
+            <button type="button" onClick={() => onChange("")}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold"
+              style={{ background: "rgba(239,68,68,0.80)", color: "white", backdropFilter: "blur(6px)" }}>
+              <X size={12} /> Remove
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading}
+          className="flex h-28 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed transition-colors hover:border-[var(--green)] disabled:opacity-60"
+          style={{ borderColor: "var(--border)", background: "var(--surface-raised)" }}>
+          {uploading
+            ? <Loader2 size={20} className="animate-spin" style={{ color: "var(--green)" }} />
+            : <ImageIcon size={20} style={{ color: "var(--muted)" }} />}
+          <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+            {uploading ? "Uploading…" : "Click to upload flyer"}
+          </span>
+          <span className="text-[10px]" style={{ color: "var(--subtle)" }}>JPEG, PNG, WebP · max 5 MB</span>
+        </button>
+      )}
+      {err && <p className="mt-1 text-xs font-semibold" style={{ color: "#EF4444" }}>{err}</p>}
+    </div>
+  );
+}
+
 /* ── event form modal ─────────────────────────────────────────────── */
-function EventFormModal({ initial, onSave, onClose }: {
+function EventFormModal({ initial, initialStatus, onSave, onClose }: {
   initial?: EventFormData & { id?: string };
-  onSave: (data: EventFormData, id?: string) => Promise<void>;
+  initialStatus?: string;
+  onSave: (data: EventFormData, id?: string, status?: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<EventFormData>(initial ?? EMPTY);
-  const [saving, setSaving] = useState(false);
+  const [savingAs, setSavingAs] = useState<"DRAFT" | "PUBLISHED" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   function set(k: keyof EventFormData, v: string) { setForm(f => ({ ...f, [k]: v })); }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function doSave(status: "DRAFT" | "PUBLISHED") {
     if (!form.title.trim() || !form.location.trim() || !form.eventDate) {
       setErr("Title, location and date are required."); return;
     }
-    setSaving(true); setErr(null);
-    try { await onSave(form, initial?.id); onClose(); }
+    setSavingAs(status); setErr(null);
+    try { await onSave(form, initial?.id, status); onClose(); }
     catch (e) { setErr(e instanceof Error ? e.message : "Save failed"); }
-    finally { setSaving(false); }
+    finally { setSavingAs(null); }
   }
+
+  const isEdit = !!initial?.id;
+  const currentStatus = initialStatus ?? "PUBLISHED";
 
   return (
     <motion.div
@@ -91,18 +154,24 @@ function EventFormModal({ initial, onSave, onClose }: {
         style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "0 24px 80px rgba(0,0,0,0.22)" }}
       >
         <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: "1px solid var(--border)" }}>
-          <h2 className="text-lg font-black" style={{ color: "var(--on-surface)" }}>
-            {initial?.id ? "Edit event" : "New event"}
-          </h2>
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-lg font-black" style={{ color: "var(--on-surface)" }}>
+              {isEdit ? "Edit event" : "New event"}
+            </h2>
+            {isEdit && currentStatus === "DRAFT" && (
+              <span className="rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide"
+                style={{ background: "rgba(245,158,11,0.12)", color: "#D97706" }}>Draft</span>
+            )}
+          </div>
           <button type="button" onClick={onClose} className="rounded-xl p-1.5 transition-colors hover:bg-[var(--surface-raised)]">
             <X size={16} style={{ color: "var(--muted)" }} />
           </button>
         </div>
 
-        <form onSubmit={submit} className="space-y-4 overflow-y-auto px-6 py-5" style={{ maxHeight: "80vh" }}>
+        <div className="space-y-4 overflow-y-auto px-6 py-5" style={{ maxHeight: "80vh" }}>
           <div>
             <label className="mb-1.5 block text-xs font-black uppercase tracking-wide" style={{ color: "var(--muted)" }}>Title *</label>
-            <input value={form.title} onChange={e => set("title", e.target.value)} className="input-shell" placeholder="HTU Founders Day 2026" required />
+            <input value={form.title} onChange={e => set("title", e.target.value)} className="input-shell" placeholder="HTU Founders Day 2026" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -113,12 +182,12 @@ function EventFormModal({ initial, onSave, onClose }: {
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-black uppercase tracking-wide" style={{ color: "var(--muted)" }}>Date & time *</label>
-              <input type="datetime-local" value={form.eventDate} onChange={e => set("eventDate", e.target.value)} className="input-shell" required />
+              <input type="datetime-local" value={form.eventDate} onChange={e => set("eventDate", e.target.value)} className="input-shell" />
             </div>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-black uppercase tracking-wide" style={{ color: "var(--muted)" }}>Location *</label>
-            <input value={form.location} onChange={e => set("location", e.target.value)} className="input-shell" placeholder="HTU Main Auditorium" required />
+            <input value={form.location} onChange={e => set("location", e.target.value)} className="input-shell" placeholder="HTU Main Auditorium" />
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-black uppercase tracking-wide" style={{ color: "var(--muted)" }}>Description</label>
@@ -142,24 +211,35 @@ function EventFormModal({ initial, onSave, onClose }: {
             />
             <p className="mt-1 text-xs" style={{ color: "var(--subtle)" }}>Paste a Google Form, Eventbrite, or any signup link</p>
           </div>
+          <EventImageUploader value={form.imageUrl} onChange={url => set("imageUrl", url)} />
           {err && (
             <p className="rounded-xl px-3 py-2 text-sm font-semibold"
               style={{ background: "rgba(239,68,68,0.08)", color: "#EF4444", border: "1px solid rgba(239,68,68,0.18)" }}>
               {err}
             </p>
           )}
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="rounded-2xl px-5 py-2.5 text-sm font-bold transition-colors hover:bg-[var(--surface-raised)]" style={{ color: "var(--muted)" }}>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="rounded-2xl px-5 py-2.5 text-sm font-bold transition-colors hover:bg-[var(--surface-raised)]"
+              style={{ color: "var(--muted)" }}>
               Cancel
             </button>
-            <button type="submit" disabled={saving}
-              className="flex items-center gap-2 rounded-2xl px-6 py-2.5 text-sm font-black text-white disabled:opacity-60"
-              style={{ background: "var(--green)" }}>
-              {saving && <Loader2 size={14} className="animate-spin" />}
-              {initial?.id ? "Save changes" : "Create event"}
-            </button>
+            <div className="flex gap-2">
+              <button type="button" disabled={!!savingAs} onClick={() => void doSave("DRAFT")}
+                className="flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold disabled:opacity-60 transition-colors hover:bg-[var(--surface-raised)]"
+                style={{ color: "var(--muted)", border: "1px solid var(--border)" }}>
+                {savingAs === "DRAFT" && <Loader2 size={13} className="animate-spin" />}
+                Save draft
+              </button>
+              <button type="button" disabled={!!savingAs} onClick={() => void doSave("PUBLISHED")}
+                className="flex items-center gap-2 rounded-2xl px-6 py-2.5 text-sm font-black text-white disabled:opacity-60"
+                style={{ background: "var(--green)" }}>
+                {savingAs === "PUBLISHED" && <Loader2 size={13} className="animate-spin" />}
+                {isEdit ? (currentStatus === "DRAFT" ? "Publish" : "Save changes") : "Publish"}
+              </button>
+            </div>
           </div>
-        </form>
+        </div>
       </motion.div>
     </motion.div>
   );
@@ -319,7 +399,13 @@ function EventDetailPanel({ events, onEdit, onDelete, canEdit }: {
             <div className="flex items-center gap-3 px-4 py-3">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dot }} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate" style={{ color: "var(--on-surface)" }}>{ev.title}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold truncate" style={{ color: "var(--on-surface)" }}>{ev.title}</p>
+                  {ev.status === "DRAFT" && (
+                    <span className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide"
+                      style={{ background: "rgba(245,158,11,0.12)", color: "#D97706" }}>Draft</span>
+                  )}
+                </div>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
                   {formatShortTime(ev.eventDate)} · {ev.location}
                 </p>
@@ -421,13 +507,14 @@ export default function EventsPage() {
   const { data: profile } = useProfile();
   const canEdit = profile?.canEditEvents === true || profile?.role === "ADMIN";
 
+  // canEdit users see their own drafts via the admin endpoint; public users see published only
   const { data: events = [], isLoading, mutate } = useSWR<CampusEvent[]>(
-    "events-page",
-    () => api.getEvents(),
+    canEdit ? "admin-events-page" : "events-page",
+    () => canEdit ? api.admin.getEvents() as Promise<CampusEvent[]> : api.getEvents(),
   );
 
   const [creating, setCreating] = useState(false);
-  const [editing,  setEditing]  = useState<(EventFormData & { id: string }) | null>(null);
+  const [editing,  setEditing]  = useState<(EventFormData & { id: string; status?: string }) | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const selectedEvents = useMemo(() => {
@@ -442,9 +529,10 @@ export default function EventsPage() {
   const upcoming = useMemo(() => events.filter(e => new Date(e.eventDate) >= new Date()), [events]);
   const past     = useMemo(() => events.filter(e => new Date(e.eventDate) <  new Date()), [events]);
 
-  async function handleSave(data: EventFormData, id?: string) {
+  async function handleSave(data: EventFormData, id?: string, status = "PUBLISHED") {
     const payload = {
       ...data,
+      status,
       opportunity:      data.opportunity      || undefined,
       registrationLink: data.registrationLink || undefined,
       imageUrl:         data.imageUrl         || undefined,
@@ -463,6 +551,7 @@ export default function EventsPage() {
   function openEdit(ev: CampusEvent) {
     setEditing({
       id: ev.id,
+      status: ev.status,
       title: ev.title, description: ev.description,
       location: ev.location,
       eventDate: (ev.eventDate as string).slice(0, 16),
@@ -585,6 +674,7 @@ export default function EventsPage() {
         {(creating || editing) && (
           <EventFormModal
             initial={editing ?? undefined}
+            initialStatus={editing?.status}
             onSave={handleSave}
             onClose={() => { setCreating(false); setEditing(null); }}
           />

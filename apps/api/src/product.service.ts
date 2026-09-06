@@ -144,18 +144,22 @@ export class ProductService {
       throw new BadRequestException('Create a business profile before listing products or services');
     }
 
-    const [sub, activeCount] = await Promise.all([
-      this.subscriptionService.getSubscription(sellerId),
-      this.prisma.product.count({ where: { sellerId, active: true } }),
-    ]);
+    const isDraft = data.status === 'DRAFT';
 
-    if (!this.subscriptionService.canListMore(sub, activeCount)) {
-      throw new ForbiddenException(
-        `Your free plan allows up to ${sub.features.maxListings} active listings. Upgrade to Seller Pro for unlimited listings.`,
-      );
+    if (!isDraft) {
+      const [sub, activeCount] = await Promise.all([
+        this.subscriptionService.getSubscription(sellerId),
+        this.prisma.product.count({ where: { sellerId, active: true } }),
+      ]);
+
+      if (!this.subscriptionService.canListMore(sub, activeCount)) {
+        throw new ForbiddenException(
+          `Your free plan allows up to ${sub.features.maxListings} active listings. Upgrade to Seller Pro for unlimited listings.`,
+        );
+      }
     }
 
-    const { imageUrls, ...restData } = data;
+    const { imageUrls, status, ...restData } = data;
     const primaryFromArray = imageUrls?.[0];
     const resolvedPrimary = primaryFromArray ?? data.imageUrl ?? undefined;
 
@@ -166,6 +170,8 @@ export class ProductService {
         imageUrls: imageUrls ?? [],
         tags: Array.isArray(data.tags) ? data.tags.join(',') : (data.tags ?? ''),
         sellerId,
+        status: status ?? 'PUBLISHED',
+        active: isDraft ? false : true,
       },
       include: { seller: { select: SELLER_SELECT } },
     });
@@ -317,20 +323,34 @@ export class ProductService {
     const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true } });
     if (!existing) throw new NotFoundException('Product not found');
     if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only modify your own products');
-    return this.prisma.product.update({ where: { id }, data: { active: false, soldAt: new Date() } });
+    return this.prisma.product.update({ where: { id }, data: { active: false, soldAt: new Date(), status: 'SOLD' } });
   }
 
   async archive(id: string, sellerId: string) {
     const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true } });
     if (!existing) throw new NotFoundException('Product not found');
     if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only modify your own products');
-    return this.prisma.product.update({ where: { id }, data: { active: false } });
+    return this.prisma.product.update({ where: { id }, data: { active: false, status: 'ARCHIVED' } });
   }
 
   async restore(id: string, sellerId: string) {
-    const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true } });
+    const existing = await this.prisma.product.findUnique({ where: { id }, select: { sellerId: true, status: true } });
     if (!existing) throw new NotFoundException('Product not found');
     if (existing.sellerId !== sellerId) throw new ForbiddenException('You can only modify your own products');
-    return this.prisma.product.update({ where: { id }, data: { active: true, soldAt: null } });
+
+    // Check subscription limit when publishing a draft (going from inactive → active)
+    if (existing.status === 'DRAFT') {
+      const [sub, activeCount] = await Promise.all([
+        this.subscriptionService.getSubscription(sellerId),
+        this.prisma.product.count({ where: { sellerId, active: true } }),
+      ]);
+      if (!this.subscriptionService.canListMore(sub, activeCount)) {
+        throw new ForbiddenException(
+          `Your free plan allows up to ${sub.features.maxListings} active listings. Upgrade to Seller Pro for unlimited listings.`,
+        );
+      }
+    }
+
+    return this.prisma.product.update({ where: { id }, data: { active: true, soldAt: null, status: 'PUBLISHED' } });
   }
 }

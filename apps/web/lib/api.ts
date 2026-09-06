@@ -183,7 +183,7 @@ export const api = {
   getCategories: () =>
     request<Category[]>("/products/categories", [], { revalidate: 300 }),
 
-  createProduct: (payload: Partial<Product>) => {
+  createProduct: (payload: Partial<Product> & { status?: "PUBLISHED" | "DRAFT" }) => {
     if (!hasAuthToken()) return Promise.reject(new Error("Authentication required"));
     return request<Product>(
       "/products",
@@ -486,6 +486,24 @@ export const api = {
       { method: "POST", body: JSON.stringify({ latitude, longitude }), strict: true },
     ),
 
+  uploadImage: async (file: File): Promise<{ url: string }> => {
+    const token = (await import("@/lib/auth")).getAuthToken();
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${apiBase}/uploads/image`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(err.message ?? "Upload failed");
+    }
+    return res.json() as Promise<{ url: string }>;
+  },
+
   uploadMessageMedia: async (file: File): Promise<{ url: string; fileName: string; fileSize: number; mimeType: string }> => {
     const token = (await import("@/lib/auth")).getAuthToken();
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -592,6 +610,9 @@ export const api = {
     request<{ id: string }>(`/products/${id}/archive`, {} as never, { method: "PUT", strict: true }),
 
   restoreListing: (id: string) =>
+    request<{ id: string }>(`/products/${id}/restore`, {} as never, { method: "PUT", strict: true }),
+
+  publishListing: (id: string) =>
     request<{ id: string }>(`/products/${id}/restore`, {} as never, { method: "PUT", strict: true }),
 
   getLocations: () =>
@@ -729,18 +750,18 @@ export const api = {
       }),
 
     getEvents: () =>
-      request<Array<{ id: string; title: string; description: string; location: string; eventDate: string; category: string; opportunity?: string | null; imageUrl?: string | null; featured?: boolean }>>(
+      request<Array<{ id: string; title: string; description: string; location: string; eventDate: string; category: string; opportunity?: string | null; imageUrl?: string | null; featured?: boolean; status?: string; creatorId?: string | null }>>(
         "/admin/events",
         [],
         { strict: true },
       ),
 
-    createEvent: (payload: { title: string; description: string; location: string; eventDate: string; category: string; opportunity?: string; imageUrl?: string }) =>
+    createEvent: (payload: { title: string; description: string; location: string; eventDate: string; category: string; opportunity?: string; registrationLink?: string; imageUrl?: string; status?: string }) =>
       request<{ id: string }>("/admin/events", {} as never, {
         method: "POST", body: JSON.stringify(payload), strict: true,
       }),
 
-    updateEvent: (id: string, payload: Partial<{ title: string; description: string; location: string; eventDate: string; category: string; opportunity: string; imageUrl: string; featured: boolean }>) =>
+    updateEvent: (id: string, payload: Partial<{ title: string; description: string; location: string; eventDate: string; category: string; opportunity: string; registrationLink: string; imageUrl: string; featured: boolean; status: string }>) =>
       request<{ id: string }>(`/admin/events/${id}`, {} as never, {
         method: "PATCH", body: JSON.stringify(payload), strict: true,
       }),
