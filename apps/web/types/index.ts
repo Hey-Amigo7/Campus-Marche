@@ -366,6 +366,22 @@ export type MessageType =
   | "TEXT" | "IMAGE" | "FILE" | "AUDIO"
   | "LOCATION" | "LIVE_LOCATION" | "VIDEO_CALL";
 
+export type MessageReaction = {
+  id: string;
+  emoji: string;
+  userId: string;
+  user: { id: string; name: string };
+};
+
+export type MessageReplyPreview = {
+  id: string;
+  content: string | null;
+  type: MessageType;
+  mediaUrl?: string | null;
+  deletedAt?: string | null;
+  sender: { id: string; name: string; avatar: string | null };
+};
+
 export type ApiMessage = {
   id: string;
   content: string | null;
@@ -386,6 +402,12 @@ export type ApiMessage = {
   conversationId: string;
   read: boolean;
   createdAt: string;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  deletedFor?: string[];
+  replyToId?: string | null;
+  replyTo?: MessageReplyPreview | null;
+  reactions: MessageReaction[];
   sender: { id: string; name: string; avatar: string | null };
   mine: boolean;
 };
@@ -397,4 +419,7 @@ export type ApiConversation = {
   lastMessage: { content: string | null; type: MessageType; createdAt: string } | null;
   unread: number;
   updatedAt: string;
+  muted: boolean;
+  pinned: boolean;
+  archived: boolean;
 };

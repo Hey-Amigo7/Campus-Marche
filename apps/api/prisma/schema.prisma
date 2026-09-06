@@ -81,6 +81,8 @@ model User {
   sentMessages       Message[]             @relation("SentMessages")
   conversationsAsA   Conversation[]        @relation("ConversationParticipantA")
   conversationsAsB   Conversation[]        @relation("ConversationParticipantB")
+  reactions          MessageReaction[]     @relation("UserReactions")
+  convPrefs          ConversationPreference[] @relation("UserConvPrefs")
   subscription       Subscription?
   wallet             Wallet?
   transferRecipients TransferRecipient[]
@@ -360,7 +362,8 @@ model Conversation {
   productId      String?
   product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
-  messages Message[]
+  messages    Message[]
+  preferences ConversationPreference[]
 
   @@unique([participantAId, participantBId, productId])
   @@index([participantAId])
@@ -384,15 +387,53 @@ model Message {
   duration     Int?
   callStatus   String?
   read         Boolean     @default(false)
+  // v2: threading, edit, delete
+  replyToId    String?
+  editedAt     DateTime?
+  deletedAt    DateTime?
+  deletedFor   String[]    @default([])
   createdAt    DateTime    @default(now())
 
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
-  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  sender         User            @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo        Message?        @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]       @relation("MessageReplies")
+  reactions      MessageReaction[]
 
   @@index([conversationId])
   @@index([senderId])
+  @@index([conversationId, createdAt])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  createdAt DateTime @default(now())
+
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+}
+
+model ConversationPreference {
+  id       String  @id @default(cuid())
+  muted    Boolean @default(false)
+  pinned   Boolean @default(false)
+  archived Boolean @default(false)
+
+  userId         String
+  user           User         @relation("UserConvPrefs", fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId])
+  @@index([userId])
 }
 
 // ─── Reviews & Saved ─────────────────────────────────────────────────────────

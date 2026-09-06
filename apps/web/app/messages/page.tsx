@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  ArrowLeft, Check, CheckCheck, FileText, Loader2,
-  MapPin, Mic, MicOff, Navigation, Paperclip,
-  PhoneOff, Plus, Search, Send, Video, VideoOff, X, Camera,
-  Image as ImageIcon, Eye, Download, Square,
+  ArrowLeft, BellOff, Check, CheckCheck, Copy, Download, Edit2,
+  Eye, FileText, Loader2, MapPin, Mic, MicOff, Navigation,
+  Paperclip, PhoneOff, Pin, Plus, Reply, Search, Send, Share2,
+  Trash2, Video, VideoOff, X, Camera, Image as ImageIcon, Square,
 } from "lucide-react";
 import { useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -18,6 +18,7 @@ import { useConversations, useMessages, useProfile } from "@/hooks/use-api";
 import type { ApiConversation, ApiMessage } from "@/types";
 
 const spring = { type: "spring", stiffness: 340, damping: 26 } as const;
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -231,74 +232,323 @@ function CallMessage({ msg }: { msg: ApiMessage }) {
   );
 }
 
-// ─── Message bubble ────────────────────────────────────────────────────────────
+// ─── Quoted message ───────────────────────────────────────────────────────────
 
-function Bubble({ message, isLast, conversationId, myId }: {
-  message: ApiMessage; isFirst: boolean; isLast: boolean;
-  conversationId: string; myId?: string;
-}) {
-  const mine = message.mine;
-  const isMedia = message.type !== "TEXT";
+function QuotedMessage({ reply, mine }: { reply: NonNullable<ApiMessage["replyTo"]>; mine: boolean }) {
+  const deleted = !!reply.deletedAt;
+  const preview = deleted              ? "Message deleted"
+    : reply.type === "IMAGE"           ? "📷 Photo"
+    : reply.type === "FILE"            ? "📄 File"
+    : reply.type === "AUDIO"           ? "🎤 Voice note"
+    : reply.type === "LOCATION" || reply.type === "LIVE_LOCATION" ? "📍 Location"
+    : reply.type === "VIDEO_CALL"      ? "📹 Video call"
+    : (reply.content ?? "");
 
   return (
-    <div className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
-      {!mine && (
-        <div className={cn("h-7 w-7 shrink-0 rounded-full", isLast ? "opacity-100" : "opacity-0")} style={{ background: "#0F172A" }}>
-          {isLast && (
-            <span className="flex h-full w-full items-center justify-center text-[10px] font-black text-white">
-              {getInitials(message.sender?.name ?? "?")}
-            </span>
-          )}
-        </div>
-      )}
+    <div className="mb-2 min-w-0 overflow-hidden rounded-xl"
+      style={{ background: mine ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.05)", borderLeft: `3px solid ${mine ? "rgba(255,255,255,0.30)" : "#7FB685"}` }}>
+      <div className="min-w-0 px-3 py-2">
+        <p className="mb-0.5 text-[10px] font-black" style={{ color: mine ? "rgba(255,255,255,0.60)" : "#5A9460" }}>
+          {reply.sender.name}
+        </p>
+        <p className="truncate text-[11px]" style={{ color: mine ? "rgba(255,255,255,0.45)" : "#64748B" }}>
+          {preview}
+        </p>
+      </div>
+    </div>
+  );
+}
 
-      <div
-        className={cn("relative", isMedia ? "" : "px-3.5 py-2",
-          mine
-            ? "rounded-2xl rounded-br-md text-white"
-            : "rounded-2xl rounded-bl-md",
-        )}
-        style={isMedia
-          ? { background: mine ? "#0F172A" : undefined }
-          : {
-              background: mine ? "#0F172A" : "rgba(255,255,255,0.95)",
-              boxShadow: "0 1px 4px rgba(15,23,42,0.10)",
-              border: mine ? "none" : "1px solid rgba(226,232,240,0.80)",
-              maxWidth: "72vw",
-            }
-        }
+// ─── Reaction display ─────────────────────────────────────────────────────────
+
+function ReactionDisplay({
+  reactions, myId, onReact,
+}: {
+  reactions: ApiMessage["reactions"];
+  myId?: string;
+  onReact: (emoji: string) => void;
+}) {
+  if (!reactions?.length) return null;
+
+  const grouped = reactions.reduce<Record<string, { count: number; hasMe: boolean }>>((acc, r) => {
+    if (!acc[r.emoji]) acc[r.emoji] = { count: 0, hasMe: false };
+    acc[r.emoji]!.count++;
+    if (r.userId === myId) acc[r.emoji]!.hasMe = true;
+    return acc;
+  }, {});
+
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {Object.entries(grouped).map(([emoji, { count, hasMe }]) => (
+        <button key={emoji} type="button" onClick={() => onReact(emoji)}
+          className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold transition-all hover:scale-105 active:scale-95"
+          style={{
+            background: hasMe ? "rgba(127,182,133,0.18)" : "rgba(15,23,42,0.06)",
+            border: hasMe ? "1px solid rgba(127,182,133,0.40)" : "1px solid rgba(226,232,240,0.80)",
+          }}>
+          <span>{emoji}</span>
+          {count > 1 && <span className="ml-0.5" style={{ color: "#64748B" }}>{count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Context menu ─────────────────────────────────────────────────────────────
+
+function ContextMenu({
+  msg, pos, mine, onClose,
+  onReply, onEdit, onCopy, onForward, onReact, onDeleteMe, onDeleteAll,
+}: {
+  msg: ApiMessage; pos: { x: number; y: number }; mine: boolean; onClose: () => void;
+  onReply: () => void; onEdit: () => void; onCopy: () => void; onForward: () => void;
+  onReact: (emoji: string) => void; onDeleteMe: () => void; onDeleteAll: () => void;
+}) {
+  const menuWidth = 188;
+  const menuHeight = 270;
+  const x = Math.min(pos.x, (typeof window !== "undefined" ? window.innerWidth : 800) - menuWidth - 8);
+  const y = Math.min(pos.y, (typeof window !== "undefined" ? window.innerHeight : 600) - menuHeight - 8);
+
+  const isText = msg.type === "TEXT" && !msg.deletedAt;
+  const canEdit = mine && isText;
+  const canDeleteAll = mine && !msg.deletedAt;
+
+  type Action = { icon: React.ElementType; label: string; fn: () => void; danger?: boolean };
+  const actions: Action[] = [
+    { icon: Reply,  label: "Reply",   fn: onReply },
+    ...(isText    ? [{ icon: Copy,   label: "Copy",    fn: onCopy   } as Action] : []),
+    { icon: Share2, label: "Forward", fn: onForward },
+    ...(canEdit   ? [{ icon: Edit2,  label: "Edit",    fn: onEdit   } as Action] : []),
+    { icon: Trash2, label: "Delete for me", fn: onDeleteMe },
+    ...(canDeleteAll ? [{ icon: Trash2, label: "Delete for everyone", fn: onDeleteAll, danger: true } as Action] : []),
+  ];
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose(); }} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.88 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.88 }}
+        transition={{ duration: 0.13 }}
+        className="fixed z-50 overflow-hidden rounded-2xl shadow-2xl"
+        style={{ left: x, top: y, width: menuWidth, background: "rgba(10,15,26,0.97)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(20px)" }}
       >
-        {/* Render by type */}
-        {message.type === "TEXT" && (
-          <p className="text-sm leading-[1.55]" style={{ color: mine ? "#fff" : "#1E293B" }}>{message.content}</p>
-        )}
-        {message.type === "IMAGE" && (
-          <ImageMessage msg={message} mine={mine} conversationId={conversationId} myId={myId} />
-        )}
-        {message.type === "AUDIO" && (
-          <AudioMessage msg={message} mine={mine} conversationId={conversationId} myId={myId} />
-        )}
-        {message.type === "FILE" && <FileMessage msg={message} />}
-        {(message.type === "LOCATION" || message.type === "LIVE_LOCATION") && (
-          <LocationMessage msg={message} mine={mine} />
-        )}
-        {message.type === "VIDEO_CALL" && <CallMessage msg={message} />}
+        {/* Quick reactions */}
+        <div className="flex items-center justify-around px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          {QUICK_EMOJIS.map(emoji => (
+            <button key={emoji} type="button" onClick={() => { onReact(emoji); onClose(); }}
+              className="text-lg transition-transform hover:scale-125 active:scale-110">
+              {emoji}
+            </button>
+          ))}
+        </div>
+        {/* Actions */}
+        {actions.map(({ icon: Icon, label, fn, danger }) => (
+          <button key={label} type="button"
+            onClick={() => { fn(); onClose(); }}
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/5"
+            style={{ color: danger ? "#EF4444" : "rgba(255,255,255,0.85)" }}>
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
+      </motion.div>
+    </>
+  );
+}
 
-        {/* Timestamp + read */}
-        <div className={cn("mt-0.5 flex items-center gap-1 px-1 pb-0.5",
-          mine ? "justify-end" : "justify-start",
-          isMedia ? "absolute bottom-1 right-2" : ""
-        )}>
-          <span className="text-[10px] font-medium" style={{ color: mine || isMedia ? "rgba(255,255,255,0.55)" : "#94A3B8" }}>
-            {formatTime(message.createdAt)}
-          </span>
-          {mine && (
-            message.read
-              ? <CheckCheck size={12} style={{ color: isMedia ? "rgba(255,255,255,0.90)" : "var(--green)" }} />
-              : <Check size={12} style={{ color: "rgba(255,255,255,0.50)" }} />
+// ─── Forward modal ────────────────────────────────────────────────────────────
+
+function ForwardModal({
+  conversations, onForward, onClose,
+}: {
+  conversations: ApiConversation[];
+  onForward: (convId: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [sending, setSending] = useState<string | null>(null);
+
+  async function forward(convId: string) {
+    setSending(convId);
+    try { await onForward(convId); onClose(); }
+    catch { /* ignore */ }
+    finally { setSending(null); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.50)", backdropFilter: "blur(4px)" }}>
+      <div className="w-full max-w-sm overflow-hidden rounded-3xl shadow-2xl"
+        style={{ background: "rgba(10,15,26,0.97)", border: "1px solid rgba(255,255,255,0.10)" }}>
+        <div className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <h2 className="text-base font-black text-white">Forward to…</h2>
+          <button type="button" onClick={onClose} className="rounded-xl p-1.5" style={{ color: "rgba(255,255,255,0.50)" }}>
+            <X size={16} />
+          </button>
+        </div>
+        <div className="max-h-72 overflow-y-auto py-2">
+          {conversations.map(conv => (
+            <button key={conv.id} type="button" onClick={() => forward(conv.id)} disabled={sending === conv.id}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors disabled:opacity-60 hover:bg-white/5">
+              <div className="grid h-10 w-10 shrink-0 overflow-hidden place-items-center rounded-full text-xs font-black text-white"
+                style={{ background: "linear-gradient(135deg, #0F172A, #1a3a2a)" }}>
+                <AvatarCircle avatar={conv.user.avatar} name={conv.user.name} size={40} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-white">{conv.user.name}</p>
+                {conv.product && (
+                  <p className="truncate text-[11px]" style={{ color: "#C68B59" }}>📦 {conv.product.title}</p>
+                )}
+              </div>
+              {sending === conv.id && <Loader2 size={16} className="animate-spin shrink-0" style={{ color: "#7FB685" }} />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Message bubble ───────────────────────────────────────────────────────────
+
+function Bubble({ message, isFirst, isLast, conversationId, myId, onContextMenu, onReact }: {
+  message: ApiMessage; isFirst: boolean; isLast: boolean;
+  conversationId: string; myId?: string;
+  onContextMenu: (msg: ApiMessage, x: number, y: number) => void;
+  onReact: (msg: ApiMessage, emoji: string) => void;
+}) {
+  const mine    = message.mine;
+  const deleted = !!message.deletedAt;
+  const isMedia = !deleted && message.type !== "TEXT";
+
+  const pressTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStartRef  = useRef<{ x: number; y: number } | null>(null);
+
+  function triggerMenu(x: number, y: number) { onContextMenu(message, x, y); }
+
+  function handleRightClick(e: React.MouseEvent) {
+    e.preventDefault();
+    triggerMenu(e.clientX, e.clientY);
+  }
+
+  function handlePointerDown(e: React.PointerEvent) {
+    if (e.pointerType === "mouse") return;
+    pressStartRef.current = { x: e.clientX, y: e.clientY };
+    pressTimerRef.current = setTimeout(() => triggerMenu(e.clientX, e.clientY), 500);
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    if (!pressStartRef.current) return;
+    if (Math.abs(e.clientX - pressStartRef.current.x) > 8 || Math.abs(e.clientY - pressStartRef.current.y) > 8) {
+      if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
+    }
+  }
+
+  function handlePointerUp() {
+    if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
+    pressStartRef.current = null;
+  }
+
+  return (
+    <div className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
+      <div className={cn("flex items-end gap-2", mine ? "flex-row-reverse" : "flex-row")}>
+        {!mine && (
+          <div className={cn("h-7 w-7 shrink-0 rounded-full", isLast ? "opacity-100" : "opacity-0")} style={{ background: "#0F172A" }}>
+            {isLast && (
+              <span className="flex h-full w-full items-center justify-center text-[10px] font-black text-white">
+                {getInitials(message.sender?.name ?? "?")}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div
+          onContextMenu={handleRightClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className={cn(
+            "relative cursor-pointer select-none",
+            (deleted || !isMedia) ? "px-3.5 py-2" : "",
+            mine ? "rounded-2xl rounded-br-md text-white" : "rounded-2xl rounded-bl-md",
+          )}
+          style={deleted ? {
+            background: mine ? "rgba(15,23,42,0.30)" : "rgba(226,232,240,0.50)",
+            border: "1px dashed rgba(148,163,184,0.40)",
+            maxWidth: "72vw",
+          } : isMedia ? {
+            background: mine ? "#0F172A" : undefined,
+          } : {
+            background: mine ? "#0F172A" : "rgba(255,255,255,0.95)",
+            boxShadow: "0 1px 4px rgba(15,23,42,0.10)",
+            border: mine ? "none" : "1px solid rgba(226,232,240,0.80)",
+            maxWidth: "72vw",
+          }}
+        >
+          {/* Reply quote */}
+          {!deleted && message.replyTo && (
+            <QuotedMessage reply={message.replyTo} mine={mine} />
+          )}
+
+          {/* Message content */}
+          {deleted ? (
+            <p className="text-sm italic" style={{ color: mine ? "rgba(255,255,255,0.40)" : "#94A3B8" }}>
+              Message deleted
+            </p>
+          ) : message.type === "TEXT" ? (
+            <p className="text-sm leading-[1.55]" style={{ color: mine ? "#fff" : "#1E293B" }}>
+              {message.content}
+            </p>
+          ) : message.type === "IMAGE" ? (
+            <ImageMessage msg={message} mine={mine} conversationId={conversationId} myId={myId} />
+          ) : message.type === "AUDIO" ? (
+            <AudioMessage msg={message} mine={mine} conversationId={conversationId} myId={myId} />
+          ) : message.type === "FILE" ? (
+            <FileMessage msg={message} />
+          ) : message.type === "LOCATION" || message.type === "LIVE_LOCATION" ? (
+            <LocationMessage msg={message} mine={mine} />
+          ) : message.type === "VIDEO_CALL" ? (
+            <CallMessage msg={message} />
+          ) : null}
+
+          {/* Timestamp + read receipt */}
+          {!deleted && (
+            <div className={cn("mt-0.5 flex items-center gap-1 px-1 pb-0.5",
+              mine ? "justify-end" : "justify-start",
+              isMedia ? "absolute bottom-1 right-2" : "",
+            )}>
+              {message.editedAt && (
+                <span className="text-[9px] italic" style={{ color: mine ? "rgba(255,255,255,0.38)" : "#CBD5E1" }}>
+                  edited
+                </span>
+              )}
+              <span className="text-[10px] font-medium"
+                style={{ color: mine || isMedia ? "rgba(255,255,255,0.55)" : "#94A3B8" }}>
+                {formatTime(message.createdAt)}
+              </span>
+              {mine && (
+                message.read
+                  ? <CheckCheck size={12} style={{ color: isMedia ? "rgba(255,255,255,0.90)" : "var(--green)" }} />
+                  : <Check size={12} style={{ color: "rgba(255,255,255,0.50)" }} />
+              )}
+            </div>
           )}
         </div>
       </div>
+
+      {/* Reactions below bubble */}
+      {!deleted && !!message.reactions?.length && (
+        <div className={cn("mt-1", mine ? "pr-2" : "pl-9")}>
+          <ReactionDisplay
+            reactions={message.reactions}
+            myId={myId}
+            onReact={emoji => onReact(message, emoji)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -314,9 +564,11 @@ function DateSeparator({ label }: { label: string }) {
   );
 }
 
-// ─── Conversation item ─────────────────────────────────────────────────────────
+// ─── Conversation item ────────────────────────────────────────────────────────
 
-function ConvItem({ conv, active, onClick }: { conv: ApiConversation; active: boolean; onClick: () => void }) {
+function ConvItem({ conv, active, online, onClick }: {
+  conv: ApiConversation; active: boolean; online: boolean; onClick: () => void;
+}) {
   return (
     <button onClick={onClick} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
       style={active ? { background: "rgba(127,182,133,0.12)" } : undefined}>
@@ -329,15 +581,26 @@ function ConvItem({ conv, active, onClick }: { conv: ApiConversation; active: bo
           <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full text-[8px]"
             style={{ background: "#7FB685", border: "2px solid #fff" }}>✓</span>
         )}
+        {online && (
+          <span className={cn("absolute h-3.5 w-3.5 rounded-full border-2 border-white",
+            conv.user.verified ? "-bottom-0.5 left-0" : "-bottom-0.5 -right-0.5"
+          )}
+            style={{ background: "#22C55E" }} />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <span className={cn("truncate text-sm", conv.unread > 0 ? "font-black" : "font-semibold")} style={{ color: "#1E293B" }}>
             {conv.user.name}
           </span>
-          <span className="shrink-0 text-[11px]" style={{ color: conv.unread > 0 ? "#5A9460" : "#94A3B8", fontWeight: conv.unread > 0 ? 700 : 400 }}>
-            {formatConvTime(conv.updatedAt)}
-          </span>
+          <div className="flex shrink-0 items-center gap-1">
+            {conv.muted  && <BellOff size={9} style={{ color: "#94A3B8" }} />}
+            {conv.pinned && <Pin     size={9} style={{ color: "#94A3B8" }} />}
+            <span className="text-[11px]"
+              style={{ color: conv.unread > 0 ? "#5A9460" : "#94A3B8", fontWeight: conv.unread > 0 ? 700 : 400 }}>
+              {formatConvTime(conv.updatedAt)}
+            </span>
+          </div>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <span className={cn("truncate text-xs", conv.unread > 0 ? "font-semibold" : "font-normal")}
@@ -361,7 +624,7 @@ function ConvItem({ conv, active, onClick }: { conv: ApiConversation; active: bo
   );
 }
 
-// ─── New chat modal ────────────────────────────────────────────────────────────
+// ─── New chat modal ───────────────────────────────────────────────────────────
 
 function NewChatModal({ onClose, onStarted }: { onClose: () => void; onStarted: (id: string) => void }) {
   const [q, setQ] = useState("");
@@ -438,7 +701,7 @@ function NewChatModal({ onClose, onStarted }: { onClose: () => void; onStarted: 
   );
 }
 
-// ─── Camera capture modal ──────────────────────────────────────────────────────
+// ─── Camera capture modal ─────────────────────────────────────────────────────
 
 function CameraModal({ onCapture, onClose }: { onCapture: (blob: Blob) => void; onClose: () => void }) {
   const videoRef   = useRef<HTMLVideoElement>(null);
@@ -487,15 +750,15 @@ function CameraModal({ onCapture, onClose }: { onCapture: (blob: Blob) => void; 
   );
 }
 
-// ─── Voice recorder ────────────────────────────────────────────────────────────
+// ─── Voice recorder ───────────────────────────────────────────────────────────
 
 function VoiceRecorder({ onSend, onCancel }: { onSend: (blob: Blob, duration: number) => void; onCancel: () => void }) {
   const [recording, setRecording]   = useState(false);
   const [elapsed, setElapsed]        = useState(0);
   const [blob, setBlob]              = useState<Blob | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef   = useRef<Blob[]>([]);
-  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recorderRef  = useRef<MediaRecorder | null>(null);
+  const chunksRef    = useRef<Blob[]>([]);
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
 
   useEffect(() => { startRecord(); return () => stopTimer(); }, []); // eslint-disable-line
@@ -531,14 +794,8 @@ function VoiceRecorder({ onSend, onCancel }: { onSend: (blob: Blob, duration: nu
     }
   }
 
-  function stop() {
-    stopTimer();
-    recorderRef.current?.stop();
-  }
-
-  function send() {
-    if (blob) onSend(blob, elapsed);
-  }
+  function stop() { stopTimer(); recorderRef.current?.stop(); }
+  function send() { if (blob) onSend(blob, elapsed); }
 
   return (
     <div className="flex items-center gap-3">
@@ -579,7 +836,7 @@ function VoiceRecorder({ onSend, onCancel }: { onSend: (blob: Blob, duration: nu
   );
 }
 
-// ─── Attachment menu ───────────────────────────────────────────────────────────
+// ─── Attachment menu ──────────────────────────────────────────────────────────
 
 function AttachmentMenu({
   open, onClose,
@@ -590,12 +847,12 @@ function AttachmentMenu({
   onVoice: () => void; onLocation: () => void; onLiveLocation: () => void;
 }) {
   const items = [
-    { icon: Camera,    label: "Camera",        color: "#6366F1", action: onCamera,        tip: "Take a photo" },
-    { icon: ImageIcon, label: "Photo",          color: "#10B981", action: onImageFile,     tip: "Send image" },
-    { icon: FileText,  label: "Document",       color: "#F59E0B", action: onDocFile,       tip: "Send file" },
-    { icon: Mic,       label: "Voice note",     color: "#EF4444", action: onVoice,         tip: "Record voice" },
-    { icon: MapPin,    label: "Location",       color: "#3B82F6", action: onLocation,      tip: "Share location" },
-    { icon: Navigation,label: "Live location",  color: "#EC4899", action: onLiveLocation,  tip: "Share live location" },
+    { icon: Camera,     label: "Camera",       color: "#6366F1", action: onCamera,       tip: "Take a photo" },
+    { icon: ImageIcon,  label: "Photo",         color: "#10B981", action: onImageFile,    tip: "Send image" },
+    { icon: FileText,   label: "Document",      color: "#F59E0B", action: onDocFile,      tip: "Send file" },
+    { icon: Mic,        label: "Voice note",    color: "#EF4444", action: onVoice,        tip: "Record voice" },
+    { icon: MapPin,     label: "Location",      color: "#3B82F6", action: onLocation,     tip: "Share location" },
+    { icon: Navigation, label: "Live location", color: "#EC4899", action: onLiveLocation, tip: "Share live location" },
   ];
 
   return (
@@ -629,7 +886,7 @@ function AttachmentMenu({
   );
 }
 
-// ─── Incoming call modal ───────────────────────────────────────────────────────
+// ─── Incoming call modal ──────────────────────────────────────────────────────
 
 function IncomingCallModal({
   callerName, onAccept, onReject,
@@ -663,7 +920,7 @@ function IncomingCallModal({
   );
 }
 
-// ─── Video call overlay ────────────────────────────────────────────────────────
+// ─── Video call overlay ───────────────────────────────────────────────────────
 
 function VideoCallOverlay({
   onEnd, localStream, remoteStream, status,
@@ -691,11 +948,9 @@ function VideoCallOverlay({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
-      {/* Remote video (full screen) */}
       <video ref={remoteRef} autoPlay playsInline className="h-full w-full object-cover"
         style={{ opacity: remoteStream ? 1 : 0 }} />
 
-      {/* Status overlay when waiting */}
       {!remoteStream && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <Loader2 size={32} className="animate-spin text-white opacity-70" />
@@ -703,7 +958,6 @@ function VideoCallOverlay({
         </div>
       )}
 
-      {/* Local video PiP */}
       <div className="absolute right-4 top-4 overflow-hidden rounded-2xl shadow-lg" style={{ width: 96, height: 128 }}>
         <video ref={localRef} autoPlay playsInline muted className="h-full w-full object-cover" />
         {camOff && (
@@ -713,7 +967,6 @@ function VideoCallOverlay({
         )}
       </div>
 
-      {/* Controls */}
       <div className="absolute bottom-10 left-0 right-0 flex items-center justify-center gap-6">
         <button type="button" onClick={toggleMute}
           className="grid h-14 w-14 place-items-center rounded-full"
@@ -735,7 +988,7 @@ function VideoCallOverlay({
   );
 }
 
-// ─── Main content ──────────────────────────────────────────────────────────────
+// ─── Main content ─────────────────────────────────────────────────────────────
 
 export default function MessagesPage() {
   return (
@@ -751,61 +1004,131 @@ function MessagesContent() {
   const myId = profile?.id;
 
   const { data: conversations, isLoading: loadingConv } = useConversations();
-  const [activeId, setActiveId]     = useState<string | null>(searchParams.get("c"));
-  const [query, setQuery]           = useState("");
-  const [text, setText]             = useState("");
-  const [sending, setSending]       = useState(false);
+  const [activeId, setActiveId]       = useState<string | null>(searchParams.get("c"));
+  const [query, setQuery]             = useState("");
+  const [text, setText]               = useState("");
+  const [sending, setSending]         = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
-  const [showAttach, setShowAttach] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  const [showVoice, setShowVoice]   = useState(false);
+  const [showAttach, setShowAttach]   = useState(false);
+  const [showCamera, setShowCamera]   = useState(false);
+  const [showVoice, setShowVoice]     = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
-  // Live location sharing state
-  const [sharingLive, setSharingLive]       = useState(false);
+  // Reply / edit state
+  const [replyTo, setReplyTo]     = useState<ApiMessage | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Context menu
+  const [contextMenuMsg, setContextMenuMsg] = useState<ApiMessage | null>(null);
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Presence & typing
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  // Infinite scroll
+  const [hasMore, setHasMore]         = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // In-conversation search
+  const [showSearch, setShowSearch]       = useState(false);
+  const [searchQuery, setSearchQuery]     = useState("");
+  const [searchResults, setSearchResults] = useState<ApiMessage[]>([]);
+
+  // Forward
+  const [forwardMsg, setForwardMsg] = useState<ApiMessage | null>(null);
+
+  // Live location
+  const [sharingLive, setSharingLive]   = useState(false);
   const liveWatchRef = useRef<number | null>(null);
   const liveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // WebRTC call state
-  const [callState, setCallState]     = useState<"idle" | "calling" | "incoming" | "in-call">("idle");
+  // WebRTC
+  const [callState, setCallState]       = useState<"idle" | "calling" | "incoming" | "in-call">("idle");
   const [incomingCall, setIncomingCall] = useState<{ from: string; fromName: string; conversationId: string; offer: RTCSessionDescriptionInit } | null>(null);
   const [localStream,  setLocalStream]  = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callStatus,   setCallStatus]   = useState("Calling…");
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pcRef           = useRef<RTCPeerConnection | null>(null);
+  const callTimeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef       = useRef<HTMLInputElement>(null);
-  const imageInputRef  = useRef<HTMLInputElement>(null);
-  const docInputRef    = useRef<HTMLInputElement>(null);
-  const { mutate }     = useSWRConfig();
+  // Refs
+  const messagesEndRef      = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef      = useRef<HTMLDivElement>(null);
+  const inputRef            = useRef<HTMLInputElement>(null);
+  const imageInputRef       = useRef<HTMLInputElement>(null);
+  const docInputRef         = useRef<HTMLInputElement>(null);
+  const activeIdRef         = useRef<string | null>(null);
+  const typingTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef         = useRef(false);
+
+  const { mutate } = useSWRConfig();
   const { socketRef, connected } = useSocket();
 
-  const active  = (conversations as ApiConversation[]).find(c => c.id === activeId) ?? null;
-  const otherUserId = active ? (myId === active.user.id ? undefined : active.user.id) : undefined;
+  // Keep activeId ref in sync
+  activeIdRef.current = activeId;
+
+  const convList = conversations as ApiConversation[];
+  const active   = convList.find(c => c.id === activeId) ?? null;
+  const otherUserId = active?.user.id ?? undefined;
+  const isOtherTyping = !!otherUserId && typingUsers.has(otherUserId);
+  const isOtherOnline  = !!otherUserId && onlineUsers.has(otherUserId);
 
   // Auto-select first conversation
   useEffect(() => {
     const req = searchParams.get("c");
     if (req) { setActiveId(req); return; }
-    if (!activeId && (conversations as ApiConversation[]).length > 0) {
-      setActiveId((conversations as ApiConversation[])[0]!.id);
-    }
-  }, [conversations, activeId, searchParams]);
+    if (!activeId && convList.length > 0) setActiveId(convList[0]!.id);
+  }, [convList, activeId, searchParams]);
 
   const { data: messagesData, isLoading: loadingMessages } = useMessages(active?.id ?? null);
   const messages = useMemo(() => messagesData ?? [], [messagesData]);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // Reset scroll state when switching conversations
+  useEffect(() => {
+    setHasMore(false);
+    setLoadingMore(false);
+    setReplyTo(null);
+    setEditingId(null);
+    setText("");
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setTypingUsers(new Set());
+  }, [activeId]);
+
+  // Set hasMore after messages load
+  useEffect(() => {
+    if (!loadingMessages && messages.length >= 50) setHasMore(true);
+  }, [messages.length, loadingMessages]);
+
+  // Auto-scroll to bottom on new messages (but not when loading older)
+  useEffect(() => {
+    if (!loadingMore) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages.length]); // eslint-disable-line
+
+  // Join/leave conversation room + query presence
   useEffect(() => {
     if (!activeId) return;
     const socket = socketRef.current;
     joinConversation(socket, activeId);
-    return () => leaveConversation(socket, activeId);
-  }, [activeId, socketRef, connected]);
 
-  // Mark as read only when a conversation is explicitly clicked open
+    if (socket && otherUserId) {
+      socket.emit("presence:query", { userIds: [otherUserId] }, (res: unknown) => {
+        const r = res as { online?: string[] };
+        if (r?.online?.includes(otherUserId)) {
+          setOnlineUsers(prev => new Set([...prev, otherUserId]));
+        }
+      });
+    }
+
+    return () => leaveConversation(socket, activeId);
+  }, [activeId, socketRef, connected]); // eslint-disable-line
+
+  // Mark as read when opening a conversation
   useEffect(() => {
     if (!activeId) return;
     api.markConversationRead(activeId)
@@ -813,16 +1136,18 @@ function MessagesContent() {
       .catch(() => null);
   }, [activeId]); // eslint-disable-line
 
+  // Focus input when conversation opens
   useEffect(() => { if (active?.id) setTimeout(() => inputRef.current?.focus(), 100); }, [active?.id]);
 
-  // Socket: incoming call + view-once events
+  // Socket events
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
 
+    // ── WebRTC ──
     function handleCallOffer(raw: unknown) {
       const data = raw as { from: string; conversationId: string; offer: RTCSessionDescriptionInit };
-      const conv = (conversations as ApiConversation[]).find(c => c.id === data.conversationId);
+      const conv = convList.find(c => c.id === data.conversationId);
       setIncomingCall({ ...data, fromName: conv?.user.name ?? "Someone" });
       setCallState("incoming");
     }
@@ -837,43 +1162,207 @@ function MessagesContent() {
       const data = raw as { candidate: RTCIceCandidateInit };
       void pcRef.current?.addIceCandidate(data.candidate);
     }
-    function handleCallEnd() {
-      endCall(false);
-    }
-    function handleCallReject() {
-      setCallStatus("Call declined");
-      endCall(false);
+    function handleCallEnd() { endCall(false); }
+    function handleCallReject() { setCallStatus("Call declined"); endCall(false); }
+
+    // ── Message events ──
+    function handleMsgEdited(raw: unknown) {
+      const data = raw as ApiMessage;
+      const convId = activeIdRef.current;
+      if (!convId) return;
+      void mutate(`messages-${convId}`, (prev: ApiMessage[] | undefined) =>
+        prev?.map(m => m.id === data.id ? { ...m, content: data.content, editedAt: data.editedAt } : m),
+        { revalidate: false },
+      );
     }
 
-    socket.on("call:offer",  handleCallOffer);
-    socket.on("call:answer", handleCallAnswer);
-    socket.on("call:ice",    handleCallIce);
-    socket.on("call:end",    handleCallEnd);
-    socket.on("call:reject", handleCallReject);
+    function handleMsgDeleted(raw: unknown) {
+      const { messageId, mode } = raw as { messageId: string; mode: "everyone" | "me" };
+      const convId = activeIdRef.current;
+      if (!convId) return;
+      void mutate(`messages-${convId}`, (prev: ApiMessage[] | undefined) => {
+        if (!prev) return prev;
+        if (mode === "everyone") {
+          return prev.map(m => m.id === messageId
+            ? { ...m, deletedAt: new Date().toISOString(), content: null, mediaUrl: null }
+            : m);
+        }
+        return prev.filter(m => m.id !== messageId);
+      }, { revalidate: false });
+    }
+
+    function handleMsgReaction(raw: unknown) {
+      const { messageId, reactions } = raw as { messageId: string; reactions: ApiMessage["reactions"] };
+      const convId = activeIdRef.current;
+      if (!convId) return;
+      void mutate(`messages-${convId}`, (prev: ApiMessage[] | undefined) =>
+        prev?.map(m => m.id === messageId ? { ...m, reactions } : m),
+        { revalidate: false },
+      );
+    }
+
+    // ── Typing ──
+    function handleTypingStart(raw: unknown) {
+      const { userId } = raw as { userId: string };
+      setTypingUsers(prev => new Set([...prev, userId]));
+    }
+    function handleTypingStop(raw: unknown) {
+      const { userId } = raw as { userId: string };
+      setTypingUsers(prev => { const next = new Set(prev); next.delete(userId); return next; });
+    }
+
+    // ── Presence ──
+    function handlePresenceOnline(raw: unknown) {
+      const { userId } = raw as { userId: string };
+      setOnlineUsers(prev => new Set([...prev, userId]));
+    }
+    function handlePresenceOffline(raw: unknown) {
+      const { userId } = raw as { userId: string };
+      setOnlineUsers(prev => { const next = new Set(prev); next.delete(userId); return next; });
+    }
+
+    socket.on("call:offer",        handleCallOffer);
+    socket.on("call:answer",       handleCallAnswer);
+    socket.on("call:ice",          handleCallIce);
+    socket.on("call:end",          handleCallEnd);
+    socket.on("call:reject",       handleCallReject);
+    socket.on("message:edited",    handleMsgEdited);
+    socket.on("message:deleted",   handleMsgDeleted);
+    socket.on("message:reaction",  handleMsgReaction);
+    socket.on("typing:start",      handleTypingStart);
+    socket.on("typing:stop",       handleTypingStop);
+    socket.on("presence:online",   handlePresenceOnline);
+    socket.on("presence:offline",  handlePresenceOffline);
 
     return () => {
-      socket.off("call:offer",  handleCallOffer);
-      socket.off("call:answer", handleCallAnswer);
-      socket.off("call:ice",    handleCallIce);
-      socket.off("call:end",    handleCallEnd);
-      socket.off("call:reject", handleCallReject);
+      socket.off("call:offer",       handleCallOffer);
+      socket.off("call:answer",      handleCallAnswer);
+      socket.off("call:ice",         handleCallIce);
+      socket.off("call:end",         handleCallEnd);
+      socket.off("call:reject",      handleCallReject);
+      socket.off("message:edited",   handleMsgEdited);
+      socket.off("message:deleted",  handleMsgDeleted);
+      socket.off("message:reaction", handleMsgReaction);
+      socket.off("typing:start",     handleTypingStart);
+      socket.off("typing:stop",      handleTypingStop);
+      socket.off("presence:online",  handlePresenceOnline);
+      socket.off("presence:offline", handlePresenceOffline);
     };
-  }, [socketRef.current, conversations]); // eslint-disable-line
+  }, [socketRef.current, convList]); // eslint-disable-line
 
-  const visible = (conversations as ApiConversation[]).filter(c => {
+  // In-conversation search
+  useEffect(() => {
+    if (!showSearch || !active || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        setSearchResults(await api.searchMessages(active.id, searchQuery.trim()));
+      } catch { setSearchResults([]); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [showSearch, active?.id, searchQuery]); // eslint-disable-line
+
+  // IntersectionObserver for infinite scroll
+  const handleLoadMoreRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    handleLoadMoreRef.current = async () => {
+      if (!active || !hasMore || loadingMore) return;
+      const oldest = messages[0]?.createdAt;
+      if (!oldest) { setHasMore(false); return; }
+
+      setLoadingMore(true);
+      const container = messagesContainerRef.current;
+      const prevHeight = container?.scrollHeight ?? 0;
+
+      try {
+        const older = await api.getMessages(active.id, { before: oldest });
+        if (older.length === 0) {
+          setHasMore(false);
+        } else {
+          await mutate(`messages-${active.id}`, (prev: ApiMessage[] = []) => [...older, ...prev], { revalidate: false });
+          if (older.length < 50) setHasMore(false);
+          requestAnimationFrame(() => {
+            if (container) container.scrollTop = container.scrollHeight - prevHeight;
+          });
+        }
+      } catch { /* ignore */ }
+      finally { setLoadingMore(false); }
+    };
+  });
+
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && messages.length > 0) {
+        void handleLoadMoreRef.current();
+      }
+    }, { threshold: 0 });
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [active?.id, hasMore, loadingMore]); // eslint-disable-line
+
+  // Filtered conversations list
+  const visible = convList.filter(c => {
+    if (c.archived) return false;
     const q = query.toLowerCase();
     return c.user.name.toLowerCase().includes(q) || (c.product?.title.toLowerCase().includes(q) ?? false);
   });
 
-  // ── Send helpers ──────────────────────────────────────────────────────────
+  // ── Typing emit ──────────────────────────────────────────────────────────
+
+  function emitTypingStop() {
+    if (!activeIdRef.current || !socketRef.current) return;
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      socketRef.current.emit("typing:stop", { conversationId: activeIdRef.current });
+    }
+    if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+  }
+
+  function emitTypingStart() {
+    if (!activeIdRef.current || !socketRef.current) return;
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      socketRef.current.emit("typing:start", { conversationId: activeIdRef.current });
+    }
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(emitTypingStop, 2000);
+  }
+
+  // ── Send helpers ─────────────────────────────────────────────────────────
 
   async function handleSend() {
-    if (!active || !text.trim()) return;
+    if (!active) return;
+
+    // Edit mode
+    if (editingId) {
+      const content = text.trim();
+      if (!content) return;
+      setSending(true);
+      try {
+        await api.editMessage(active.id, editingId, content);
+        await mutate(`messages-${active.id}`);
+        setEditingId(null);
+        setText("");
+      } catch { /* ignore */ }
+      finally { setSending(false); }
+      return;
+    }
+
+    if (!text.trim()) return;
     setSending(true);
     const content = text.trim();
+    const replyToId = replyTo?.id;
     setText("");
+    setReplyTo(null);
+    emitTypingStop();
     try {
-      await api.sendMessage(active.id, content);
+      await api.sendMessage(active.id, content, replyToId);
       await mutate(`messages-${active.id}`);
       await mutate("conversations");
     } catch { setText(content); }
@@ -899,19 +1388,14 @@ function MessagesContent() {
       const isAudio = mimeType.startsWith("audio/");
       await sendRich({
         type: isImage ? "IMAGE" : isAudio ? "AUDIO" : "FILE",
-        mediaUrl: url,
-        fileName,
-        fileSize,
-        mimeType,
-        viewOnce,
+        mediaUrl: url, fileName, fileSize, mimeType, viewOnce,
       });
     } finally { setUploadingMedia(false); }
   }
 
   async function handleCameraCapture(blob: Blob) {
     setShowCamera(false);
-    const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
-    await uploadAndSend(file);
+    await uploadAndSend(new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" }));
   }
 
   async function handleVoiceSend(blob: Blob, duration: number) {
@@ -932,12 +1416,7 @@ function MessagesContent() {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 10000 })
       );
-      await sendRich({
-        type: "LOCATION",
-        latitude:  pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        locationName: "My location",
-      });
+      await sendRich({ type: "LOCATION", latitude: pos.coords.latitude, longitude: pos.coords.longitude, locationName: "My location" });
     } catch { alert("Could not get your location. Please allow location access."); }
     finally { setSending(false); }
   }
@@ -945,26 +1424,20 @@ function MessagesContent() {
   async function handleLiveLocation() {
     if (!active || sharingLive) return;
     const stream = navigator.geolocation;
-    const LIVE_DURATION = 5 * 60 * 1000; // 5 minutes
+    const LIVE_DURATION = 5 * 60 * 1000;
 
     try {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
         stream.getCurrentPosition(res, rej, { enableHighAccuracy: true })
       );
       const liveUntil = new Date(Date.now() + LIVE_DURATION).toISOString();
-      await sendRich({
-        type: "LIVE_LOCATION",
-        latitude:  pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        locationName: "Live location",
-        liveUntil,
-      });
+      await sendRich({ type: "LIVE_LOCATION", latitude: pos.coords.latitude, longitude: pos.coords.longitude, locationName: "Live location", liveUntil });
 
       setSharingLive(true);
       liveWatchRef.current = stream.watchPosition(
         p => api.updateLiveLocation(active.id, p.coords.latitude, p.coords.longitude).catch(() => null),
         undefined,
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true },
       );
       liveTimerRef.current = setTimeout(() => stopLiveLocation(), LIVE_DURATION);
     } catch { alert("Could not get your location."); }
@@ -976,9 +1449,69 @@ function MessagesContent() {
     setSharingLive(false);
   }
 
-  useEffect(() => () => stopLiveLocation(), []);
+  useEffect(() => () => stopLiveLocation(), []); // eslint-disable-line
 
-  // ── WebRTC ────────────────────────────────────────────────────────────────
+  // ── Message actions ──────────────────────────────────────────────────────
+
+  function handleContextMenu(msg: ApiMessage, x: number, y: number) {
+    setContextMenuMsg(msg);
+    setContextMenuPos({ x, y });
+  }
+
+  function closeContextMenu() { setContextMenuMsg(null); setContextMenuPos(null); }
+
+  function handleReply() {
+    if (!contextMenuMsg) return;
+    setReplyTo(contextMenuMsg);
+    setEditingId(null);
+    setText("");
+    closeContextMenu();
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function handleEditStart() {
+    if (!contextMenuMsg) return;
+    setEditingId(contextMenuMsg.id);
+    setReplyTo(null);
+    setText(contextMenuMsg.content ?? "");
+    closeContextMenu();
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function handleCopy() {
+    if (contextMenuMsg?.content) navigator.clipboard.writeText(contextMenuMsg.content).catch(() => null);
+    closeContextMenu();
+  }
+
+  function handleForwardOpen() { setForwardMsg(contextMenuMsg); closeContextMenu(); }
+
+  async function handleForwardSend(targetConvId: string) {
+    if (!active || !forwardMsg) return;
+    await api.forwardMessage(active.id, forwardMsg.id, targetConvId);
+    await mutate(`messages-${targetConvId}`);
+    await mutate("conversations");
+  }
+
+  async function handleDelete(mode: "me" | "everyone") {
+    if (!active || !contextMenuMsg) return;
+    closeContextMenu();
+    try {
+      await api.deleteMessage(active.id, contextMenuMsg.id, mode);
+    } catch { /* ignore */ }
+  }
+
+  async function handleReact(msg: ApiMessage, emoji: string) {
+    if (!active) return;
+    closeContextMenu();
+    const myReaction = msg.reactions?.find(r => r.userId === myId && r.emoji === emoji);
+    try {
+      if (myReaction) await api.removeReaction(active.id, msg.id);
+      else await api.reactToMessage(active.id, msg.id, emoji);
+      // socket event will update the cache via message:reaction
+    } catch { /* ignore */ }
+  }
+
+  // ── WebRTC ───────────────────────────────────────────────────────────────
 
   function createPeerConnection(remoteUserId: string) {
     const pc = new RTCPeerConnection({
@@ -987,17 +1520,11 @@ function MessagesContent() {
         { urls: "stun:stun1.l.google.com:19302" },
       ],
     });
-
     pc.onicecandidate = e => {
-      if (e.candidate && socketRef.current) {
+      if (e.candidate && socketRef.current)
         socketRef.current.emit("call:ice", { to: remoteUserId, candidate: e.candidate });
-      }
     };
-
-    pc.ontrack = e => {
-      setRemoteStream(e.streams[0] ?? null);
-    };
-
+    pc.ontrack = e => setRemoteStream(e.streams[0] ?? null);
     return pc;
   }
 
@@ -1006,7 +1533,6 @@ function MessagesContent() {
     setCallState("calling");
     setCallStatus("Calling…");
 
-    // Auto-end after 30 s if recipient doesn't answer
     callTimeoutRef.current = setTimeout(() => {
       endCall(true);
       setCallStatus("No answer");
@@ -1015,20 +1541,12 @@ function MessagesContent() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setLocalStream(stream);
-
       const pc = createPeerConnection(otherUserId);
       pcRef.current = pc;
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
-
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-
-      socketRef.current?.emit("call:offer", {
-        to: otherUserId,
-        conversationId: active.id,
-        offer: pc.localDescription,
-      });
-
+      socketRef.current?.emit("call:offer", { to: otherUserId, conversationId: active.id, offer: pc.localDescription });
       await sendRich({ type: "VIDEO_CALL", callStatus: "pending" });
     } catch {
       if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
@@ -1041,25 +1559,18 @@ function MessagesContent() {
     if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     setCallState("in-call");
     setCallStatus("Connected");
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setLocalStream(stream);
-
       const pc = createPeerConnection(incomingCall.from);
       pcRef.current = pc;
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
-
       await pc.setRemoteDescription(incomingCall.offer);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-
       socketRef.current?.emit("call:answer", { to: incomingCall.from, answer: pc.localDescription });
-
       setIncomingCall(null);
-    } catch {
-      endCall(true);
-    }
+    } catch { endCall(true); }
   }
 
   function rejectCall() {
@@ -1071,9 +1582,8 @@ function MessagesContent() {
 
   function endCall(notifyOther = true) {
     if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
-    if (notifyOther && otherUserId && active) {
+    if (notifyOther && otherUserId && active)
       socketRef.current?.emit("call:end", { to: otherUserId, conversationId: active.id });
-    }
     localStream?.getTracks().forEach(t => t.stop());
     pcRef.current?.close();
     pcRef.current = null;
@@ -1083,7 +1593,7 @@ function MessagesContent() {
     setCallStatus("Idle");
   }
 
-  // ── Group messages ────────────────────────────────────────────────────────
+  // ── Grouped messages ─────────────────────────────────────────────────────
 
   const groupedMessages = useMemo(() => {
     type Item = { type: "date"; label: string } | { type: "msg"; message: ApiMessage; isFirst: boolean; isLast: boolean };
@@ -1104,7 +1614,7 @@ function MessagesContent() {
     return items;
   }, [messages]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <AuthGate>
@@ -1150,7 +1660,11 @@ function MessagesContent() {
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-semibold" style={{ color: "#94A3B8" }}>{query ? "No chats match." : "No conversations yet."}</p>
                   </div>
-                ) : visible.map(conv => <ConvItem key={conv.id} conv={conv} active={active?.id === conv.id} onClick={() => setActiveId(conv.id)} />)}
+                ) : visible.map(conv => (
+                  <ConvItem key={conv.id} conv={conv} active={active?.id === conv.id}
+                    online={onlineUsers.has(conv.user.id)}
+                    onClick={() => setActiveId(conv.id)} />
+                ))}
               </div>
             </aside>
 
@@ -1165,20 +1679,40 @@ function MessagesContent() {
                       className="mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-xl transition-colors hover:bg-slate-100 md:hidden">
                       <ArrowLeft size={16} style={{ color: "#64748B" }} />
                     </button>
-                    <div className="grid h-10 w-10 shrink-0 overflow-hidden place-items-center rounded-full text-xs font-black text-white"
+                    <div className="relative grid h-10 w-10 shrink-0 overflow-hidden place-items-center rounded-full text-xs font-black text-white"
                       style={{ background: "linear-gradient(135deg, #0F172A, #1a3a2a)" }}>
                       <AvatarCircle avatar={active.user.avatar} name={active.user.name} size={40} />
+                      {isOtherOnline && (
+                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white"
+                          style={{ background: "#22C55E" }} />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-sm" style={{ color: "#1E293B" }}>{active.user.name}</p>
-                      {active.product && (
+                      {isOtherTyping ? (
+                        <p className="text-[11px] font-medium" style={{ color: "#7FB685" }}>
+                          <span className="inline-flex gap-0.5 items-center">
+                            <span className="animate-bounce" style={{ animationDelay: "0ms" }}>·</span>
+                            <span className="animate-bounce" style={{ animationDelay: "150ms" }}>·</span>
+                            <span className="animate-bounce" style={{ animationDelay: "300ms" }}>·</span>
+                          </span>
+                          {" "}typing
+                        </p>
+                      ) : isOtherOnline ? (
+                        <p className="text-[11px]" style={{ color: "#7FB685" }}>Online</p>
+                      ) : active.product ? (
                         <p className="truncate text-xs font-semibold" style={{ color: "#C68B59" }}>📦 {active.product.title}</p>
-                      )}
-                      {sharingLive && (
+                      ) : sharingLive ? (
                         <p className="text-[10px] font-bold" style={{ color: "#EC4899" }}>📍 Sharing live location</p>
-                      )}
+                      ) : null}
                     </div>
-                    {/* Video call button */}
+                    {/* Search toggle */}
+                    <button type="button" onClick={() => { setShowSearch(v => !v); setSearchQuery(""); }}
+                      className="grid h-9 w-9 place-items-center rounded-xl transition-colors hover:bg-slate-100"
+                      style={{ color: showSearch ? "#4A7C59" : "#64748B" }}>
+                      <Search size={17} />
+                    </button>
+                    {/* Video call */}
                     <button type="button" onClick={startVideoCall} disabled={callState !== "idle"}
                       title="Video call"
                       className="grid h-9 w-9 place-items-center rounded-xl transition-colors hover:bg-slate-100 disabled:opacity-40">
@@ -1186,11 +1720,70 @@ function MessagesContent() {
                     </button>
                   </div>
 
+                  {/* Search panel */}
+                  <AnimatePresence>
+                    {showSearch && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden"
+                        style={{ borderBottom: "1px solid rgba(226,232,240,0.60)", background: "rgba(248,245,239,0.80)" }}
+                      >
+                        <div className="px-4 py-2">
+                          <div className="flex items-center gap-2 rounded-2xl px-3"
+                            style={{ background: "rgba(255,255,255,0.90)", border: "1px solid rgba(226,232,240,0.80)" }}>
+                            <Search size={13} style={{ color: "#94A3B8" }} />
+                            <input
+                              autoFocus
+                              value={searchQuery}
+                              onChange={e => setSearchQuery(e.target.value)}
+                              placeholder="Search messages…"
+                              className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none"
+                              style={{ color: "#1E293B" }}
+                            />
+                            {searchQuery && (
+                              <button type="button" onClick={() => setSearchQuery("")}><X size={12} style={{ color: "#94A3B8" }} /></button>
+                            )}
+                          </div>
+                          {searchResults.length > 0 && (
+                            <div className="mt-2 max-h-36 overflow-y-auto space-y-1">
+                              {searchResults.map(msg => (
+                                <div key={msg.id} className="rounded-xl px-3 py-2 text-xs" style={{ background: "rgba(255,255,255,0.70)", color: "#334155" }}>
+                                  <span className="font-bold" style={{ color: "#5A9460" }}>{msg.sender.name}: </span>
+                                  {msg.content}
+                                  <span className="ml-2" style={{ color: "#94A3B8" }}>{formatTime(msg.createdAt)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+                            <p className="py-2 text-center text-xs" style={{ color: "#94A3B8" }}>No results</p>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   {/* Messages */}
-                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1"
+                  <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-1"
                     style={{ background: "rgba(248,245,239,0.60)" }}>
+
+                    {/* Top sentinel for infinite scroll */}
+                    <div ref={topSentinelRef} className="h-1" />
+
+                    {/* Load more indicator */}
+                    {loadingMore && (
+                      <div className="flex justify-center py-2">
+                        <Loader2 size={18} className="animate-spin" style={{ color: "#7FB685" }} />
+                      </div>
+                    )}
+
                     {loadingMessages ? (
-                      <div className="flex h-full items-center justify-center"><Loader2 size={24} className="animate-spin" style={{ color: "#7FB685" }} /></div>
+                      <div className="flex h-full items-center justify-center">
+                        <Loader2 size={24} className="animate-spin" style={{ color: "#7FB685" }} />
+                      </div>
                     ) : groupedMessages.length === 0 ? (
                       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                         <div className="grid h-16 w-16 place-items-center rounded-full text-2xl" style={{ background: "rgba(127,182,133,0.10)" }}>💬</div>
@@ -1200,16 +1793,25 @@ function MessagesContent() {
                     ) : groupedMessages.map((item, i) =>
                         item.type === "date"
                           ? <DateSeparator key={`d-${i}`} label={item.label} />
-                          : <Bubble key={item.message.id} message={item.message} isFirst={item.isFirst} isLast={item.isLast} conversationId={active.id} myId={myId} />
+                          : <Bubble
+                              key={item.message.id}
+                              message={item.message}
+                              isFirst={item.isFirst}
+                              isLast={item.isLast}
+                              conversationId={active.id}
+                              myId={myId}
+                              onContextMenu={handleContextMenu}
+                              onReact={handleReact}
+                            />
                       )
                     }
                     <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Input */}
-                  <div className="relative px-4 py-3" style={{ borderTop: "1px solid rgba(226,232,240,0.60)", background: "rgba(255,255,255,0.96)" }}>
+                  {/* Input area */}
+                  <div className="relative px-4 py-3"
+                    style={{ borderTop: "1px solid rgba(226,232,240,0.60)", background: "rgba(255,255,255,0.96)" }}>
 
-                    {/* Attachment menu */}
                     <AttachmentMenu
                       open={showAttach} onClose={() => setShowAttach(false)}
                       onImageFile={() => imageInputRef.current?.click()}
@@ -1220,7 +1822,6 @@ function MessagesContent() {
                       onLiveLocation={handleLiveLocation}
                     />
 
-                    {/* Hidden file inputs */}
                     <input ref={imageInputRef} type="file" accept="image/*" className="sr-only"
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadAndSend(f); e.target.value = ""; }} />
                     <input ref={docInputRef} type="file"
@@ -1228,11 +1829,51 @@ function MessagesContent() {
                       className="sr-only"
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadAndSend(f); e.target.value = ""; }} />
 
+                    {/* Reply preview */}
+                    <AnimatePresence>
+                      {replyTo && !editingId && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mb-2 flex items-center gap-2 overflow-hidden rounded-xl px-3 py-2"
+                          style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.20)" }}>
+                          <Reply size={13} style={{ color: "#7FB685" }} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-black" style={{ color: "#5A9460" }}>{replyTo.sender.name}</p>
+                            <p className="truncate text-[11px]" style={{ color: "#64748B" }}>
+                              {replyTo.type === "IMAGE" ? "📷 Photo" : replyTo.type === "FILE" ? "📄 File" : replyTo.content ?? ""}
+                            </p>
+                          </div>
+                          <button type="button" onClick={() => setReplyTo(null)}>
+                            <X size={13} style={{ color: "#94A3B8" }} />
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Edit preview */}
+                    <AnimatePresence>
+                      {editingId && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mb-2 flex items-center gap-2 overflow-hidden rounded-xl px-3 py-2"
+                          style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.20)" }}>
+                          <Edit2 size={13} style={{ color: "#6366F1" }} />
+                          <p className="flex-1 text-[11px] font-semibold" style={{ color: "#6366F1" }}>Editing message</p>
+                          <button type="button" onClick={() => { setEditingId(null); setText(""); }}>
+                            <X size={13} style={{ color: "#94A3B8" }} />
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
                     {showVoice ? (
                       <VoiceRecorder onSend={handleVoiceSend} onCancel={() => setShowVoice(false)} />
                     ) : (
                       <div className="flex items-center gap-2">
-                        {/* Attach button */}
                         <motion.button type="button" whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={spring}
                           onClick={() => setShowAttach(v => !v)} disabled={uploadingMedia}
                           className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-40"
@@ -1240,20 +1881,19 @@ function MessagesContent() {
                           {uploadingMedia ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />}
                         </motion.button>
 
-                        {/* Text input */}
-                        <input ref={inputRef} value={text} onChange={e => setText(e.target.value)}
+                        <input ref={inputRef} value={text} onChange={e => { setText(e.target.value); emitTypingStart(); }}
+                          onBlur={emitTypingStop}
                           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}
-                          placeholder="Type a message…"
+                          placeholder={editingId ? "Edit message…" : "Type a message…"}
                           className="min-w-0 flex-1 rounded-full px-4 py-3 text-sm outline-none"
-                          style={{ background: "rgba(248,245,239,0.90)", border: "1px solid rgba(226,232,240,0.80)", color: "#1E293B" }}
+                          style={{ background: "rgba(248,245,239,0.90)", border: `1px solid ${editingId ? "rgba(99,102,241,0.30)" : "rgba(226,232,240,0.80)"}`, color: "#1E293B" }}
                           maxLength={2000} disabled={sending || uploadingMedia} />
 
-                        {/* Send / mic */}
                         {text.trim() ? (
                           <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }} transition={spring}
                             onClick={handleSend} disabled={sending}
                             className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white disabled:opacity-40"
-                            style={{ background: "#0F172A" }}>
+                            style={{ background: editingId ? "#6366F1" : "#0F172A" }}>
                             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
                           </motion.button>
                         ) : (
@@ -1291,6 +1931,33 @@ function MessagesContent() {
           onStarted={id => { setShowNewChat(false); setActiveId(id); void mutate("conversations"); }} />
       )}
       {showCamera && <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />}
+
+      {forwardMsg && (
+        <ForwardModal
+          conversations={convList.filter(c => c.id !== activeId)}
+          onForward={handleForwardSend}
+          onClose={() => setForwardMsg(null)}
+        />
+      )}
+
+      {/* Context menu */}
+      <AnimatePresence>
+        {contextMenuMsg && contextMenuPos && (
+          <ContextMenu
+            msg={contextMenuMsg}
+            pos={contextMenuPos}
+            mine={contextMenuMsg.mine}
+            onClose={closeContextMenu}
+            onReply={handleReply}
+            onEdit={handleEditStart}
+            onCopy={handleCopy}
+            onForward={handleForwardOpen}
+            onReact={emoji => handleReact(contextMenuMsg, emoji)}
+            onDeleteMe={() => handleDelete("me")}
+            onDeleteAll={() => handleDelete("everyone")}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Incoming call */}
       <AnimatePresence>
