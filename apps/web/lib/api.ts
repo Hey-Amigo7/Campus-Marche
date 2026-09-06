@@ -626,6 +626,9 @@ export const api = {
       );
     },
 
+    deleteUser: (userId: string) =>
+      request<{ message: string }>(`/admin/users/${userId}`, { message: "" }, { method: "DELETE", strict: true }),
+
     suspendUser: (userId: string) =>
       request<{ id: string }>(`/admin/users/${userId}/suspend`, {} as never, { method: "PATCH", strict: true }),
 
@@ -760,5 +763,25 @@ export const api = {
         { fixed: { outForDelivery: 0, delivered: 0 }, message: "" },
         { method: "POST", strict: true },
       ),
+
+    downloadExport: async (format: "csv" | "xlsx") => {
+      const { getAuthToken } = await import("@/lib/auth");
+      const token = getAuthToken();
+      const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
+      const res = await fetch(`${API_URL}/admin/export/${format}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `campus-marche-export-${date}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
   },
 };

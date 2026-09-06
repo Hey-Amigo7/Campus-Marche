@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/providers/theme-provider";
 import { LenisProvider } from "@/providers/lenis-provider";
 import { GoogleProvider } from "@/providers/google-provider";
 import { PwaRegister } from "@/components/pwa-register";
+import { PwaInstall } from "@/components/pwa-install";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -72,6 +73,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full font-sans">
         <PwaRegister />
+        <PwaInstall />
         <GoogleProvider>
           <LenisProvider>
             <ThemeProvider>

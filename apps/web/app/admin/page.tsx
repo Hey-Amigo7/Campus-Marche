@@ -211,6 +211,19 @@ function StatCard({
 
 function OverviewTab() {
   const { data: stats, isLoading } = useSWR<AdminStats>("admin-stats", api.admin.getStats);
+  const [exporting, setExporting] = useState<"csv" | "xlsx" | null>(null);
+
+  async function handleExport(format: "csv" | "xlsx") {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      await api.admin.downloadExport(format);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   if (isLoading || !stats) {
     return (
@@ -268,6 +281,30 @@ function OverviewTab() {
           />
         </div>
       </div>
+
+      <div className="rounded-2xl p-6" style={CARD}>
+        <p className="text-xs font-black uppercase tracking-widest text-slate-400">Data export</p>
+        <p className="mt-1 text-sm text-slate-500">Export platform data for offline analysis. Passwords and secrets are never included.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            onClick={() => handleExport("csv")}
+            disabled={!!exporting}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {exporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownCircle className="h-4 w-4 text-slate-500" />}
+            Export CSV
+          </button>
+          <button
+            onClick={() => handleExport("xlsx")}
+            disabled={!!exporting}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {exporting === "xlsx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownCircle className="h-4 w-4 text-emerald-600" />}
+            Export Excel (.xlsx)
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-slate-400">Excel workbook includes Users, Products, and Orders sheets.</p>
+      </div>
     </div>
   );
 }
@@ -284,6 +321,9 @@ function UsersTab() {
   const [warnLoading, setWarnLoading] = useState(false);
   const [warnError, setWarnError] = useState<string | null>(null);
   const [warnSent, setWarnSent] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data, isLoading, mutate } = useSWR(
     ["admin-users", skip, debouncedQ],
@@ -316,6 +356,21 @@ function UsersTab() {
   async function toggleEventsPermission(userId: string, current: boolean) {
     await api.admin.grantEventsPermission(userId, !current);
     await mutate();
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await api.admin.deleteUser(deleteTarget.id);
+      setDeleteTarget(null);
+      await mutate();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Deletion failed.");
+    } finally {
+      setDeleteLoading(false);
+    }
   }
 
   async function sendWarn() {
@@ -403,6 +458,56 @@ function UsersTab() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(15,23,42,0.55)", backdropFilter: "blur(8px)" }}
+        >
+          <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 p-5">
+              <div className="flex items-center gap-3">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-red-50">
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-800">Delete account</p>
+                  <p className="text-xs text-slate-400">{deleteTarget.name}</p>
+                </div>
+              </div>
+              <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} className="grid h-8 w-8 place-items-center rounded-full hover:bg-slate-100">
+                <X className="h-4 w-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-slate-600">
+                This will <strong>permanently anonymize</strong> the account. Personal data will be removed.
+                Historical orders and payment records will be preserved for audit purposes.
+                This action cannot be undone.
+              </p>
+              {deleteError && (
+                <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{deleteError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
+                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleteLoading}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50 hover:bg-red-700"
+                >
+                  {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Delete account
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -504,6 +609,15 @@ function UsersTab() {
                         >
                           <ShieldOff className="h-4 w-4" style={{ color: user.verified ? "#EF4444" : "#CBD5E1" }} />
                         </button>
+                        {user.role !== "ADMIN" && (
+                          <button
+                            onClick={() => { setDeleteTarget({ id: user.id, name: user.name }); setDeleteError(null); }}
+                            title="Delete account"
+                            className="grid h-8 w-8 place-items-center rounded-lg bg-red-50 transition-all hover:scale-110"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -121,24 +121,29 @@ export class AuthService {
     const raw = identifier.trim();
     const lower = raw.toLowerCase();
 
-    let candidates: Array<(typeof USER_SELECT extends object ? { [K in keyof typeof USER_SELECT]: unknown } : never) & { id: string; email: string; password: string | null }> = [];
+    type Candidate = (typeof USER_SELECT extends object ? { [K in keyof typeof USER_SELECT]: unknown } : never) & {
+      id: string; email: string; password: string | null; deletedAt: Date | null;
+    };
+    let candidates: Candidate[] = [];
+
+    const extraSelect = { password: true, deletedAt: true } as const;
 
     if (lower.includes('@') && !lower.startsWith('@')) {
       // Looks like an email address
       const user = await this.prisma.user.findUnique({
         where: { email: lower },
-        select: { ...USER_SELECT, password: true },
+        select: { ...USER_SELECT, ...extraSelect },
       });
-      if (user) candidates = [user as typeof candidates[0]];
+      if (user) candidates = [user as Candidate];
     } else if (/^(\+?233|0)\d{8,9}$/.test(raw.replace(/\s/g, ''))) {
       // Looks like a Ghana phone number
       try {
         const normalizedPhone = normalizeGhanaPhone(raw);
         const user = await this.prisma.user.findFirst({
           where: { phone: normalizedPhone },
-          select: { ...USER_SELECT, password: true },
+          select: { ...USER_SELECT, ...extraSelect },
         });
-        if (user) candidates = [user as typeof candidates[0]];
+        if (user) candidates = [user as Candidate];
       } catch {
         // invalid phone format — fall through to dummy hash check
       }
@@ -147,14 +152,15 @@ export class AuthService {
       const handle = lower.startsWith('@') ? lower.slice(1) : lower;
       const users = await this.prisma.user.findMany({
         where: { name: { startsWith: handle, mode: 'insensitive' } },
-        select: { ...USER_SELECT, password: true },
+        select: { ...USER_SELECT, ...extraSelect },
         take: 10,
       });
-      candidates = users as typeof candidates;
+      candidates = users as Candidate[];
     }
 
-    // Find the candidate whose password matches
+    // Find the candidate whose password matches; skip deleted accounts
     for (const candidate of candidates) {
+      if (candidate.deletedAt !== null) continue;
       const match = await bcrypt.compare(password, candidate.password ?? DUMMY_PASSWORD_HASH);
       if (match) {
         const token = await this.signToken({ id: candidate.id, email: candidate.email, verified: Boolean(candidate.verified) });
@@ -163,8 +169,8 @@ export class AuthService {
       }
     }
 
-    // Timing-safe dummy compare when no candidates found
-    if (candidates.length === 0) {
+    // Timing-safe dummy compare when no active candidates found
+    if (candidates.filter(c => c.deletedAt === null).length === 0) {
       await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     }
 
@@ -186,14 +192,16 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: USER_SELECT,
+      select: { ...USER_SELECT, deletedAt: true },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('User not found');
+    if (!user || user.deletedAt !== null) {
+      throw new UnauthorizedException('Account unavailable');
     }
 
-    return user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { deletedAt: _deletedAt, ...safeUser } = user;
+    return safeUser as AuthenticatedUser;
   }
 
   async getProfileData(token: string) {

@@ -96,7 +96,7 @@ export class UserController {
     const ghostPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
 
     await this.prisma.$transaction([
-      // Anonymize personal data
+      // Anonymize personal data and mark as deleted
       this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -108,6 +108,7 @@ export class UserController {
           phoneVerified: false,
           verified: false,
           premium: false,
+          deletedAt: new Date(),
         },
       }),
       // Deactivate all listings
