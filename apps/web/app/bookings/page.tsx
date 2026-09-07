@@ -161,8 +161,8 @@ function BookingCard({ booking, isSeller, onAction }: {
           </Link>
         )}
 
-        {/* Cancel (buyer only, for REQUESTED/CONFIRMED) */}
-        {!isSeller && ["REQUESTED", "CONFIRMED"].includes(booking.status) && (
+        {/* Cancel (buyer only, for REQUESTED/ACCEPTED/CONFIRMED) */}
+        {!isSeller && ["REQUESTED", "ACCEPTED", "CONFIRMED"].includes(booking.status) && (
           <>
             {!showCancelForm ? (
               <button type="button" onClick={() => setShowCancelForm(true)}

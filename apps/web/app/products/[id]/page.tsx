@@ -401,6 +401,7 @@ function ServiceBookingPanel({ product }: { product: import("@/types").Product }
   const [success, setSuccess]           = useState(false);
 
   useEffect(() => {
+    if (!hasAuthToken()) return;
     setLoadingSlots(true);
     setSelectedSlot(null);
     api.getAvailableSlots(product.id, selectedDate)

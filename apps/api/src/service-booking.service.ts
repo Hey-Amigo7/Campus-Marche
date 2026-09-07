@@ -175,6 +175,17 @@ export class ServiceBookingService {
   }
 
   async getForUser(userId: string) {
+    // Catch-all: promote any ACCEPTED bookings whose linked order is already paid
+    // (handles edge cases where the webhook fired before this fix was deployed)
+    await this.prisma.serviceBooking.updateMany({
+      where: {
+        OR:     [{ buyerId: userId }, { sellerId: userId }],
+        status: 'ACCEPTED',
+        order:  { escrowStatus: EscrowStatus.ESCROW_HELD },
+      },
+      data: { status: 'CONFIRMED' },
+    });
+
     return this.prisma.serviceBooking.findMany({
       where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
       include: {
