@@ -716,6 +716,26 @@ export class PaymentService {
       paymentStatus: 'Paid',
     });
 
+    // Auto-confirm the linked service booking (if this order was created for a service)
+    const linkedBooking = await this.prisma.serviceBooking.findUnique({
+      where:  { orderId: order.id },
+      select: { id: true, buyerId: true, sellerId: true, status: true },
+    });
+    if (linkedBooking && linkedBooking.status === 'ACCEPTED') {
+      await this.prisma.serviceBooking.update({
+        where: { id: linkedBooking.id },
+        data:  { status: 'CONFIRMED' },
+      });
+      this.notificationService?.notify(
+        linkedBooking.sellerId, 'booking', 'Booking confirmed',
+        'Payment received — your service booking is now confirmed.',
+      ).catch(() => undefined);
+      this.notificationService?.notify(
+        linkedBooking.buyerId, 'booking', 'Booking confirmed',
+        'Your payment was received. Your booking is confirmed!',
+      ).catch(() => undefined);
+    }
+
     return this.prisma.paymentTransaction.findUnique({ where: { reference } });
   }
 }
