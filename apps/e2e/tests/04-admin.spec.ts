@@ -1,11 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'admin@campus-marche.com';
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/admin/login');
-  await page.getByPlaceholder('admin@campus-marche.com').fill(ADMIN_EMAIL);
+  await page.getByPlaceholder('Enter your email').fill(ADMIN_EMAIL);
   await page.getByPlaceholder('••••••••').fill(ADMIN_PASSWORD);
   await page.getByRole('button', { name: /sign in to admin/i }).click();
   await expect(page).toHaveURL(/\/admin($|\?)/, { timeout: 15_000 });

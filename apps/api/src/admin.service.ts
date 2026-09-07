@@ -27,8 +27,8 @@ export class AdminService {
   }
 
   async adminLogin(email: string, password: string) {
-    const adminEmail = this.config.get<string>('ADMIN_EMAIL', 'admin@campus-marche.com');
-    const adminPassword = this.config.get<string>('ADMIN_PASSWORD', 'Admin@123!');
+    const adminEmail = this.config.getOrThrow<string>('ADMIN_EMAIL');
+    const adminPassword = this.config.getOrThrow<string>('ADMIN_PASSWORD');
 
     if (email.trim().toLowerCase() !== adminEmail.toLowerCase() || password !== adminPassword) {
       throw new UnauthorizedException('Invalid admin credentials');

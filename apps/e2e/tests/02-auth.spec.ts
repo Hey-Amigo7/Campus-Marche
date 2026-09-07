@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'admin@campus-marche.com';
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 const USER_EMAIL = process.env.E2E_USER_EMAIL ?? '';
 const USER_PASSWORD = process.env.E2E_USER_PASSWORD ?? '';
@@ -19,7 +19,7 @@ test.describe('Authentication', () => {
 
   test('admin login with wrong credentials shows error', async ({ page }) => {
     await page.goto('/admin/login');
-    await page.getByPlaceholder('admin@campus-marche.com').fill('wrong@admin.com');
+    await page.getByPlaceholder('Enter your email').fill('wrong@admin.com');
     await page.getByPlaceholder('••••••••').fill('wrongpassword');
     await page.getByRole('button', { name: /sign in to admin/i }).click();
     await expect(
@@ -31,7 +31,7 @@ test.describe('Authentication', () => {
     test.skip(!ADMIN_PASSWORD, 'E2E_ADMIN_PASSWORD not set');
 
     await page.goto('/admin/login');
-    await page.getByPlaceholder('admin@campus-marche.com').fill(ADMIN_EMAIL);
+    await page.getByPlaceholder('Enter your email').fill(ADMIN_EMAIL);
     await page.getByPlaceholder('••••••••').fill(ADMIN_PASSWORD);
     await page.getByRole('button', { name: /sign in to admin/i }).click();
 
