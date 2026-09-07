@@ -117,6 +117,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [deliveryContact, setDeliveryContact] = useState("");
   const [deliveryContactName, setDeliveryContactName] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [removingDelivery, setRemovingDelivery] = useState(false);
 
   // Live delivery tracking
   const [liveCoords, setLiveCoords] = useState<DeliveryCoords | null>(
@@ -284,15 +285,16 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const hasRegisteredDelivery = !!order.deliveryPersonId;
   const pickupPending = hasRegisteredDelivery && !!order.pickupCode && !order.pickupVerifiedAt;
   const deliveryPending = hasRegisteredDelivery && !!order.deliveryCode && !order.deliveryVerifiedAt && isPaid;
-  // Buyer sees old confirm button only if no registered delivery person is assigned
-  const showOldConfirmButton = role === "buyer" && !hasRegisteredDelivery && ["ESCROW_HELD", "PROCESSING", "SHIPPED", "DELIVERED"].includes(escrow);
+  // Buyer sees confirm button only once delivery has started (order is "Out for delivery")
+  // Not shown while funds are simply held in escrow waiting for seller to dispatch
+  const showOldConfirmButton = role === "buyer" && !hasRegisteredDelivery && isOutForDelivery;
   const isDisputed = escrow === "DISPUTED";
 
-  // Seller can update delivery stage; buyer confirms delivery via releaseEscrow
+  // 'Delivered' is only reachable via delivery code verification — sellers cannot self-mark as delivered
   const SELLER_TRANSITIONS: Record<string, string[]> = {
     "Awaiting payment": ["Cancelled"],
     "In progress":      ["Out for delivery", "Cancelled"],
-    "Out for delivery": ["Delivered"],
+    "Out for delivery": [],
   };
   const allowedTransitions =
     role === "seller" ? (SELLER_TRANSITIONS[order.status] ?? []) : [];
@@ -324,6 +326,19 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       toast(err instanceof Error ? err.message : "Could not assign delivery person.");
     } finally {
       setAssigning(false);
+    }
+  }
+
+  async function handleRemoveDelivery() {
+    setRemovingDelivery(true);
+    try {
+      await api.removeDeliveryPerson(id);
+      await mutate();
+      toast("Delivery person removed.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not remove delivery person.");
+    } finally {
+      setRemovingDelivery(false);
     }
   }
 
@@ -621,38 +636,64 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                       <p className="text-sm text-slate-500">Waiting for the buyer to set their delivery address.</p>
                     )}
 
-                    <form onSubmit={handleAssignDelivery} className="space-y-3">
-                      <div>
-                        <label className="text-xs font-bold text-slate-700">Assign delivery person</label>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          Enter their email or phone number. They don&apos;t need a Campus Marche account.
-                        </p>
-                        <input
-                          type="text"
-                          value={deliveryContact}
-                          onChange={(e) => setDeliveryContact(e.target.value)}
-                          placeholder="0244000000 or name@email.com"
-                          required
-                          className="input-shell mt-1 text-sm"
-                        />
+                    {/* Show current delivery person assignment with option to remove (before pickup) */}
+                    {(order.deliveryPersonId || (order as { externalDeliveryContact?: string }).externalDeliveryContact) && !order.pickupVerifiedAt ? (
+                      <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Truck className="h-4 w-4 shrink-0" style={{ color: "#7FB685" }} />
+                          <span className="font-semibold text-slate-700">
+                            {order.deliveryPerson?.name
+                              ?? (order as { externalDeliveryName?: string }).externalDeliveryName
+                              ?? (order as { externalDeliveryContact?: string }).externalDeliveryContact
+                              ?? "Delivery person assigned"}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveDelivery}
+                          disabled={removingDelivery}
+                          className="text-xs font-bold text-red-500 hover:text-red-700 disabled:opacity-50"
+                        >
+                          {removingDelivery ? <Loader2 className="h-3 w-3 animate-spin" /> : "Remove"}
+                        </button>
                       </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-700">
-                          Their name <span className="font-normal text-slate-400">(optional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={deliveryContactName}
-                          onChange={(e) => setDeliveryContactName(e.target.value)}
-                          placeholder="e.g. Kofi Mensah"
-                          className="input-shell mt-1 text-sm"
-                        />
-                      </div>
-                      <button type="submit" disabled={assigning} className="btn-primary w-full justify-center text-sm disabled:opacity-50">
-                        {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-                        Assign &amp; start delivery
-                      </button>
-                    </form>
+                    ) : null}
+
+                    {/* Only show assignment form when no delivery person is assigned yet */}
+                    {!order.deliveryPersonId && !(order as { externalDeliveryContact?: string }).externalDeliveryContact ? (
+                      <form onSubmit={handleAssignDelivery} className="space-y-3">
+                        <div>
+                          <label className="text-xs font-bold text-slate-700">Assign delivery person</label>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            Enter their email or phone number. They don&apos;t need a Campus Marche account.
+                          </p>
+                          <input
+                            type="text"
+                            value={deliveryContact}
+                            onChange={(e) => setDeliveryContact(e.target.value)}
+                            placeholder="0244000000 or name@email.com"
+                            required
+                            className="input-shell mt-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-700">
+                            Their name <span className="font-normal text-slate-400">(optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={deliveryContactName}
+                            onChange={(e) => setDeliveryContactName(e.target.value)}
+                            placeholder="e.g. Kofi Mensah"
+                            className="input-shell mt-1 text-sm"
+                          />
+                        </div>
+                        <button type="submit" disabled={assigning} className="btn-primary w-full justify-center text-sm disabled:opacity-50">
+                          {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                          Assign &amp; start delivery
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 ) : role === "delivery" ? (
                   <div className="mt-3 rounded-xl bg-slate-50 p-4 text-sm">

@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
                 autoComplete="username"
                 className="w-full rounded-2xl px-4 py-3.5 text-sm font-semibold outline-none transition-all"
                 style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff" }}
-                placeholder="admin@campus-marche.com"
+                placeholder="Enter your email"
               />
             </div>
 

@@ -87,6 +87,7 @@ export type Product = {
   imageUrl?: string;
   imageUrls?: string[];
   views: number;
+  availability?: ServiceAvailability | null;
 };
 
 export type Category = {
@@ -194,6 +195,7 @@ export type Order = {
   createdAt?: string;
   buyerId?: string;
   sellerId?: string;
+  deliveryMethod?: "SELLER_DELIVERY" | "ASSIGNED_PERSON" | "BUYER_PICKUP" | string;
   deliveryAddress?: string | null;
   deliveryPhone?: string | null;
   deliveryPersonId?: string | null;
@@ -207,6 +209,49 @@ export type Order = {
   deliveryVerifiedAt?: string | null;
   disputeReason?: string | null;
   disputedAt?: string | null;
+};
+
+export type ServiceAvailability = {
+  id: string;
+  productId: string;
+  durationMin: number;
+  priceType: "session" | "hour";
+  availableDays: string;
+  startHour: number;
+  endHour: number;
+  maxBookingsPerDay: number;
+  advanceNoticeHours: number;
+};
+
+export type ServiceBookingStatus =
+  | "REQUESTED"
+  | "ACCEPTED"
+  | "DECLINED"
+  | "CONFIRMED"
+  | "IN_SERVICE"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export type ServiceBooking = {
+  id: string;
+  status: ServiceBookingStatus | string;
+  productId: string;
+  product: { id: string; title: string; imageUrl?: string | null; category?: string | null };
+  buyerId: string;
+  buyer: { id: string; name: string; avatar: string };
+  sellerId: string;
+  seller: { id: string; name: string; avatar: string };
+  scheduledAt: string;
+  durationMin: number;
+  price: number;
+  totalAmount: number;
+  platformFee: number;
+  sellerAmount: number;
+  notes?: string | null;
+  cancelReason?: string | null;
+  orderId?: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Wallet = {

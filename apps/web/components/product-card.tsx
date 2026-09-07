@@ -218,7 +218,7 @@ export function ProductCard({ product, compact = false }: { product: Product; co
           <span className="text-base font-black" style={{ color: "var(--on-surface)" }}>
             {formatCurrency(Math.round((product.price * 1.025) * 100) / 100)}
           </span>
-          {conditionColor && product.condition && (
+          {!isService && conditionColor && product.condition && (
             <span
               className="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
               style={{ background: `${conditionColor}18`, color: conditionColor }}
@@ -226,9 +226,14 @@ export function ProductCard({ product, compact = false }: { product: Product; co
               {product.condition}
             </span>
           )}
-          {product.negotiable && (
+          {!isService && product.negotiable && (
             <span className="ml-auto text-[10px] font-medium" style={{ color: "var(--green)" }}>
               Negotiable
+            </span>
+          )}
+          {isService && (
+            <span className="ml-auto text-[10px] font-medium" style={{ color: "var(--muted)" }}>
+              / session
             </span>
           )}
         </div>
@@ -277,11 +282,15 @@ export function ProductCard({ product, compact = false }: { product: Product; co
             <span>{formatRelativeDate(product.postedAt)}</span>
           </div>
 
-          {product.seller.premium && (
+          {isService ? (
+            <span className="text-[10px] font-black" style={{ color: "var(--caramel)" }}>
+              Book →
+            </span>
+          ) : product.seller.premium ? (
             <span className="text-[10px] font-semibold" style={{ color: "var(--caramel)" }}>
               ★ Premium
             </span>
-          )}
+          ) : null}
         </div>
       </div>
     </motion.article>

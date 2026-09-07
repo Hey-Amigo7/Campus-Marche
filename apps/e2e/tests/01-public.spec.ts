@@ -63,7 +63,7 @@ test.describe('Public pages', () => {
   test('admin login page renders', async ({ page }) => {
     await page.goto('/admin/login');
     await expect(page.getByText(/admin portal/i)).toBeVisible();
-    await expect(page.getByPlaceholder('admin@campus-marche.com')).toBeVisible();
+    await expect(page.getByPlaceholder('Enter your email')).toBeVisible();
     await expect(page.getByRole('button', { name: /sign in to admin/i })).toBeVisible();
   });
 });

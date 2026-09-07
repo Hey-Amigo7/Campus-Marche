@@ -268,6 +268,12 @@ export const api = {
       strict: true,
     }),
 
+  removeDeliveryPerson: (orderId: string) =>
+    request<Order>(`/orders/${orderId}/delivery-person`, {} as Order, {
+      method: "DELETE",
+      strict: true,
+    }),
+
   updateDeliveryLocation: (orderId: string, latitude: number, longitude: number, heading?: number, speed?: number) =>
     request<unknown>(`/orders/${orderId}/location`, null, {
       method: "PUT",
@@ -477,6 +483,69 @@ export const api = {
       `/orders/${orderId}/dispute`,
       {} as never,
       { method: "POST", body: JSON.stringify({ reason }), strict: true },
+    ),
+
+  // ── Service bookings ───────────────────────────────────────────────────────
+
+  getBookings: () =>
+    request<import("@/types").ServiceBooking[]>("/service-bookings", []),
+
+  getBooking: (id: string) =>
+    request<import("@/types").ServiceBooking | null>(`/service-bookings/${id}`, null),
+
+  createBooking: (data: { productId: string; scheduledAt: string; notes?: string }) =>
+    request<import("@/types").ServiceBooking>(
+      "/service-bookings",
+      {} as never,
+      { method: "POST", body: JSON.stringify(data), strict: true },
+    ),
+
+  getAvailableSlots: (productId: string, date: string) =>
+    request<{ slots: { time: string; available: boolean }[]; durationMin?: number; priceType?: string; message?: string }>(
+      `/service-bookings/slots/${productId}?date=${encodeURIComponent(date)}`,
+      { slots: [] },
+    ),
+
+  acceptBooking: (id: string) =>
+    request<{ booking: import("@/types").ServiceBooking; orderId: string }>(
+      `/service-bookings/${id}/accept`,
+      {} as never,
+      { method: "PATCH", strict: true },
+    ),
+
+  declineBooking: (id: string, reason?: string) =>
+    request<import("@/types").ServiceBooking>(
+      `/service-bookings/${id}/decline`,
+      {} as never,
+      { method: "PATCH", body: JSON.stringify({ reason }), strict: true },
+    ),
+
+  cancelBooking: (id: string, reason?: string) =>
+    request<import("@/types").ServiceBooking>(
+      `/service-bookings/${id}/cancel`,
+      {} as never,
+      { method: "PATCH", body: JSON.stringify({ reason }), strict: true },
+    ),
+
+  startService: (id: string) =>
+    request<import("@/types").ServiceBooking>(
+      `/service-bookings/${id}/start`,
+      {} as never,
+      { method: "PATCH", strict: true },
+    ),
+
+  completeService: (id: string) =>
+    request<{ message: string }>(
+      `/service-bookings/${id}/complete`,
+      { message: "" },
+      { method: "PATCH", strict: true },
+    ),
+
+  saveServiceAvailability: (productId: string, data: Partial<import("@/types").ServiceAvailability>) =>
+    request<import("@/types").ServiceAvailability>(
+      `/service-bookings/availability/${productId}`,
+      {} as never,
+      { method: "POST", body: JSON.stringify(data), strict: true },
     ),
 
   updateLiveLocation: (conversationId: string, latitude: number, longitude: number) =>

@@ -371,7 +371,7 @@ export class AuthService {
       return { message: 'Admin account already exists. Use the admin login to sign in.' };
     }
 
-    const adminEmail = this.config.get<string>('ADMIN_EMAIL', 'admin@campus-marche.com');
+    const adminEmail = this.config.getOrThrow<string>('ADMIN_EMAIL');
     const adminPassword = this.config.getOrThrow<string>('ADMIN_PASSWORD');
     const hash = await bcrypt.hash(adminPassword, 12);
 
