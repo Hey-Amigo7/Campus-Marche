@@ -194,6 +194,7 @@ export type Order = {
   createdAt?: string;
   buyerId?: string;
   sellerId?: string;
+  deliveryMethod?: "SELLER_DELIVERY" | "ASSIGNED_PERSON" | "BUYER_PICKUP" | string;
   deliveryAddress?: string | null;
   deliveryPhone?: string | null;
   deliveryPersonId?: string | null;

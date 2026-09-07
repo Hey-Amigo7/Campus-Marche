@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from './auth/auth-user.decorator';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -35,7 +35,7 @@ export class OrderController {
   @Post()
   @ApiOperation({ summary: 'Create a new order for a product' })
   create(@Body() body: CreateOrderDto, @AuthUser() user: { id: string }) {
-    return this.orderService.create({ productId: body.productId, buyerId: user.id });
+    return this.orderService.create({ productId: body.productId, buyerId: user.id, deliveryMethod: body.deliveryMethod });
   }
 
   @Put(':id/status')
@@ -56,6 +56,12 @@ export class OrderController {
     @AuthUser() user: { id: string },
   ) {
     return this.orderService.setDeliveryDetails(id, user.id, body.deliveryAddress, body.deliveryPhone);
+  }
+
+  @Delete(':id/delivery-person')
+  @ApiOperation({ summary: 'Remove the assigned delivery person (seller only, before pickup)' })
+  removeDeliveryPerson(@Param('id') id: string, @AuthUser() user: { id: string }) {
+    return this.orderService.removeDeliveryPerson(id, user.id);
   }
 
   @Post(':id/assign-delivery')

@@ -268,6 +268,12 @@ export const api = {
       strict: true,
     }),
 
+  removeDeliveryPerson: (orderId: string) =>
+    request<Order>(`/orders/${orderId}/delivery-person`, {} as Order, {
+      method: "DELETE",
+      strict: true,
+    }),
+
   updateDeliveryLocation: (orderId: string, latitude: number, longitude: number, heading?: number, speed?: number) =>
     request<unknown>(`/orders/${orderId}/location`, null, {
       method: "PUT",

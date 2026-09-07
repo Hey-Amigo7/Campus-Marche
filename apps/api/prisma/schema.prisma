@@ -182,6 +182,7 @@ model Order {
   // Paystack reference for the primary payment
   paymentReference    String?
   // Delivery
+  deliveryMethod           String    @default("SELLER_DELIVERY")
   deliveryAddress          String?
   deliveryPhone            String?
   deliveryPersonId         String?

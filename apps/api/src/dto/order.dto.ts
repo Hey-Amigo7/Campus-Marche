@@ -15,10 +15,17 @@ const ORDER_STATUSES = [
   'Payment failed',
 ] as const;
 
+const DELIVERY_METHODS = ['SELLER_DELIVERY', 'ASSIGNED_PERSON', 'BUYER_PICKUP'] as const;
+
 export class CreateOrderDto {
   @ApiProperty({ description: 'ID of the product to purchase' })
   @IsString()
   productId!: string;
+
+  @ApiPropertyOptional({ enum: DELIVERY_METHODS, default: 'SELLER_DELIVERY' })
+  @IsOptional()
+  @IsIn(DELIVERY_METHODS)
+  deliveryMethod?: string;
 }
 
 export class UpdateOrderStatusDto {

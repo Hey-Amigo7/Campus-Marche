@@ -17,10 +17,11 @@ const ALLOWED_BUYER_TRANSITIONS: Record<string, string[]> = {
 };
 
 // Seller can mark shipping stages; payment/escrow transitions are handled by PaymentService
+// 'Delivered' is intentionally removed — only reachable via verifyDeliveryCode() to prevent false delivery claims
 const ALLOWED_SELLER_TRANSITIONS: Record<string, string[]> = {
   'Awaiting payment': ['Cancelled'],
   'In progress':      ['Out for delivery', 'Cancelled'],
-  'Out for delivery': ['Delivered'],
+  'Out for delivery': [],
   Delivered:          [],
   Completed:          [],
   Cancelled:          [],
@@ -116,7 +117,7 @@ export class OrderService {
     };
   }
 
-  async create(data: { buyerId: string; productId: string }) {
+  async create(data: { buyerId: string; productId: string; deliveryMethod?: string }) {
     const product = await this.prisma.product.findUnique({
       where: { id: data.productId, active: true },
       select: { id: true, price: true, sellerId: true },
@@ -132,15 +133,16 @@ export class OrderService {
 
     const order = await this.prisma.order.create({
       data: {
-        buyerId:      data.buyerId,
-        productId:    data.productId,
-        sellerId:     product.sellerId,
-        price:        product.price,
-        totalAmount:  commission.totalAmount,
-        platformFee:  commission.platformFee,
-        sellerAmount: commission.sellerAmount,
-        escrowStatus: EscrowStatus.PENDING_PAYMENT,
-        status:       'Awaiting payment',
+        buyerId:        data.buyerId,
+        productId:      data.productId,
+        sellerId:       product.sellerId,
+        price:          product.price,
+        totalAmount:    commission.totalAmount,
+        platformFee:    commission.platformFee,
+        sellerAmount:   commission.sellerAmount,
+        escrowStatus:   EscrowStatus.PENDING_PAYMENT,
+        status:         'Awaiting payment',
+        deliveryMethod: data.deliveryMethod ?? 'SELLER_DELIVERY',
       },
       include: { product: { select: { title: true, sellerId: true } } },
     });
@@ -204,7 +206,12 @@ export class OrderService {
 
     if (!order) throw new NotFoundException('Order not found');
     if (order.product.sellerId !== requesterId) throw new ForbiddenException('Only the seller can assign a delivery person');
-    if (!['In progress'].includes(order.status)) throw new BadRequestException('Can only assign delivery for orders in progress');
+    if (!['In progress'].includes(order.status)) {
+      if (order.pickupVerifiedAt) {
+        throw new BadRequestException('Delivery has already started and cannot be changed. Contact support if there is an issue.');
+      }
+      throw new BadRequestException('Can only assign a delivery person once the order is in progress and payment has been received');
+    }
 
     const contact = identifier.trim();
 
@@ -219,7 +226,7 @@ export class OrderService {
 
     if (registeredUser) {
       // Link to registered account — clears any previous external contact
-      return this.prisma.order.update({
+      const updated = await this.prisma.order.update({
         where: { id: orderId },
         data: {
           deliveryPersonId:        registeredUser.id,
@@ -231,6 +238,17 @@ export class OrderService {
           // Status stays "In progress" until delivery person verifies the pickup code
         },
       });
+
+      this.notificationService
+        ?.notify(
+          registeredUser.id,
+          'delivery_assigned',
+          'You have been assigned as delivery person',
+          'Contact the seller for the pickup code. You will need to enter it in your app to confirm collection.',
+        )
+        .catch(() => undefined);
+
+      return updated;
     }
 
     // External contact — store their info, advance status directly (no app-based code entry)
@@ -242,6 +260,31 @@ export class OrderService {
         externalDeliveryContact: contact,
         status: 'Out for delivery',
         escrowStatus: EscrowStatus.SHIPPED,
+      },
+    });
+  }
+
+  async removeDeliveryPerson(orderId: string, requesterId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { product: { select: { sellerId: true } } },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.product.sellerId !== requesterId) throw new ForbiddenException('Only the seller can remove the delivery person');
+    if (order.pickupVerifiedAt) {
+      throw new BadRequestException('Delivery has already started and cannot be changed. Contact support if there is an issue.');
+    }
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        deliveryPersonId:        null,
+        externalDeliveryName:    null,
+        externalDeliveryContact: null,
+        pickupCode:              null,
+        pickupCodeExpires:       null,
+        pickupVerifiedAt:        null,
       },
     });
   }
