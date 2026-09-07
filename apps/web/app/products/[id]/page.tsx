@@ -362,8 +362,36 @@ function ServiceBookingPanel({ product }: { product: import("@/types").Product }
   const { toast } = useToast();
   const availability = product.availability ?? null;
 
-  const today = new Date().toISOString().slice(0, 10);
-  const [selectedDate, setSelectedDate] = useState(today);
+  // Convert JS getDay() (0=Sun) to seller day format (1=Mon…7=Sun)
+  function jsToSellerDay(jsDay: number) { return jsDay === 0 ? 7 : jsDay; }
+
+  function isDateAvailable(dateStr: string) {
+    if (!availability) return true; // no restrictions set yet
+    const d = new Date(dateStr + "T12:00:00");
+    const avDay = jsToSellerDay(d.getDay());
+    return availability.availableDays.split(",").includes(String(avDay));
+  }
+
+  // Build date options for next 28 days; only available days are selectable
+  const allDateOptions = Array.from({ length: 28 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const value = d.toISOString().slice(0, 10);
+    return {
+      value,
+      label: i === 0 ? "Today"
+           : i === 1 ? "Tomorrow"
+           : d.toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" }),
+      available: isDateAvailable(value),
+    };
+  });
+
+  // Show available dates only; show next 14 max
+  const dateOptions = allDateOptions.filter(d => d.available).slice(0, 14);
+
+  // Default selected date = first available date
+  const defaultDate = dateOptions[0]?.value ?? new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState(defaultDate);
   const [slots, setSlots]               = useState<{ time: string; available: boolean }[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -371,17 +399,6 @@ function ServiceBookingPanel({ product }: { product: import("@/types").Product }
   const [booking, setBooking]           = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [success, setSuccess]           = useState(false);
-
-  const dateOptions = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return {
-      value: d.toISOString().slice(0, 10),
-      label: i === 0 ? "Today"
-           : i === 1 ? "Tomorrow"
-           : d.toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" }),
-    };
-  });
 
   useEffect(() => {
     setLoadingSlots(true);
@@ -408,16 +425,60 @@ function ServiceBookingPanel({ product }: { product: import("@/types").Product }
     }
   }
 
+  // Seller conditions card — always shown so buyers know what they're agreeing to
+  const ConditionsCard = availability ? (
+    <div className="rounded-2xl p-4 space-y-3" style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
+      <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>
+        Seller availability
+      </p>
+      <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: "#71717A" }}>
+        <Clock className="h-3.5 w-3.5 shrink-0" style={{ color: "#16A34A" }} />
+        <span>{fmtHour(availability.startHour)} – {fmtHour(availability.endHour)}</span>
+        <span style={{ color: "#D4D4D8" }}>·</span>
+        <span>
+          {availability.durationMin >= 60
+            ? `${availability.durationMin / 60}h per session`
+            : `${availability.durationMin}min per session`}
+        </span>
+        <span style={{ color: "#D4D4D8" }}>·</span>
+        <span>{availability.priceType === "hour" ? "Billed per hour" : "Billed per session"}</span>
+      </div>
+      <div className="flex gap-1.5 flex-wrap">
+        {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((day, i) => {
+          const on = availability.availableDays.split(",").includes(String(i + 1));
+          return (
+            <span key={day} className="rounded-lg px-2.5 py-1 text-[11px] font-bold"
+              style={on
+                ? { background: "rgba(22,163,74,0.10)", color: "#16A34A" }
+                : { background: "#F4F4F5", color: "#D4D4D8" }}>
+              {day}
+            </span>
+          );
+        })}
+      </div>
+      {availability.advanceNoticeHours > 0 && (
+        <p className="text-[11px]" style={{ color: "#A1A1AA" }}>
+          Requires {availability.advanceNoticeHours >= 24
+            ? `${availability.advanceNoticeHours / 24} day${availability.advanceNoticeHours / 24 > 1 ? "s" : ""}`
+            : `${availability.advanceNoticeHours}h`} advance notice
+        </p>
+      )}
+    </div>
+  ) : null;
+
   if (!hasAuthToken()) {
     return (
-      <div className="rounded-3xl p-6 text-center space-y-3" style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
-        <CalendarCheck className="mx-auto h-8 w-8" style={{ color: "#16A34A" }} />
-        <p className="font-black text-[#09090B]">Sign in to book this service</p>
-        <Link href="/auth/login"
-          className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black text-white"
-          style={{ background: "linear-gradient(135deg, #22C55E, #16A34A)" }}>
-          Sign in to book
-        </Link>
+      <div className="space-y-4">
+        {ConditionsCard}
+        <div className="rounded-3xl p-6 text-center space-y-3" style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
+          <CalendarCheck className="mx-auto h-8 w-8" style={{ color: "#16A34A" }} />
+          <p className="font-black text-[#09090B]">Sign in to request a booking</p>
+          <Link href="/auth/login"
+            className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black text-white"
+            style={{ background: "linear-gradient(135deg, #22C55E, #16A34A)" }}>
+            Sign in to book
+          </Link>
+        </div>
       </div>
     );
   }
@@ -435,37 +496,39 @@ function ServiceBookingPanel({ product }: { product: import("@/types").Product }
     );
   }
 
+  if (!availability) {
+    return (
+      <div className="rounded-3xl p-6 text-center space-y-2" style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
+        <CalendarCheck className="mx-auto h-8 w-8" style={{ color: "#D4D4D8" }} />
+        <p className="font-black text-[#09090B]">Availability not yet set</p>
+        <p className="text-sm" style={{ color: "#A1A1AA" }}>
+          The seller hasn&apos;t configured their booking schedule yet. Message them directly.
+        </p>
+      </div>
+    );
+  }
+
+  if (dateOptions.length === 0) {
+    return (
+      <div className="space-y-4">
+        {ConditionsCard}
+        <div className="rounded-2xl p-4 text-center" style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
+          <p className="text-sm font-semibold" style={{ color: "#A1A1AA" }}>
+            No available dates in the next 28 days based on the seller&apos;s schedule.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 rounded-3xl p-5" style={{ background: "#FAFAF9", border: "1px solid #E4E4E7" }}>
       <p className="text-xs font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>Book this service</p>
 
-      {/* Availability info */}
-      {availability && (
-        <div className="flex flex-wrap items-center gap-3 text-xs font-semibold" style={{ color: "#71717A" }}>
-          <span className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" style={{ color: "#16A34A" }} />
-            {fmtHour(availability.startHour)} – {fmtHour(availability.endHour)}
-          </span>
-          <span>
-            {availability.durationMin >= 60
-              ? `${availability.durationMin / 60}h session`
-              : `${availability.durationMin}min session`}
-          </span>
-          <span className="flex gap-1.5">
-            {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((day, i) => {
-              const on = availability.availableDays.split(",").includes(String(i + 1));
-              return (
-                <span key={day} className="rounded-md px-1.5 py-0.5 font-bold"
-                  style={on ? { background: "rgba(22,163,74,0.1)", color: "#16A34A" } : { color: "#D4D4D8" }}>
-                  {day}
-                </span>
-              );
-            })}
-          </span>
-        </div>
-      )}
+      {/* Seller schedule — conditions the buyer is agreeing to */}
+      {ConditionsCard}
 
-      {/* Date strip */}
+      {/* Date strip — only available days */}
       <div>
         <p className="mb-2 text-sm font-black" style={{ color: "#09090B" }}>Choose a date</p>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">

@@ -526,8 +526,21 @@ export default function EventsPage() {
     });
   }, [events, selectedDay]);
 
-  const upcoming = useMemo(() => events.filter(e => new Date(e.eventDate) >= new Date()), [events]);
-  const past     = useMemo(() => events.filter(e => new Date(e.eventDate) <  new Date()), [events]);
+  // Classify by calendar day — an event on today's date is "today" for the full day,
+  // not "past" once the scheduled hour passes. Only events from earlier calendar days are past.
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  }, []);
+
+  function eventDayStr(ev: CampusEvent) {
+    const d = new Date(ev.eventDate);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  const todayEvents = useMemo(() => events.filter(e => eventDayStr(e) === todayStr), [events, todayStr]);
+  const upcoming    = useMemo(() => events.filter(e => eventDayStr(e) >  todayStr), [events, todayStr]);
+  const past        = useMemo(() => events.filter(e => eventDayStr(e) <  todayStr), [events, todayStr]);
 
   async function handleSave(data: EventFormData, id?: string, status = "PUBLISHED") {
     const payload = {
@@ -646,6 +659,17 @@ export default function EventsPage() {
                 </div>
               ) : (
                 <>
+                  {todayEvents.length > 0 && (
+                    <section>
+                      <div className="mb-4 flex items-center gap-2.5">
+                        <span className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--green)" }} />
+                        <p className="text-xs font-black uppercase tracking-widest" style={{ color: "var(--green)" }}>
+                          Happening today · {todayEvents.length}
+                        </p>
+                      </div>
+                      <EventDetailPanel events={todayEvents} onEdit={openEdit} onDelete={handleDelete} canEdit={canEdit} />
+                    </section>
+                  )}
                   {upcoming.length > 0 && (
                     <section>
                       <p className="mb-4 text-xs font-black uppercase tracking-widest" style={{ color: "var(--muted)" }}>
