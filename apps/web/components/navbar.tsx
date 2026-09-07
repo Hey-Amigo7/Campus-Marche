@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogIn, ChevronDown, LogOut, User, ShoppingBag,
   Package, Settings, MessageCircle, Heart, Bell,
-  BarChart2, X, Palette, ShoppingCart, Store, Wallet, ReceiptText,
+  BarChart2, X, Palette, ShoppingCart, Store, Wallet, ReceiptText, CalendarCheck,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -127,8 +127,9 @@ function UserDropdown({
     { icon: Package,       label: "My Listings",   href: "/profile/listings" },
     { icon: Heart,         label: "Saved Items",   href: "/saved"            },
     { icon: MessageCircle, label: "Messages",      href: "/messages"         },
-    { icon: ShoppingBag,   label: "My Orders",     href: "/orders"           },
-    { icon: ReceiptText,  label: "Transactions",   href: "/transactions"      },
+    { icon: ShoppingBag,    label: "My Orders",     href: "/orders"           },
+    { icon: CalendarCheck, label: "My Bookings",   href: "/bookings"         },
+    { icon: ReceiptText,   label: "Transactions",  href: "/transactions"     },
     ...(hasBusiness && sellerId
       ? [
           { icon: Store,  label: "My Storefront",    href: `/store/${sellerId}` },
@@ -466,8 +467,9 @@ export function Navbar() {
                         { icon: User,        label: "My Profile",      href: "/profile"               },
                         { icon: Package,     label: "My Listings",     href: "/profile/listings"      },
                         { icon: Heart,       label: "Saved Items",     href: "/saved"                 },
-                        { icon: ShoppingBag, label: "My Orders",       href: "/orders"                },
-                        { icon: ReceiptText, label: "Transactions",    href: "/transactions"          },
+                        { icon: ShoppingBag,    label: "My Orders",     href: "/orders"          },
+                        { icon: CalendarCheck, label: "My Bookings",   href: "/bookings"        },
+                        { icon: ReceiptText,   label: "Transactions",  href: "/transactions"    },
                         ...(profile?.business && profile?.id
                           ? [
                               { icon: Store,  label: "My Storefront",   href: `/store/${profile.id}` },

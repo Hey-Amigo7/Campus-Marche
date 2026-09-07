@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, Camera, CheckCircle2, Info, Loader2, Package, Plus, Tag, X } from "lucide-react";
+import { CalendarCheck, Camera, CheckCircle2, Clock, Info, Loader2, Package, Plus, Tag, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -234,6 +234,13 @@ export default function SellPage() {
   const [listingType, setListingType] = useState<"product" | "service">("product");
   const [negotiable, setNegotiable] = useState(true);
   const [rawPrice, setRawPrice] = useState("");
+  const [durationMin, setDurationMin] = useState(60);
+  const [priceType, setPriceType] = useState<"session" | "hour">("session");
+  const [availableDays, setAvailableDays] = useState<string[]>(["1", "2", "3", "4", "5"]);
+  const [startHour, setStartHour] = useState(8);
+  const [endHour, setEndHour] = useState(18);
+  const [maxBookingsPerDay, setMaxBookingsPerDay] = useState(3);
+  const [advanceNoticeHours, setAdvanceNoticeHours] = useState(24);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -250,6 +257,16 @@ export default function SellPage() {
     count: apiNames.has(name) ? (categoriesData!.find(c => c.name === name)?.count ?? 0) : 0,
   }));
   const [businessLoadingSave, setBusinessLoadingSave] = useState(false);
+
+  function toggleDay(day: string) {
+    setAvailableDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort());
+  }
+
+  function formatHour(h: number) {
+    const period = h >= 12 ? "PM" : "AM";
+    const display = h % 12 === 0 ? 12 : h % 12;
+    return `${display}:00 ${period}`;
+  }
 
   async function handleBusinessSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -328,10 +345,29 @@ export default function SellPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (listingType === "service" && availableDays.length === 0) {
+      toast("Please select at least one available day.");
+      return;
+    }
+    if (listingType === "service" && endHour <= startHour) {
+      toast("End time must be after start time.");
+      return;
+    }
     setLoading(true);
     const form = new FormData(event.currentTarget);
     try {
-      await api.createProduct(readFormPayload(form, "PUBLISHED") as never);
+      const product = await api.createProduct(readFormPayload(form, "PUBLISHED") as never);
+      if (listingType === "service") {
+        await api.saveServiceAvailability(product.id, {
+          durationMin,
+          priceType,
+          availableDays: availableDays.join(","),
+          startHour,
+          endHour,
+          maxBookingsPerDay,
+          advanceNoticeHours,
+        });
+      }
       toast("Listing published! Redirecting to marketplace…");
       setTimeout(() => router.push("/products"), 900);
     } catch (error) {
@@ -346,7 +382,18 @@ export default function SellPage() {
     setSavingDraft(true);
     const form = new FormData(formRef.current);
     try {
-      await api.createProduct(readFormPayload(form, "DRAFT") as never);
+      const product = await api.createProduct(readFormPayload(form, "DRAFT") as never);
+      if (listingType === "service") {
+        await api.saveServiceAvailability(product.id, {
+          durationMin,
+          priceType,
+          availableDays: availableDays.join(","),
+          startHour,
+          endHour,
+          maxBookingsPerDay,
+          advanceNoticeHours,
+        }).catch(() => null);
+      }
       toast("Draft saved. Find it in My Listings.");
       setTimeout(() => router.push("/profile/listings"), 900);
     } catch (error) {
@@ -577,6 +624,98 @@ export default function SellPage() {
                             <option>Fair</option>
                           </select>
                         </div>
+                      )}
+
+                      {listingType === "service" && (
+                        <>
+                          {/* Duration & price type */}
+                          <div>
+                            <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>Session duration</label>
+                            <select value={durationMin} onChange={e => setDurationMin(Number(e.target.value))} className="input-shell">
+                              <option value={30}>30 minutes</option>
+                              <option value={45}>45 minutes</option>
+                              <option value={60}>1 hour</option>
+                              <option value={90}>1.5 hours</option>
+                              <option value={120}>2 hours</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>Price type</label>
+                            <select value={priceType} onChange={e => setPriceType(e.target.value as "session" | "hour")} className="input-shell">
+                              <option value="session">Per session</option>
+                              <option value="hour">Per hour</option>
+                            </select>
+                          </div>
+
+                          {/* Available days */}
+                          <div className="md:col-span-2">
+                            <label className="mb-2 block text-sm font-black" style={{ color: "var(--on-surface)" }}>Available days</label>
+                            <div className="flex flex-wrap gap-2">
+                              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => {
+                                const val = String(i + 1);
+                                const active = availableDays.includes(val);
+                                return (
+                                  <button key={day} type="button" onClick={() => toggleDay(val)}
+                                    className="rounded-xl px-3.5 py-1.5 text-xs font-black transition-all"
+                                    style={active
+                                      ? { background: "var(--green)", color: "#fff", border: "1.5px solid var(--green)" }
+                                      : { background: "var(--surface-raised)", color: "var(--muted)", border: "1.5px solid var(--border)" }}>
+                                    {day}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {availableDays.length === 0 && (
+                              <p className="mt-1.5 text-xs font-semibold" style={{ color: "#EF4444" }}>Select at least one available day</p>
+                            )}
+                          </div>
+
+                          {/* Start & end hours */}
+                          <div>
+                            <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>
+                              <Clock size={13} className="inline mr-1.5 align-middle" style={{ color: "var(--green)" }} />
+                              Start time
+                            </label>
+                            <select value={startHour} onChange={e => setStartHour(Number(e.target.value))} className="input-shell">
+                              {Array.from({ length: 24 }, (_, h) => (
+                                <option key={h} value={h}>{formatHour(h)}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>
+                              <Clock size={13} className="inline mr-1.5 align-middle" style={{ color: "var(--green)" }} />
+                              End time
+                            </label>
+                            <select value={endHour} onChange={e => setEndHour(Number(e.target.value))} className="input-shell">
+                              {Array.from({ length: 24 }, (_, h) => h + 1).map(h => (
+                                <option key={h} value={h} disabled={h <= startHour}>{formatHour(h)}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Max bookings & advance notice */}
+                          <div>
+                            <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>Max bookings per day</label>
+                            <select value={maxBookingsPerDay} onChange={e => setMaxBookingsPerDay(Number(e.target.value))} className="input-shell">
+                              {[1, 2, 3, 4, 5, 6, 8, 10].map(n => (
+                                <option key={n} value={n}>{n} {n === 1 ? "booking" : "bookings"}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-black" style={{ color: "var(--on-surface)" }}>Advance notice required</label>
+                            <select value={advanceNoticeHours} onChange={e => setAdvanceNoticeHours(Number(e.target.value))} className="input-shell">
+                              <option value={0}>No notice needed</option>
+                              <option value={2}>2 hours</option>
+                              <option value={6}>6 hours</option>
+                              <option value={12}>12 hours</option>
+                              <option value={24}>1 day</option>
+                              <option value={48}>2 days</option>
+                              <option value={72}>3 days</option>
+                            </select>
+                          </div>
+                        </>
                       )}
 
                       <div className="md:col-span-2">

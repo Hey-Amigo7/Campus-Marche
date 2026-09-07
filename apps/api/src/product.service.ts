@@ -105,14 +105,14 @@ export class ProductService {
     const product = await this.prisma.product.findUnique({
       where: { id, active: true },
       include: {
-        seller: { select: SELLER_SELECT },
-        reviews: { orderBy: { createdAt: 'desc' }, take: 20 },
+        seller:       { select: SELLER_SELECT },
+        reviews:      { orderBy: { createdAt: 'desc' }, take: 20 },
+        availability: true,
       },
     });
 
     if (!product) return null;
 
-    // Backfill image if missing
     return this.withDefaults(product as ProductWithSeller);
   }
 

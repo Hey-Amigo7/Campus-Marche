@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, Loader2, MapPin, Share2, Star } from "lucide-react";
+import { Bookmark, BookmarkCheck, CalendarCheck, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Share2, Star } from "lucide-react";
 import { notFound } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,6 +14,7 @@ import { ProductArt, ProductGrid } from "@/components/product-card";
 import { EmptyState, Rating, SellerBadge } from "@/components/ui";
 import { useProduct, useProducts, useProfile, useReviews, useSavedStatus } from "@/hooks/use-api";
 import { hasAuthToken } from "@/lib/auth";
+import { useToast } from "@/providers/toast-provider";
 
 const PANEL = {
   background:    "rgba(255,255,255,0.85)",
@@ -351,6 +352,189 @@ function ReviewForm({ productId, sellerId }: { productId: string; sellerId: stri
   );
 }
 
+function fmtHour(h: number) {
+  const period = h >= 12 ? "PM" : "AM";
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${display}:00 ${period}`;
+}
+
+function ServiceBookingPanel({ product }: { product: import("@/types").Product }) {
+  const { toast } = useToast();
+  const availability = product.availability ?? null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [slots, setSlots]               = useState<{ time: string; available: boolean }[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [notes, setNotes]               = useState("");
+  const [booking, setBooking]           = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [success, setSuccess]           = useState(false);
+
+  const dateOptions = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return {
+      value: d.toISOString().slice(0, 10),
+      label: i === 0 ? "Today"
+           : i === 1 ? "Tomorrow"
+           : d.toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" }),
+    };
+  });
+
+  useEffect(() => {
+    setLoadingSlots(true);
+    setSelectedSlot(null);
+    api.getAvailableSlots(product.id, selectedDate)
+      .then(res => setSlots(res.slots ?? []))
+      .catch(() => setSlots([]))
+      .finally(() => setLoadingSlots(false));
+  }, [product.id, selectedDate]);
+
+  async function handleBook() {
+    if (!selectedSlot) return;
+    setBooking(true);
+    setBookingError(null);
+    try {
+      const scheduledAt = `${selectedDate}T${selectedSlot}:00`;
+      await api.createBooking({ productId: product.id, scheduledAt, notes: notes.trim() || undefined });
+      setSuccess(true);
+      toast("Booking request sent! The seller will confirm shortly.");
+    } catch (err) {
+      setBookingError(err instanceof Error ? err.message : "Could not send booking request.");
+    } finally {
+      setBooking(false);
+    }
+  }
+
+  if (!hasAuthToken()) {
+    return (
+      <div className="rounded-3xl p-6 text-center space-y-3" style={{ background: "#F4F4F5", border: "1px solid #E4E4E7" }}>
+        <CalendarCheck className="mx-auto h-8 w-8" style={{ color: "#16A34A" }} />
+        <p className="font-black text-[#09090B]">Sign in to book this service</p>
+        <Link href="/auth/login"
+          className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black text-white"
+          style={{ background: "linear-gradient(135deg, #22C55E, #16A34A)" }}>
+          Sign in to book
+        </Link>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div className="rounded-3xl p-6 text-center space-y-3" style={{ background: "rgba(22,163,74,0.06)", border: "1px solid rgba(22,163,74,0.20)" }}>
+        <CheckCircle2 className="mx-auto h-10 w-10" style={{ color: "#16A34A" }} />
+        <p className="font-black text-[#09090B]">Booking request sent!</p>
+        <p className="text-sm" style={{ color: "#71717A" }}>
+          The seller will confirm your appointment.{" "}
+          <Link href="/bookings" className="font-bold" style={{ color: "#16A34A" }}>View in My Bookings →</Link>
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 rounded-3xl p-5" style={{ background: "#FAFAF9", border: "1px solid #E4E4E7" }}>
+      <p className="text-xs font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>Book this service</p>
+
+      {/* Availability info */}
+      {availability && (
+        <div className="flex flex-wrap items-center gap-3 text-xs font-semibold" style={{ color: "#71717A" }}>
+          <span className="flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" style={{ color: "#16A34A" }} />
+            {fmtHour(availability.startHour)} – {fmtHour(availability.endHour)}
+          </span>
+          <span>
+            {availability.durationMin >= 60
+              ? `${availability.durationMin / 60}h session`
+              : `${availability.durationMin}min session`}
+          </span>
+          <span className="flex gap-1.5">
+            {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((day, i) => {
+              const on = availability.availableDays.split(",").includes(String(i + 1));
+              return (
+                <span key={day} className="rounded-md px-1.5 py-0.5 font-bold"
+                  style={on ? { background: "rgba(22,163,74,0.1)", color: "#16A34A" } : { color: "#D4D4D8" }}>
+                  {day}
+                </span>
+              );
+            })}
+          </span>
+        </div>
+      )}
+
+      {/* Date strip */}
+      <div>
+        <p className="mb-2 text-sm font-black" style={{ color: "#09090B" }}>Choose a date</p>
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {dateOptions.map(({ value, label }) => (
+            <button key={value} type="button" onClick={() => setSelectedDate(value)}
+              className="shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all"
+              style={selectedDate === value
+                ? { background: "#16A34A", color: "#fff", border: "1px solid #16A34A" }
+                : { background: "#F4F4F5", color: "#71717A", border: "1px solid #E4E4E7" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Time slots */}
+      <div>
+        <p className="mb-2 text-sm font-black" style={{ color: "#09090B" }}>Choose a time</p>
+        {loadingSlots ? (
+          <div className="flex items-center gap-2 text-sm" style={{ color: "#A1A1AA" }}>
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading slots…
+          </div>
+        ) : slots.length === 0 ? (
+          <p className="text-sm" style={{ color: "#A1A1AA" }}>No available slots on this date.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {slots.map(slot => (
+              <button key={slot.time} type="button"
+                onClick={() => slot.available && setSelectedSlot(slot.time)}
+                disabled={!slot.available}
+                className="rounded-xl py-2.5 text-xs font-bold transition-all"
+                style={!slot.available
+                  ? { background: "#F4F4F5", color: "#D4D4D8", border: "1px solid #E4E4E7", cursor: "not-allowed" }
+                  : selectedSlot === slot.time
+                  ? { background: "#16A34A", color: "#fff", border: "1.5px solid #16A34A" }
+                  : { background: "#F4F4F5", color: "#27272A", border: "1px solid #E4E4E7" }}>
+                {slot.time}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Notes */}
+      <div>
+        <label className="mb-1.5 block text-sm font-black" style={{ color: "#09090B" }}>
+          Notes <span style={{ color: "#A1A1AA", fontWeight: 500 }}>(optional)</span>
+        </label>
+        <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)}
+          placeholder="Anything the seller should know…"
+          className="w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none"
+          style={{ background: "#fff", border: "1px solid #E4E4E7", color: "#09090B", caretColor: "#16A34A" }}
+          onFocus={e => { e.currentTarget.style.borderColor = "#16A34A"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.08)"; }}
+          onBlur={e  => { e.currentTarget.style.borderColor = "#E4E4E7"; e.currentTarget.style.boxShadow = "none"; }}
+        />
+      </div>
+
+      {bookingError && <p className="text-xs font-semibold" style={{ color: "#DC2626" }}>{bookingError}</p>}
+
+      <button type="button" onClick={handleBook} disabled={!selectedSlot || booking}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white disabled:opacity-50 transition-all hover:-translate-y-0.5"
+        style={{ background: "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)" }}>
+        {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck className="h-4 w-4" />}
+        {booking ? "Sending request…" : "Request booking"}
+      </button>
+    </div>
+  );
+}
+
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: product, isLoading, error } = useProduct(id);
@@ -546,17 +730,27 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               );
             })()}
 
-            {/* CTA buttons */}
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <BuyNowButton productId={product.id} price={product.price} listingType={product.listingType} category={product.category} />
+            {/* CTA */}
+            {product.listingType === "service" || product.category === "Services" ? (
+              <div className="space-y-2.5">
+                <ServiceBookingPanel product={product} />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <SaveButton productId={product.id} />
+                  <ShareButton title={product.title} price={product.price} />
+                </div>
               </div>
-              <div className="sm:col-span-2">
-                <AddToCartButton product={product} />
+            ) : (
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <BuyNowButton productId={product.id} price={product.price} listingType={product.listingType} category={product.category} />
+                </div>
+                <div className="sm:col-span-2">
+                  <AddToCartButton product={product} />
+                </div>
+                <SaveButton productId={product.id} />
+                <ShareButton title={product.title} price={product.price} />
               </div>
-              <SaveButton productId={product.id} />
-              <ShareButton title={product.title} price={product.price} />
-            </div>
+            )}
 
             {/* Tags */}
             {product.tags.length > 0 && (

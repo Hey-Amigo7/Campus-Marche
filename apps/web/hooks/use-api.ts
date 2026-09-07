@@ -58,6 +58,13 @@ export function useOrder(id: string | null) {
   );
 }
 
+export function useBookings() {
+  return useSWR<import("@/types").ServiceBooking[]>("bookings", api.getBookings, {
+    fallbackData: [],
+    shouldRetryOnError: false,
+  });
+}
+
 export function useProfile() {
   return useSWR<Seller | null>("profile", api.getProfile, { fallbackData: null });
 }

@@ -89,6 +89,8 @@ model User {
   transferRecipients TransferRecipient[]
   payouts            Payout[]
   sellerOrders       Order[]               @relation("SellerOrders")
+  buyerBookings      ServiceBooking[]      @relation("BookingBuyer")
+  sellerBookings     ServiceBooking[]      @relation("BookingSeller")
 }
 
 model BusinessProfile {
@@ -133,15 +135,16 @@ model Product {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  sellerId      String
-  seller        User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  orders        Order[]
-  reviews       Review[]
-  savedItems    SavedItem[]
-  conversations Conversation[]
-  reports       Report[]
-
-  viewLogs      ProductView[]
+  sellerId        String
+  seller          User                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orders          Order[]
+  reviews         Review[]
+  savedItems      SavedItem[]
+  conversations   Conversation[]
+  reports         Report[]
+  viewLogs        ProductView[]
+  availability    ServiceAvailability?
+  serviceBookings ServiceBooking[]
 
   @@index([sellerId])
   @@index([category])
@@ -214,6 +217,7 @@ model Order {
   deliveryPerson User?                @relation("DeliveryPerson", fields: [deliveryPersonId], references: [id], onDelete: SetNull)
   payouts        Payout[]
   revenue        PlatformRevenue?
+  serviceBooking ServiceBooking?
 
   @@index([buyerId])
   @@index([sellerId])
@@ -613,4 +617,62 @@ model Subscription {
   @@index([userId])
   @@index([status])
   @@index([expiresAt])
+}
+
+// ─── Service Booking ──────────────────────────────────────────────────────────
+
+model ServiceAvailability {
+  id                String   @id @default(cuid())
+  productId         String   @unique
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  durationMin       Int      @default(60)
+  priceType         String   @default("session")
+  availableDays     String   @default("1,2,3,4,5")
+  startHour         Int      @default(8)
+  endHour           Int      @default(18)
+  maxBookingsPerDay Int      @default(3)
+  advanceNoticeHours Int     @default(24)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model ServiceBooking {
+  id            String   @id @default(cuid())
+  // REQUESTED | ACCEPTED | DECLINED | CONFIRMED | IN_SERVICE | COMPLETED | CANCELLED
+  status        String   @default("REQUESTED")
+
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  buyerId       String
+  buyer         User     @relation("BookingBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+
+  sellerId      String
+  seller        User     @relation("BookingSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  scheduledAt   DateTime
+  durationMin   Int
+
+  price         Float
+  totalAmount   Float
+  platformFee   Float
+  sellerAmount  Float
+
+  notes         String?
+  cancelReason  String?
+  cancelledById String?
+
+  orderId       String?  @unique
+  order         Order?   @relation(fields: [orderId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([productId])
+  @@index([scheduledAt])
+  @@index([status])
 }

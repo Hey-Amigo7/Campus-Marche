@@ -23,6 +23,7 @@ import { PayoutModule } from './payout.module';     // imports WalletModule
 import { ProductModule } from './product.module';   // imports AdminModule + SubscriptionModule
 import { ReportModule } from './report.module';
 import { ReviewModule } from './review.module';
+import { ServiceBookingModule } from './service-booking.module';
 import { SavedItemsModule } from './saved-items.module';
 import { SellerModule } from './seller.module';
 import { SubscriptionModule } from './subscription.module';
@@ -60,6 +61,7 @@ import { WalletModule } from './wallet.module';
     ProductModule,
     ReportModule,
     ReviewModule,
+    ServiceBookingModule,
     SavedItemsModule,
     SellerModule,
     SubscriptionModule,
