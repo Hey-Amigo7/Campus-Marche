@@ -277,6 +277,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const isPaid = PAID_ESCROW_STATES.includes(escrow);
   const isActive = !["RELEASED", "REFUNDED", "FAILED", "CANCELLED"].includes(escrow) && order.status !== "Cancelled";
   const isOutForDelivery = order.status === "Out for delivery" || escrow === "SHIPPED";
+  const isServiceOrder = order.product.listingType === "service";
   const hasDeliveryDetails = !!(order.deliveryAddress && order.deliveryPhone);
   const escrowLabel = ESCROW_LABELS[escrow] ?? order.status;
   const statusClass = ESCROW_COLORS[escrow] ?? "bg-slate-100 text-slate-700";
@@ -440,12 +441,16 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </Link>
 
         {/* Header */}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-black text-slate-950">{order.product.title}</h1>
-          <span className={`rounded-full px-3 py-1 text-sm font-bold ${statusClass}`}>{escrowLabel}</span>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600 capitalize">{role}</span>
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-sm font-bold ${statusClass}`}>{escrowLabel}</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600 capitalize">{role}</span>
+          </div>
+          <h1 className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">{order.product.title}</h1>
+          <p className="mt-0.5 text-sm font-semibold text-slate-400">
+            {isServiceOrder ? "Booking" : "Order"} #{id.slice(0, 12).toUpperCase()}
+          </p>
         </div>
-        <p className="mt-1 text-sm font-semibold text-slate-400">Order #{id.slice(0, 12).toUpperCase()}</p>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
           {/* ── Left column ── */}
@@ -453,15 +458,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Product summary */}
             <section className="flex gap-4 rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
-              <ProductArt style={order.product.imageStyle} className="h-24 w-24 shrink-0 rounded-xl" />
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Product</p>
-                <p className="mt-1 text-lg font-black text-slate-950">{order.product.title}</p>
-                <p className="mt-1 text-xl font-black text-brand-navy">{formatCurrency(order.product.price)}</p>
-                {order.product.location ? (
+              <ProductArt style={order.product.imageStyle} className="h-20 w-20 shrink-0 rounded-xl sm:h-24 sm:w-24" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                  {isServiceOrder ? "Service" : "Product"}
+                </p>
+                <p className="mt-1 line-clamp-2 text-base font-black text-slate-950 sm:text-lg">{order.product.title}</p>
+                <p className="mt-1 text-lg font-black text-brand-navy sm:text-xl">{formatCurrency(order.product.price)}</p>
+                {order.product.location && !isServiceOrder ? (
                   <p className="mt-1.5 flex items-center gap-1 text-sm font-semibold text-slate-500">
-                    <MapPin className="h-3.5 w-3.5" />
-                    {order.product.location}
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{order.product.location}</span>
                   </p>
                 ) : null}
               </div>
@@ -566,7 +573,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── DELIVERY DETAILS ── */}
-            {isPaid && isActive ? (
+            {isPaid && isActive && !isServiceOrder ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
                 <h2 className="text-base font-black" style={{ color: "#1E293B" }}>Delivery details</h2>
 
@@ -718,7 +725,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── LIVE TRACKING ── */}
-            {isOutForDelivery ? (
+            {isOutForDelivery && !isServiceOrder ? (
               <section className="rounded-2xl border p-5 shadow-sm" style={{ borderColor: "rgba(127,182,133,0.35)", background: "rgba(223,243,227,0.25)" }}>
                 <div className="flex items-center gap-2">
                   <Navigation className="h-5 w-5" style={{ color: "#5A9460" }} />
@@ -863,7 +870,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── BUYER DELIVERY CODE ── */}
-            {role === "buyer" && isPaid && order.deliveryCode && !order.deliveryVerifiedAt ? (
+            {role === "buyer" && isPaid && order.deliveryCode && !order.deliveryVerifiedAt && !isServiceOrder ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.25)" }}>
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5" style={{ color: "#6366F1" }} />
@@ -902,7 +909,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── BUYER DELIVERY CONFIRMED (code already verified) ── */}
-            {role === "buyer" && order.deliveryVerifiedAt ? (
+            {role === "buyer" && order.deliveryVerifiedAt && !isServiceOrder ? (
               <section className="rounded-2xl p-4" style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.30)" }}>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5" style={{ color: "#5A9460" }} />
@@ -912,7 +919,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── SELLER PICKUP CODE ── */}
-            {role === "seller" && pickupPending ? (
+            {role === "seller" && pickupPending && !isServiceOrder ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.30)" }}>
                 <div className="flex items-center gap-2">
                   <KeyRound className="h-5 w-5" style={{ color: "#D97706" }} />
@@ -944,7 +951,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── DELIVERY PERSON: PICKUP CODE ENTRY ── */}
-            {role === "delivery" && !order.pickupVerifiedAt && order.status === "In progress" ? (
+            {role === "delivery" && !order.pickupVerifiedAt && order.status === "In progress" && !isServiceOrder ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.30)" }}>
                 <div className="flex items-center gap-2">
                   <KeyRound className="h-5 w-5" style={{ color: "#D97706" }} />
@@ -970,7 +977,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── DELIVERY PERSON: DELIVERY CODE ENTRY ── */}
-            {role === "delivery" && !order.deliveryVerifiedAt && isOutForDelivery ? (
+            {role === "delivery" && !order.deliveryVerifiedAt && isOutForDelivery && !isServiceOrder ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.25)" }}>
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5" style={{ color: "#6366F1" }} />
@@ -996,7 +1003,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             ) : null}
 
             {/* ── ESCROW RELEASE (self-delivery / no registered delivery person) ── */}
-            {showOldConfirmButton ? (
+            {showOldConfirmButton && !isServiceOrder ? (
               <section className="rounded-2xl p-5" style={{ background: "rgba(127,182,133,0.10)", border: "1px solid rgba(127,182,133,0.30)" }}>
                 <h2 className="text-base font-black text-green-900">Confirm delivery</h2>
                 <p className="mt-1 text-sm text-green-700">
@@ -1012,6 +1019,26 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   {releasingEscrow ? <Loader2 className="inline h-4 w-4 animate-spin" /> : <CheckCircle2 className="inline h-4 w-4" />}
                   {" "}Confirm delivery &amp; release payment
                 </button>
+              </section>
+            ) : null}
+
+            {/* ── SERVICE: ESCROW HELD NOTICE ── */}
+            {isServiceOrder && isPaid && isActive ? (
+              <section className="rounded-2xl p-5" style={{ background: "rgba(114,204,35,0.06)", border: "1px solid rgba(114,204,35,0.25)" }}>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: "var(--green)" }} />
+                  <h2 className="text-base font-black" style={{ color: "#14532D" }}>Payment secured in escrow</h2>
+                </div>
+                <p className="mt-2 text-sm leading-6" style={{ color: "#166534" }}>
+                  Your payment is held safely. The seller will receive it automatically once the service is marked complete.
+                </p>
+                <Link
+                  href="/bookings"
+                  className="mt-4 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black text-white w-full"
+                  style={{ background: "var(--green)" }}
+                >
+                  View booking details
+                </Link>
               </section>
             ) : null}
 
@@ -1093,7 +1120,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <aside className="space-y-4">
             {/* Order timeline */}
             <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
-              <h3 className="mb-4 text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Order progress</h3>
+              <h3 className="mb-4 text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>
+                {isServiceOrder ? "Payment progress" : "Order progress"}
+              </h3>
               <OrderTimeline status={order.status} escrowStatus={order.escrowStatus} />
             </div>
 
@@ -1159,7 +1188,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* Status actions */}
-            {allowedTransitions.length > 0 && isActive ? (
+            {allowedTransitions.length > 0 && isActive && !isServiceOrder ? (
               <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
                 <h3 className="text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>Update status</h3>
                 <div className="mt-3 space-y-2">

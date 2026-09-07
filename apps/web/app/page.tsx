@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ShoppingBag, Truck, Shield, Gift, ArrowRight } from "lucide-react";
+import { CalendarDays, MapPin, ShoppingBag, Truck, Shield, Gift, ArrowRight } from "lucide-react";
 import { CategoryCard } from "@/components/category-card";
 import { ProductCard } from "@/components/product-card";
-import { useProducts, useCategories, useSiteStats } from "@/hooks/use-api";
+import { useProducts, useCategories, useSiteStats, useEvents } from "@/hooks/use-api";
 import { hasAuthToken } from "@/lib/auth";
 import { useEffect, useState } from "react";
-import type { Product } from "@/types";
+import type { CampusEvent, Product } from "@/types";
 import {
   FadeUp,
   MotionButton,
@@ -484,6 +484,117 @@ function TrendingSection() {
 }
 
 
+/* ─── 8. Campus events strip ─────────────────────────────────── */
+const EVENT_CAT: Record<string, { dot: string; gradient: string }> = {
+  "Campus update": { dot: "#0F172A", gradient: "linear-gradient(135deg,rgba(15,23,42,0.12),rgba(15,23,42,0.04))" },
+  "Academic":      { dot: "#16A34A", gradient: "linear-gradient(135deg,rgba(22,163,74,0.14),rgba(22,163,74,0.04))" },
+  "Social":        { dot: "#C68B59", gradient: "linear-gradient(135deg,rgba(198,139,89,0.16),rgba(198,139,89,0.04))" },
+  "Career":        { dot: "#6366F1", gradient: "linear-gradient(135deg,rgba(99,102,241,0.14),rgba(99,102,241,0.04))" },
+  "Sports":        { dot: "#EF4444", gradient: "linear-gradient(135deg,rgba(239,68,68,0.14),rgba(239,68,68,0.04))" },
+};
+function eventCat(cat: string) {
+  return EVENT_CAT[cat] ?? { dot: "var(--border)", gradient: "linear-gradient(135deg,rgba(0,0,0,0.06),transparent)" };
+}
+function evDayStr(ev: CampusEvent) {
+  const d = new Date(ev.eventDate);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function EventStrip() {
+  const { data: events } = useEvents();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const shown = (events ?? [])
+    .filter(e => (e as CampusEvent & { status?: string }).status !== "DRAFT" && evDayStr(e) >= todayStr)
+    .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime())
+    .slice(0, 6);
+
+  if (shown.length === 0) return null;
+
+  return (
+    <section className="py-10" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="container-shell">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight" style={{ color: "var(--on-surface)" }}>
+              Campus events
+            </h2>
+            <p className="mt-0.5 text-sm" style={{ color: "var(--muted)" }}>
+              What&apos;s happening at HTU — today and ahead
+            </p>
+          </div>
+          <Link href="/events"
+            className="inline-flex items-center gap-1 text-sm font-semibold transition-colors"
+            style={{ color: "var(--green)" }}>
+            View all <AnimatedArrowRight size={14} />
+          </Link>
+        </div>
+
+        <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {shown.map(ev => {
+            const isToday = evDayStr(ev) === todayStr;
+            const cat = eventCat(ev.category);
+            const time = new Intl.DateTimeFormat("en-GH", { hour: "numeric", minute: "2-digit" }).format(new Date(ev.eventDate));
+            const dateLabel = isToday ? "Today"
+              : new Intl.DateTimeFormat("en-GH", { weekday: "short", month: "short", day: "numeric" }).format(new Date(ev.eventDate));
+
+            return (
+              <Link key={ev.id} href="/events"
+                className="block shrink-0 w-[260px] overflow-hidden rounded-2xl transition-all hover:-translate-y-1"
+                style={{ border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "0 2px 12px rgba(9,9,11,0.04)" }}>
+                {/* Image or gradient header */}
+                <div className="relative h-32 overflow-hidden"
+                  style={{ background: ev.imageUrl ? undefined : cat.gradient }}>
+                  {ev.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ev.imageUrl} alt="" className="h-full w-full object-cover" />
+                  )}
+                  {ev.imageUrl && (
+                    <div className="absolute inset-0"
+                      style={{ background: "linear-gradient(to top,rgba(9,9,11,0.50) 0%,transparent 55%)" }} />
+                  )}
+                  {isToday && (
+                    <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black text-white"
+                      style={{ background: "var(--green)" }}>
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                      Live today
+                    </span>
+                  )}
+                  <span className="absolute right-3 top-3 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                    style={{ background: "rgba(0,0,0,0.55)", color: "#fff", backdropFilter: "blur(6px)" }}>
+                    {ev.category}
+                  </span>
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: cat.dot }} />
+                </div>
+
+                {/* Body */}
+                <div className="space-y-2 p-4">
+                  <h3 className="line-clamp-2 text-sm font-black leading-snug" style={{ color: "var(--on-surface)" }}>
+                    {ev.title}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                    <CalendarDays size={11} style={{ color: "var(--green)" }} />
+                    {dateLabel} · {time}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                    <MapPin size={11} style={{ color: "var(--green)" }} />
+                    <span className="truncate">{ev.location}</span>
+                  </div>
+                  {ev.opportunity && (
+                    <p className="line-clamp-1 text-[11px] font-semibold" style={{ color: "var(--green)" }}>
+                      {ev.opportunity}
+                    </p>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─── 9. Feature cards ────────────────────────────────────── */
 function FeatureCards() {
   return (
@@ -682,6 +793,7 @@ export default function HomePage() {
       <LiveListings />
       <CollectionGrid />
       <TrendingSection />
+      <EventStrip />
       <EditorialSplit />
       <FeatureCards />
 

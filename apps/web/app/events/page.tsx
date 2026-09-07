@@ -526,8 +526,21 @@ export default function EventsPage() {
     });
   }, [events, selectedDay]);
 
-  const upcoming = useMemo(() => events.filter(e => new Date(e.eventDate) >= new Date()), [events]);
-  const past     = useMemo(() => events.filter(e => new Date(e.eventDate) <  new Date()), [events]);
+  // Classify by calendar day — an event on today's date is "today" for the full day,
+  // not "past" once the scheduled hour passes. Only events from earlier calendar days are past.
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  }, []);
+
+  function eventDayStr(ev: CampusEvent) {
+    const d = new Date(ev.eventDate);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  const todayEvents = useMemo(() => events.filter(e => eventDayStr(e) === todayStr), [events, todayStr]);
+  const upcoming    = useMemo(() => events.filter(e => eventDayStr(e) >  todayStr), [events, todayStr]);
+  const past        = useMemo(() => events.filter(e => eventDayStr(e) <  todayStr), [events, todayStr]);
 
   async function handleSave(data: EventFormData, id?: string, status = "PUBLISHED") {
     const payload = {
@@ -594,47 +607,18 @@ export default function EventsPage() {
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: "var(--green)" }} />
           </div>
         ) : (
-          <div className="grid gap-8 lg:grid-cols-[380px_1fr]">
-            {/* Left — calendar */}
-            <div className="space-y-4">
+          <div className="grid gap-8 lg:grid-cols-[340px_1fr]">
+            {/* Left — calendar only; clicking a day filters the right list */}
+            <div>
               <EventCalendar events={events} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
-
-              {/* Day detail panel */}
-              <AnimatePresence>
-                {selectedDay && selectedEvents.length > 0 && (
-                  <motion.div
-                    key="day-panel"
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 12 }}
-                    transition={spring}
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="text-sm font-black" style={{ color: "var(--on-surface)" }}>
-                        {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-GH", { weekday: "long", month: "long", day: "numeric" })}
-                      </p>
-                      <button type="button" onClick={() => setSelectedDay(null)}
-                        className="rounded-lg p-1 transition-colors hover:bg-[var(--surface-raised)]">
-                        <X size={13} style={{ color: "var(--muted)" }} />
-                      </button>
-                    </div>
-                    <EventDetailPanel events={selectedEvents} onEdit={openEdit} onDelete={handleDelete} canEdit={canEdit} />
-                  </motion.div>
-                )}
-                {selectedDay && selectedEvents.length === 0 && (
-                  <motion.div
-                    key="empty-day"
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    className="rounded-2xl px-5 py-6 text-center"
-                    style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
-                  >
-                    <p className="text-sm font-semibold" style={{ color: "var(--muted)" }}>No events on this day</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {selectedDay && (
+                <p className="mt-3 text-center text-xs" style={{ color: "var(--subtle)" }}>
+                  Click the date again or use &ldquo;Clear&rdquo; to see all events
+                </p>
+              )}
             </div>
 
-            {/* Right — full list */}
+            {/* Right — single event list, filtered by selected day or full */}
             <div className="space-y-8">
               {events.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-20">
@@ -644,8 +628,48 @@ export default function EventsPage() {
                     Campus events and opportunities will appear here when published.
                   </p>
                 </div>
+              ) : selectedDay ? (
+                /* Day-filtered view */
+                <section>
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-black" style={{ color: "var(--on-surface)" }}>
+                        {new Date(selectedDay + "T12:00:00").toLocaleDateString("en-GH", { weekday: "long", month: "long", day: "numeric" })}
+                      </p>
+                      <p className="mt-0.5 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                        {selectedEvents.length} event{selectedEvents.length !== 1 ? "s" : ""} on this day
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => setSelectedDay(null)}
+                      className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-colors hover:bg-[var(--surface-raised)]"
+                      style={{ color: "var(--muted)", border: "1px solid var(--border)" }}>
+                      <X size={12} /> Clear
+                    </button>
+                  </div>
+                  {selectedEvents.length > 0
+                    ? <EventDetailPanel events={selectedEvents} onEdit={openEdit} onDelete={handleDelete} canEdit={canEdit} />
+                    : (
+                      <div className="rounded-2xl px-5 py-10 text-center"
+                        style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
+                        <p className="text-sm font-semibold" style={{ color: "var(--muted)" }}>No events on this day</p>
+                      </div>
+                    )
+                  }
+                </section>
               ) : (
+                /* Full list view */
                 <>
+                  {todayEvents.length > 0 && (
+                    <section>
+                      <div className="mb-4 flex items-center gap-2.5">
+                        <span className="h-2 w-2 animate-pulse rounded-full" style={{ background: "var(--green)" }} />
+                        <p className="text-xs font-black uppercase tracking-widest" style={{ color: "var(--green)" }}>
+                          Happening today · {todayEvents.length}
+                        </p>
+                      </div>
+                      <EventDetailPanel events={todayEvents} onEdit={openEdit} onDelete={handleDelete} canEdit={canEdit} />
+                    </section>
+                  )}
                   {upcoming.length > 0 && (
                     <section>
                       <p className="mb-4 text-xs font-black uppercase tracking-widest" style={{ color: "var(--muted)" }}>

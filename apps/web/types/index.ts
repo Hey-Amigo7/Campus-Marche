@@ -178,7 +178,7 @@ export type OrderTrackingResponse = {
 
 export type Order = {
   id: string;
-  product: Pick<Product, "id" | "title" | "price" | "imageUrl" | "imageStyle" | "location">;
+  product: Pick<Product, "id" | "title" | "price" | "imageUrl" | "imageStyle" | "location" | "listingType">;
   status: OrderStatus | string;
   escrowStatus: EscrowStatus | string;
   /** Kept for backward-compat; prefer escrowStatus for logic */
