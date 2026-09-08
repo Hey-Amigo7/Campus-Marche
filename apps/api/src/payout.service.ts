@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -147,18 +148,46 @@ export class PayoutService {
     });
 
     if (!payout) throw new NotFoundException('Payout not found');
-    if (!([PayoutStatus.PENDING, PayoutStatus.APPROVED] as PayoutStatus[]).includes(payout.status)) {
-      throw new BadRequestException(`Cannot process payout with status ${payout.status}`);
-    }
 
     const secret = this.getSecret();
     if (!secret) {
-      this.logger.warn(`Payout ${payoutId}: PAYSTACK_SECRET_KEY not configured — marking PENDING`);
+      this.logger.warn(`Payout ${payoutId}: PAYSTACK_SECRET_KEY not configured — skipping`);
       return;
     }
 
-    // ── Test-mode bypass: skip ALL Paystack API calls to avoid "starter business" error ──
-    // Recipient creation also hits Paystack and would appear as pending in dashboard.
+    // Deterministic reference: identical on every retry so Paystack deduplicates,
+    // and so transfer.success/failed webhooks can locate this payout by reference
+    // even if the server crashes between the Paystack call and storing transferCode.
+    const reference = `CM-PAYOUT-${payoutId}`;
+
+    // Atomic concurrency lock + wallet debit in one DB transaction.
+    // updateMany WHERE status IN (PENDING, APPROVED) returns count = 0 if another
+    // concurrent call already claimed this payout — we abort without touching Paystack.
+    // Debit is inside the same transaction so the lock and balance change are atomic:
+    // the seller cannot double-spend while the transfer is in-flight.
+    // If debitAvailable throws (e.g. race-depleted balance), the updateMany rolls back
+    // and the payout stays in its previous state.
+    let claimed = false;
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.payout.updateMany({
+        where: { id: payoutId, status: { in: [PayoutStatus.PENDING, PayoutStatus.APPROVED] } },
+        data: { status: PayoutStatus.PROCESSING, transferReference: reference },
+      });
+      if (count === 0) return;
+      claimed = true;
+      await this.walletService.debitAvailable(payout.sellerId, payout.amount, tx, payoutId);
+    });
+
+    if (!claimed) {
+      this.logger.warn(`Payout ${payoutId}: concurrent call already claimed this payout — aborting`);
+      return;
+    }
+
+    // ── Test-mode bypass ─────────────────────────────────────────────────────────
+    // Skips recipient creation and transfer initiation to avoid "starter business"
+    // restrictions on Paystack test accounts. Goes straight to COMPLETED and runs
+    // finalizeWithdrawal (debitAvailable already ran in the lock step above).
+    // Do NOT change this bypass path.
     if (secret.startsWith('sk_test_')) {
       const testRef  = `TEST-CM-PAYOUT-${payoutId.slice(-8)}-${Date.now()}`;
       const testCode = `TEST_TRANSFER_${payoutId.slice(-8)}`;
@@ -175,7 +204,6 @@ export class PayoutService {
           },
         });
 
-        await this.walletService.debitAvailable(payout.sellerId, payout.amount, tx);
         await this.walletService.finalizeWithdrawal(payout.sellerId, payout.amount, tx);
 
         if (payout.orderId) {
@@ -201,68 +229,100 @@ export class PayoutService {
       return;
     }
 
-    // ── Live mode: real Paystack calls below ───────────────────────────────
+    // ── Live mode: real Paystack calls below ─────────────────────────────────────
 
-    // Determine MoMo phone
     const phone = momoPhone ?? payout.seller.business?.momoPhone;
     if (!phone && payout.payoutMethod !== 'BANK_TRANSFER') {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payout.update({ where: { id: payoutId }, data: { status: PayoutStatus.FAILED, failureReason: 'Seller has no MoMo phone on file' } });
+        await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx, payoutId);
+      });
       throw new BadRequestException('Seller has no MoMo phone on file');
     }
 
     const bankCode = MOMO_BANK_CODES[payout.payoutMethod];
 
-    // ── Step 1: Get or create transfer recipient ────────────────────────────
-    const recipientCode = await this.getOrCreateRecipient(
-      secret,
-      payout.sellerId,
-      payout.seller.name,
-      phone!,
-      bankCode,
-      payout.payoutMethod,
-    );
+    let recipientCode: string;
+    try {
+      recipientCode = await this.getOrCreateRecipient(
+        secret,
+        payout.sellerId,
+        payout.seller.name,
+        phone!,
+        bankCode,
+        payout.payoutMethod,
+      );
+    } catch (recipientErr) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payout.update({ where: { id: payoutId }, data: { status: PayoutStatus.FAILED, failureReason: recipientErr instanceof Error ? recipientErr.message : String(recipientErr) } });
+        await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx, payoutId);
+      });
+      throw recipientErr;
+    }
 
-    // ── Step 2: Debit seller available balance ─────────────────────────────
-    await this.walletService.debitAvailable(payout.sellerId, payout.amount);
-
-    // ── Step 3: Initiate Paystack transfer ─────────────────────────────────
-    const reference = `CM-PAYOUT-${payoutId.slice(-8)}-${Date.now()}`;
     const amountInPesewas = Math.round(payout.amount * 100);
 
-    const transferRes = await fetch('https://api.paystack.co/transfer', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source: 'balance',
-        amount: amountInPesewas,
-        recipient: recipientCode,
-        reference,
-        reason: `Campus Marche seller payout${payout.orderId ? ` — order ${payout.orderId.slice(0, 8)}` : ''}`,
-      }),
-    });
-
-    const transferData = (await transferRes.json()) as PaystackTransferResponse;
+    let transferData: PaystackTransferResponse;
+    try {
+      const transferRes = await fetch('https://api.paystack.co/transfer', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: 'balance',
+          amount: amountInPesewas,
+          recipient: recipientCode,
+          reference,
+          reason: `Campus Marche seller payout${payout.orderId ? ` — order ${payout.orderId.slice(0, 8)}` : ''}`,
+        }),
+      });
+      transferData = (await transferRes.json()) as PaystackTransferResponse;
+    } catch (networkErr) {
+      // Network timeout or DNS failure: Paystack may or may not have received the request.
+      // Restore the debit and mark TRANSFER_UNKNOWN. Requires admin reconciliation.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payout.update({
+          where: { id: payoutId },
+          data: {
+            status: PayoutStatus.TRANSFER_UNKNOWN,
+            recipientCode,
+            failureReason: `Paystack API unreachable: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`,
+          },
+        });
+        await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx, payoutId);
+      });
+      this.logger.error(`Payout ${payoutId} → TRANSFER_UNKNOWN: Paystack network error — balance restored, requires admin reconciliation`);
+      return;
+    }
 
     if (!transferData.status || !transferData.data) {
-      // Refund the debited balance
-      await this.walletService.refundAvailable(payout.sellerId, payout.amount);
+      // Paystack explicitly rejected the transfer. Restore the debit.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payout.update({
+          where: { id: payoutId },
+          data: {
+            status: PayoutStatus.FAILED,
+            recipientCode,
+            failureReason: `Paystack rejected: ${transferData.message}`,
+          },
+        });
+        await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx, payoutId);
+      });
+      this.logger.error(`Payout ${payoutId} FAILED: Paystack rejected — ${transferData.message}`);
       throw new BadRequestException(`Paystack transfer failed: ${transferData.message}`);
     }
 
-    // ── Step 4: Update payout record ───────────────────────────────────────
+    // Transfer accepted by Paystack. Store the transfer_code; payout stays PROCESSING.
+    // The transfer.success webhook will call handleTransferSuccess → finalizeWithdrawal → COMPLETED.
     await this.prisma.payout.update({
       where: { id: payoutId },
       data: {
-        status: PayoutStatus.PROCESSING,
         transferCode: transferData.data.transfer_code,
-        transferReference: transferData.data.reference,
-        recipientCode,
         processedAt: new Date(),
+        recipientCode,
       },
     });
 
-    this.logger.log(
-      `Payout ${payoutId} processing — transfer_code: ${transferData.data.transfer_code}`,
-    );
+    this.logger.log(`Payout ${payoutId} PROCESSING — transfer_code: ${transferData.data.transfer_code}, reference: ${reference}`);
 
     this.notificationService?.notify(
       payout.sellerId,
@@ -278,24 +338,49 @@ export class PayoutService {
     const payout = await this.prisma.payout.findFirst({
       where: {
         OR: [{ transferCode }, { transferReference: reference }],
-        status: PayoutStatus.PROCESSING,
+        // TRANSFER_UNKNOWN: Paystack timed out but the transfer went through anyway;
+        // debit was restored in processPayout and must be re-applied here.
+        status: { in: [PayoutStatus.PROCESSING, PayoutStatus.TRANSFER_UNKNOWN] },
       },
     });
 
     if (!payout) {
-      this.logger.warn(`transfer.success: no PROCESSING payout found for code=${transferCode} ref=${reference}`);
+      this.logger.warn(`transfer.success: no PROCESSING/TRANSFER_UNKNOWN payout found for code=${transferCode} ref=${reference}`);
       return;
     }
 
+    const wasTransferUnknown = payout.status === PayoutStatus.TRANSFER_UNKNOWN;
+
+    // Atomic idempotency guard: if two transfer.success webhooks arrive concurrently,
+    // only the one that wins the updateMany proceeds — the other sees count = 0.
+    let updated = false;
     await this.prisma.$transaction(async (tx) => {
-      await tx.payout.update({
-        where: { id: payout.id },
+      const { count } = await tx.payout.updateMany({
+        where: { id: payout.id, status: { in: [PayoutStatus.PROCESSING, PayoutStatus.TRANSFER_UNKNOWN] } },
         data: { status: PayoutStatus.COMPLETED, completedAt: new Date() },
       });
+      if (count === 0) return;
+      updated = true;
 
-      await this.walletService.finalizeWithdrawal(payout.sellerId, payout.amount, tx);
+      // For TRANSFER_UNKNOWN payouts the debit was restored in processPayout; re-apply it now.
+      // If the seller spent the restored balance in the interim, record the debt and let admin reconcile.
+      if (wasTransferUnknown) {
+        try {
+          await this.walletService.debitAvailable(payout.sellerId, payout.amount, tx, payout.id);
+        } catch (debitErr) {
+          if (debitErr instanceof BadRequestException) {
+            await this.walletService.recordSellerDebt(payout.sellerId, payout.amount, tx, undefined, payout.id);
+            this.logger.error(
+              `Payout ${payout.id} TRANSFER_UNKNOWN resolved but seller balance insufficient — SELLER_DEBT_RECORDED, requires admin recovery`,
+            );
+          } else {
+            throw debitErr;
+          }
+        }
+      }
 
-      // Mark the linked order RELEASED if it was RELEASE_PENDING
+      await this.walletService.finalizeWithdrawal(payout.sellerId, payout.amount, tx, payout.id);
+
       if (payout.orderId) {
         await tx.order.updateMany({
           where: { id: payout.orderId, escrowStatus: 'RELEASE_PENDING' },
@@ -304,12 +389,13 @@ export class PayoutService {
       }
     });
 
-    // Push real-time update so the order detail page ticks the final step green
+    if (!updated) {
+      this.logger.warn(`transfer.success: payout ${payout.id} already processed — idempotent skip`);
+      return;
+    }
+
     if (payout.orderId) {
-      this.chatGateway?.emitOrderUpdated(payout.orderId, {
-        escrowStatus: 'RELEASED',
-        paymentStatus: 'Paid',
-      });
+      this.chatGateway?.emitOrderUpdated(payout.orderId, { escrowStatus: 'RELEASED', paymentStatus: 'Paid' });
     }
 
     this.notificationService?.notify(
@@ -322,32 +408,95 @@ export class PayoutService {
     this.logger.log(`Payout ${payout.id} COMPLETED — GHS ${payout.amount}`);
   }
 
-  // ─── Webhook: transfer.failed / transfer.reversed ─────────────────────────
+  // ─── Webhook: transfer.failed ─────────────────────────────────────────────
 
   async handleTransferFailed(transferCode: string, reference: string, reason?: string) {
     const payout = await this.prisma.payout.findFirst({
-      where: { OR: [{ transferCode }, { transferReference: reference }] },
+      where: {
+        OR: [{ transferCode }, { transferReference: reference }],
+        // TRANSFER_UNKNOWN: balance was already restored in processPayout; no refund needed here.
+        status: { in: [PayoutStatus.PROCESSING, PayoutStatus.TRANSFER_UNKNOWN] },
+      },
     });
 
-    if (!payout) return;
+    if (!payout) {
+      this.logger.warn(`transfer.failed: no PROCESSING/TRANSFER_UNKNOWN payout found for code=${transferCode} ref=${reference}`);
+      return;
+    }
 
+    const wasProcessing = payout.status === PayoutStatus.PROCESSING;
+
+    let updated = false;
     await this.prisma.$transaction(async (tx) => {
-      await tx.payout.update({
-        where: { id: payout.id },
+      const { count } = await tx.payout.updateMany({
+        where: { id: payout.id, status: { in: [PayoutStatus.PROCESSING, PayoutStatus.TRANSFER_UNKNOWN] } },
         data: { status: PayoutStatus.FAILED, failureReason: reason ?? 'Transfer failed' },
       });
-      // Refund the available balance since the transfer didn't go through
-      await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx);
+      if (count === 0) return;
+      updated = true;
+      // PROCESSING = balance was debited in processPayout → restore it.
+      // TRANSFER_UNKNOWN = balance was already restored in processPayout → no-op.
+      if (wasProcessing) {
+        await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx, payout.id);
+      }
     });
+
+    if (!updated) {
+      this.logger.warn(`transfer.failed: payout ${payout.id} already processed — idempotent skip`);
+      return;
+    }
 
     this.notificationService?.notify(
       payout.sellerId,
       'payout',
       'Payout failed',
-      `Your payout of GHS ${payout.amount.toFixed(2)} failed. Your balance has been restored. Please contact support.`,
+      `Your payout of GHS ${payout.amount.toFixed(2)} failed. ${wasProcessing ? 'Your balance has been restored. ' : ''}Please contact support.`,
     ).catch(() => undefined);
 
-    this.logger.error(`Payout ${payout.id} FAILED: ${reason ?? 'unknown'}`);
+    this.logger.error(`Payout ${payout.id} FAILED: ${reason ?? 'unknown'} — ${wasProcessing ? 'balance restored' : 'balance unchanged (was TRANSFER_UNKNOWN)'}`);
+  }
+
+  // ─── Webhook: transfer.reversed ────────────────────────────────────────────
+
+  async handleTransferReversed(transferCode: string, reference: string, reason?: string) {
+    const payout = await this.prisma.payout.findFirst({
+      where: {
+        OR: [{ transferCode }, { transferReference: reference }],
+        status: PayoutStatus.COMPLETED,
+      },
+    });
+
+    if (!payout) {
+      this.logger.warn(`transfer.reversed: no COMPLETED payout found for code=${transferCode} ref=${reference}`);
+      return;
+    }
+
+    // Atomic idempotency guard; also guards against double-reversal.
+    let updated = false;
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.payout.updateMany({
+        where: { id: payout.id, status: PayoutStatus.COMPLETED },
+        data: { status: PayoutStatus.REVERSED, failureReason: reason ?? 'Transfer reversed by Paystack' },
+      });
+      if (count === 0) return;
+      updated = true;
+      // Restore availableBalance AND decrement totalWithdrawn in one atomic operation.
+      await this.walletService.reverseWithdrawal(payout.sellerId, payout.amount, tx, payout.id);
+    });
+
+    if (!updated) {
+      this.logger.warn(`transfer.reversed: payout ${payout.id} already processed — idempotent skip`);
+      return;
+    }
+
+    this.notificationService?.notify(
+      payout.sellerId,
+      'payout',
+      'Payout reversed',
+      `Your payout of GHS ${payout.amount.toFixed(2)} was reversed by Paystack. Your balance has been restored. Please contact support.`,
+    ).catch(() => undefined);
+
+    this.logger.error(`Payout ${payout.id} REVERSED: ${reason ?? 'unknown'} — availableBalance restored, totalWithdrawn decremented`);
   }
 
   // ─── Admin: list pending payouts ───────────────────────────────────────────
@@ -409,27 +558,24 @@ export class PayoutService {
       throw new BadRequestException(`Cannot approve payout with status ${payout.status}`);
     }
 
-    await this.prisma.payout.update({
-      where: { id: payoutId },
+    // Atomic conditional update so two simultaneous admin approvals cannot both win.
+    // processPayout's own lock handles the APPROVED → PROCESSING transition.
+    const { count } = await this.prisma.payout.updateMany({
+      where: { id: payoutId, status: PayoutStatus.PENDING },
       data: { status: PayoutStatus.APPROVED, approvedAt: new Date() },
     });
-
-    try {
-      await this.processPayout(payoutId);
-    } catch (err) {
-      // Roll back to PENDING so admin can investigate and retry
-      await this.prisma.payout.update({
-        where: { id: payoutId },
-        data: {
-          status: PayoutStatus.PENDING,
-          approvedAt: null,
-          failureReason: err instanceof Error ? err.message : String(err),
-        },
-      }).catch(() => null);
-      throw err;
+    if (count === 0) {
+      throw new BadRequestException('Payout was already processed by another request');
     }
 
-    return this.prisma.payout.findUnique({ where: { id: payoutId } });
+    // processPayout sets FAILED/TRANSFER_UNKNOWN internally on error — no rollback needed here.
+    await this.processPayout(payoutId);
+
+    const result = await this.prisma.payout.findUnique({ where: { id: payoutId } });
+    if (result?.status === PayoutStatus.APPROVED) {
+      throw new ConflictException('Payout approved but could not be processed — PAYSTACK_SECRET_KEY is not configured');
+    }
+    return result;
   }
 
   // ─── Admin: cancel/void a payout and restore seller balance ──────────────
@@ -438,24 +584,34 @@ export class PayoutService {
     const payout = await this.prisma.payout.findUnique({ where: { id: payoutId } });
     if (!payout) throw new NotFoundException('Payout not found');
 
-    const cancellable: PayoutStatus[] = [PayoutStatus.PENDING, PayoutStatus.PROCESSING];
+    // TRANSFER_UNKNOWN: balance was already restored in processPayout — no refund needed on cancel.
+    // Admin should verify the Paystack transfer status before cancelling a TRANSFER_UNKNOWN payout.
+    const cancellable: PayoutStatus[] = [PayoutStatus.PENDING, PayoutStatus.PROCESSING, PayoutStatus.TRANSFER_UNKNOWN];
     if (!cancellable.includes(payout.status)) {
       throw new ForbiddenException(`Cannot cancel a payout with status ${payout.status}`);
     }
 
-    // PROCESSING means availableBalance was already debited — restore it
-    const needsRefund = payout.status === PayoutStatus.PROCESSING;
-
+    // Two-phase conditional update guards against a concurrent state change
+    // (e.g. PROCESSING → COMPLETED via webhook) racing the stale `payout.status` read above.
+    let needsRefund = false;
     await this.prisma.$transaction(async (tx) => {
-      await tx.payout.update({
-        where: { id: payoutId },
-        data: {
-          status: PayoutStatus.CANCELLED,
-          failureReason: 'Cancelled by admin — balance restored',
-        },
+      // First: try PROCESSING — balance was debited in processPayout, must restore it.
+      const processingResult = await tx.payout.updateMany({
+        where: { id: payoutId, status: PayoutStatus.PROCESSING },
+        data: { status: PayoutStatus.CANCELLED, failureReason: 'Cancelled by admin — balance restored' },
       });
-      if (needsRefund) {
+      if (processingResult.count > 0) {
+        needsRefund = true;
         await this.walletService.refundAvailable(payout.sellerId, payout.amount, tx);
+        return;
+      }
+      // Second: try PENDING / TRANSFER_UNKNOWN — balance not debited or already restored.
+      const otherResult = await tx.payout.updateMany({
+        where: { id: payoutId, status: { in: [PayoutStatus.PENDING, PayoutStatus.TRANSFER_UNKNOWN] } },
+        data: { status: PayoutStatus.CANCELLED, failureReason: 'Cancelled by admin' },
+      });
+      if (otherResult.count === 0) {
+        throw new ConflictException(`Payout ${payoutId} can no longer be cancelled — status changed concurrently`);
       }
     });
 
@@ -463,7 +619,7 @@ export class PayoutService {
       payout.sellerId,
       'payout',
       'Payout voided',
-      `Your payout of GHS ${payout.amount.toFixed(2)} was cancelled and your balance has been restored.`,
+      `Your payout of GHS ${payout.amount.toFixed(2)} was cancelled${needsRefund ? ' and your balance has been restored' : ''}.`,
     ).catch(() => undefined);
 
     return { message: needsRefund ? 'Payout cancelled and balance restored.' : 'Payout cancelled.' };

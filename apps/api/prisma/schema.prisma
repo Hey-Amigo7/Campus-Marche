@@ -37,6 +37,8 @@ enum PayoutStatus {
   COMPLETED
   FAILED
   CANCELLED
+  REVERSED          // transfer.reversed after COMPLETED — distinct from FAILED
+  TRANSFER_UNKNOWN  // Paystack API timed out; transfer existence uncertain
 }
 
 enum PayoutMethod {
@@ -270,9 +272,11 @@ model Wallet {
 }
 
 // Immutable audit trail of every balance change on a wallet.
+// type is a plain String (no DB enum) so new values can be added without a migration.
+// Current values (legacy):   CREDIT_PENDING | PENDING_TO_AVAILABLE | DEBIT_AVAILABLE | REFUND_AVAILABLE | REVERSE_PENDING | FINALIZE_WITHDRAWAL
+// Target values (Phase 2+):  ENTITLEMENT_PENDING | ENTITLEMENT_RELEASED | PAYOUT_INITIATED | TRANSFER_CONFIRMED | PAYOUT_FAILED_RESTORED | TRANSFER_REVERSED | ENTITLEMENT_REVERSED | REFUND_POST_RELEASE | SELLER_DEBT_RECORDED
 model WalletTransaction {
   id        String   @id @default(cuid())
-  // CREDIT_PENDING | PENDING_TO_AVAILABLE | DEBIT_AVAILABLE | REFUND_AVAILABLE | REVERSE_PENDING | FINALIZE_WITHDRAWAL
   type      String
   amount    Float
   orderId   String?
@@ -364,6 +368,10 @@ model WebhookLog {
   error     String?
   createdAt DateTime @default(now())
 
+  // Prevents duplicate processing of the same event identity.
+  // PostgreSQL treats NULLs as distinct in unique indexes, so multiple
+  // NULL-reference rows (non-payment events) are still permitted.
+  @@unique([eventType, reference])
   @@index([reference])
   @@index([eventType])
   @@index([createdAt])

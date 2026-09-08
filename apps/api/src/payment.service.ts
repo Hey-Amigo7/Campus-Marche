@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -370,6 +371,10 @@ export class PaymentService {
       payoutMethod = PayoutMethod.AIRTELTIGO_MONEY;
     }
 
+    // Create the payout record inside the same transaction as the balance update so a crash
+    // between the two cannot leave availableBalance inflated with no corresponding payout.
+    // A crash after commit leaves a PENDING payout that admin can retry-process safely.
+    let createdPayoutId: string | null = null;
     await this.prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: orderId },
@@ -380,9 +385,27 @@ export class PaymentService {
         },
       });
       await this.walletService.pendingToAvailable(sellerId, sellerAmount, tx);
+      const payout = await tx.payout.create({
+        data: { sellerId, orderId, amount: sellerAmount, payoutMethod },
+      });
+      createdPayoutId = payout.id;
     });
 
-    await this.payoutService.createEscrowPayout(sellerId, orderId, sellerAmount, payoutMethod, momoPhone);
+    // Network calls must not run inside a DB transaction.
+    const autoApprove = this.config.get<string>('PAYOUT_AUTO_APPROVE') !== 'false';
+    if (createdPayoutId && autoApprove) {
+      try {
+        await this.payoutService.processPayout(createdPayoutId, momoPhone);
+      } catch (err) {
+        this.logger.error(`releaseEscrowInternal: auto-process payout ${createdPayoutId} failed: ${err instanceof Error ? err.message : String(err)}`);
+        await this.prisma.payout.update({
+          where: { id: createdPayoutId },
+          data: { failureReason: err instanceof Error ? err.message : String(err) },
+        }).catch(() => null);
+      }
+    } else if (createdPayoutId) {
+      this.logger.log(`releaseEscrowInternal: payout ${createdPayoutId} created as PENDING — awaiting admin approval`);
+    }
 
     const isServiceOrder = order.product.listingType === 'service';
     if (isServiceOrder) {
@@ -451,10 +474,14 @@ export class PaymentService {
       } else if (eventType === 'transfer.success') {
         const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
         await this.payoutService.handleTransferSuccess(transferCode, reference);
-      } else if (eventType === 'transfer.failed' || eventType === 'transfer.reversed') {
+      } else if (eventType === 'transfer.failed') {
         const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
         const reason = (data as unknown as { reason?: string }).reason;
         await this.payoutService.handleTransferFailed(transferCode, reference, reason);
+      } else if (eventType === 'transfer.reversed') {
+        const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
+        const reason = (data as unknown as { reason?: string }).reason;
+        await this.payoutService.handleTransferReversed(transferCode, reference, reason);
       } else if (eventType === 'refund.processed' || eventType === 'refund.failed') {
         await this.handleRefund(data);
       }
@@ -572,10 +599,14 @@ export class PaymentService {
       });
 
       if (order.sellerId && order.sellerAmount) {
-        const releasedToAvailable = ['RELEASE_PENDING', 'DELIVERED'].includes(order.escrowStatus);
-        if (releasedToAvailable) {
+        if (order.escrowStatus === 'RELEASE_PENDING') {
+          // pendingToAvailable already ran — funds are in availableBalance; debit them back.
           await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx, undefined);
-        } else if (['ESCROW_HELD', 'DISPUTED'].includes(order.escrowStatus)) {
+        } else if (order.escrowStatus === 'RELEASED') {
+          // Payout already completed — record the debt obligation; admin must recover separately.
+          await this.walletService.recordSellerDebt(order.sellerId, order.sellerAmount, tx, orderId);
+        } else if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED', 'DISPUTED'].includes(order.escrowStatus)) {
+          // Funds still in pendingBalance; reverse the credit.
           await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx, orderId);
         }
       }
@@ -596,38 +627,36 @@ export class PaymentService {
   ): Promise<{ message: string }> {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Order not found');
-    if (order.escrowStatus !== EscrowStatus.DISPUTED) {
-      throw new BadRequestException('This order is not currently under dispute');
-    }
 
     this.logger.log(
       `Admin ${adminId ?? 'unknown'} resolving dispute for order ${orderId} — decision: ${decision}`,
     );
 
-    // Record the resolution decision on the order.
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { disputeResolvedAt: new Date(), disputeDecision: decision },
+    // Atomic claim: transitions DISPUTED → ESCROW_HELD in one conditional update.
+    // Two concurrent resolutions cannot both see count > 0 for the same DISPUTED order.
+    const { count } = await this.prisma.order.updateMany({
+      where: { id: orderId, escrowStatus: EscrowStatus.DISPUTED },
+      data: {
+        disputeResolvedAt: new Date(),
+        disputeDecision:   decision,
+        escrowStatus:      EscrowStatus.ESCROW_HELD,
+      },
     });
+    if (count === 0) {
+      const current = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (current?.escrowStatus !== EscrowStatus.DISPUTED) {
+        throw new BadRequestException('This order is not currently under dispute');
+      }
+      throw new ConflictException('Dispute was already resolved by a concurrent request — refresh and try again');
+    }
 
     if (decision === 'REFUND_BUYER') {
-      // Reset to ESCROW_HELD so adminRefundOrder works (it checks for paid payment + non-terminal state).
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { escrowStatus: EscrowStatus.ESCROW_HELD },
-      });
       return this.adminRefundOrder(orderId);
     }
 
-    // RELEASE_SELLER — move funds to seller despite dispute.
-    // Reset dispute state so releaseEscrowInternal's state check passes.
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { escrowStatus: EscrowStatus.ESCROW_HELD },
-    });
+    // RELEASE_SELLER — order is now ESCROW_HELD, releaseEscrowInternal moves it to RELEASE_PENDING.
     await this.releaseEscrowInternal(orderId);
 
-    // Notify both parties.
     if (order.buyerId) {
       this.notificationService?.notify(
         order.buyerId, 'dispute', 'Dispute resolved',
@@ -700,11 +729,12 @@ export class PaymentService {
         },
       });
 
-      // Reverse wallet balance — pending if funds not yet released, available if buyer already confirmed
+      // Reverse wallet balance based on where funds currently sit.
       if (order.sellerId && order.sellerAmount) {
-        const inAvailable = ['RELEASE_PENDING', 'DELIVERED'].includes(order.escrowStatus);
-        if (inAvailable) {
+        if (order.escrowStatus === 'RELEASE_PENDING') {
           await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx);
+        } else if (order.escrowStatus === 'RELEASED') {
+          await this.walletService.recordSellerDebt(order.sellerId, order.sellerAmount, tx, order.id);
         } else {
           await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx);
         }
