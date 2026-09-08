@@ -141,6 +141,44 @@ export class WalletService {
     });
   }
 
+  /** Reverse a completed withdrawal (called on transfer.reversed webhook). */
+  async reverseWithdrawal(
+    userId: string,
+    amount: number,
+    tx?: Prisma.TransactionClient,
+    payoutId?: string,
+  ) {
+    const client = tx ?? this.prisma;
+    const wallet = await client.wallet.findUnique({ where: { userId } });
+    if (!wallet) throw new Error(`reverseWithdrawal: wallet not found for user ${userId} — payout ${payoutId ?? 'unknown'}`);
+    await client.wallet.update({
+      where: { userId },
+      data: {
+        availableBalance: { increment: amount },
+        totalWithdrawn:   { decrement: amount },
+      },
+    });
+    await client.walletTransaction.create({
+      data: { walletId: wallet.id, type: 'TRANSFER_REVERSED', amount, payoutId },
+    });
+  }
+
+  /** Record seller debt obligation without changing balances (used when a refund occurs after payout completion). */
+  async recordSellerDebt(
+    userId: string,
+    amount: number,
+    tx?: Prisma.TransactionClient,
+    orderId?: string,
+    payoutId?: string,
+  ) {
+    const client = tx ?? this.prisma;
+    const wallet = await client.wallet.findUnique({ where: { userId } });
+    if (!wallet) return;
+    await client.walletTransaction.create({
+      data: { walletId: wallet.id, type: 'SELLER_DEBT_RECORDED', amount, orderId, payoutId },
+    });
+  }
+
   async getBalance(userId: string) {
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) {

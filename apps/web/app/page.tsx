@@ -22,7 +22,6 @@ import { ProgressiveBlur } from "@/components/progressive-blur";
 import { motion } from "framer-motion";
 import { LoopText } from "@/components/skiper-loop";
 import { StatsRow } from "@/components/skiper-numbers";
-import { CarouselNavigator, useCarousel } from "@/components/watermelon-carousel-nav";
 
 /* ─── Constants ────────────────────────────────────────────── */
 
@@ -296,17 +295,13 @@ function Stats() {
   );
 }
 
-/* ─── 5. Live listings with carousel nav ─────────────────── */
+/* ─── 5. Live listings ────────────────────────────────────── */
 function LiveListings() {
   const { data: products, isLoading } = useProducts();
 
   const fresh = [...(products ?? [])]
-    .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
-
-  const ITEMS_PER_PAGE = 8;
-  const pages = Math.max(1, Math.ceil(fresh.length / ITEMS_PER_PAGE));
-  const { current, go } = useCarousel(pages);
-  const paginated = fresh.slice(current * ITEMS_PER_PAGE, (current + 1) * ITEMS_PER_PAGE);
+    .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime())
+    .slice(0, 4);
 
   return (
     <section className="container-shell py-10">
@@ -320,48 +315,26 @@ function LiveListings() {
             Fresh from HTU students and local vendors
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {pages > 1 && (
-            <CarouselNavigator
-              count={pages}
-              current={current}
-              onChange={go}
-              autoDelay={5000}
-              theme={{
-                bg:       "bg-zinc-900",
-                button:   "bg-zinc-800 text-white hover:bg-zinc-700",
-                dot:      "bg-zinc-600",
-                progress: "bg-white",
-              }}
-            />
-          )}
-          <Link
-            href="/products"
-            className="inline-flex items-center gap-1 text-sm font-semibold transition-colors"
-            style={{ color: "var(--green)" }}
-          >
-            See all <AnimatedArrowRight size={14} />
-          </Link>
-        </div>
+        <Link
+          href="/products"
+          className="inline-flex items-center gap-1 text-sm font-semibold transition-colors"
+          style={{ color: "var(--green)" }}
+        >
+          See all <AnimatedArrowRight size={14} />
+        </Link>
       </div>
 
       {/* Grid */}
       {isLoading || fresh.length === 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => <ProductSkeleton key={i} />)}
+          {Array.from({ length: 4 }).map((_, i) => <ProductSkeleton key={i} />)}
         </div>
       ) : (
-        <motion.div
-          key={current}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
-        >
-          {paginated.map((product) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {fresh.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
-        </motion.div>
+        </div>
       )}
     </section>
   );
