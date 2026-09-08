@@ -105,17 +105,22 @@ export class OrderService {
 
     const role: 'buyer' | 'seller' | 'delivery' = isBuyer ? 'buyer' : isSeller ? 'seller' : 'delivery';
 
+    // Verification codes are stripped server-side — only the authorised party receives them.
+    // Seller/delivery person sees pickupCode; buyer sees deliveryCode.
+    // This prevents a seller from fetching the buyer's delivery code via direct API calls.
+    const canSeePickup   = isSeller || isDelivery;
+    const canSeeDelivery = isBuyer;
+
     return {
       ...order,
       role,
       meetupLocation: order.product.location,
       counterpart: isBuyer ? order.product.seller.name : order.buyer.name,
       counterpartId: isBuyer ? order.product.seller.id : order.buyer.id,
-      // Verification codes: only visible to the authorised party
-      pickupCode:         isSeller ? order.pickupCode         : undefined,
-      pickupCodeExpires:  isSeller ? order.pickupCodeExpires  : undefined,
-      deliveryCode:       isBuyer  ? order.deliveryCode       : undefined,
-      deliveryCodeExpires: isBuyer ? order.deliveryCodeExpires : undefined,
+      pickupCode:          canSeePickup   ? order.pickupCode          : undefined,
+      pickupCodeExpires:   canSeePickup   ? order.pickupCodeExpires   : undefined,
+      deliveryCode:        canSeeDelivery ? order.deliveryCode        : undefined,
+      deliveryCodeExpires: canSeeDelivery ? order.deliveryCodeExpires : undefined,
     };
   }
 
@@ -159,7 +164,7 @@ export class OrderService {
   async updateStatus(id: string, userId: string, newStatus: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { product: { select: { sellerId: true } } },
+      include: { product: { select: { sellerId: true, listingType: true } } },
     });
 
     if (!order) throw new NotFoundException('Order not found');
@@ -168,6 +173,13 @@ export class OrderService {
     const isSeller = order.product.sellerId === userId;
 
     if (!isBuyer && !isSeller) throw new ForbiddenException('You can only update your own orders');
+
+    // Service orders never go through delivery stages — escrow release is triggered by
+    // ServiceBookingService.complete() instead.
+    const DELIVERY_TRANSITIONS = ['Out for delivery', 'Shipped', 'Delivered'];
+    if (order.product.listingType === 'service' && DELIVERY_TRANSITIONS.includes(newStatus)) {
+      throw new BadRequestException('Service orders do not have delivery stages');
+    }
 
     const allowedTransitions = isBuyer
       ? ALLOWED_BUYER_TRANSITIONS[order.status]

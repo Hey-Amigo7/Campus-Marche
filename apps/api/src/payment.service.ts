@@ -344,6 +344,7 @@ export class PaymentService {
         product: {
           select: {
             sellerId: true,
+            listingType: true,
             seller: { select: { name: true, business: { select: { momoProvider: true, momoPhone: true } } } },
           },
         },
@@ -383,12 +384,22 @@ export class PaymentService {
 
     await this.payoutService.createEscrowPayout(sellerId, orderId, sellerAmount, payoutMethod, momoPhone);
 
-    this.notificationService?.notify(
-      order.buyerId, 'escrow', 'Delivery confirmed', 'Thank you! Funds are being released to the seller.',
-    ).catch(() => undefined);
-    this.notificationService?.notify(
-      sellerId, 'escrow', '🎉 Payment incoming', 'The buyer confirmed delivery. Your payout is being processed.',
-    ).catch(() => undefined);
+    const isServiceOrder = order.product.listingType === 'service';
+    if (isServiceOrder) {
+      this.notificationService?.notify(
+        order.buyerId, 'escrow', 'Service complete', 'Your service session is complete. Funds are being released to the seller.',
+      ).catch(() => undefined);
+      this.notificationService?.notify(
+        sellerId, 'escrow', '🎉 Payment incoming', 'Service marked complete. Your payout is being processed.',
+      ).catch(() => undefined);
+    } else {
+      this.notificationService?.notify(
+        order.buyerId, 'escrow', 'Delivery confirmed', 'Thank you! Funds are being released to the seller.',
+      ).catch(() => undefined);
+      this.notificationService?.notify(
+        sellerId, 'escrow', '🎉 Payment incoming', 'The buyer confirmed delivery. Your payout is being processed.',
+      ).catch(() => undefined);
+    }
 
     this.chatGateway?.emitOrderUpdated(orderId, {
       escrowStatus: EscrowStatus.RELEASE_PENDING,
@@ -541,19 +552,31 @@ export class PaymentService {
     const data = (await res.json()) as { status: boolean; message: string };
     if (!data.status) throw new BadRequestException(`Paystack refund failed: ${data.message}`);
 
-    // Optimistically update order — webhook will confirm final state
+    // Optimistically update order — refund.processed webhook will confirm final state.
     await this.prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: orderId },
         data: { escrowStatus: EscrowStatus.REFUNDED, paymentStatus: 'Refunded', status: 'Refunded' },
       });
 
+      // Mark the PaymentTransaction as refunded so the ledger is consistent.
+      await tx.paymentTransaction.update({
+        where: { reference: payment.reference },
+        data: { status: 'Refunded', refundedAt: new Date() },
+      });
+
+      // Mark platform revenue as reversed — fee was not collected.
+      await tx.platformRevenue.updateMany({
+        where: { orderId },
+        data: { reversedAt: new Date() },
+      });
+
       if (order.sellerId && order.sellerAmount) {
         const releasedToAvailable = ['RELEASE_PENDING', 'DELIVERED'].includes(order.escrowStatus);
         if (releasedToAvailable) {
-          await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx);
-        } else if (order.escrowStatus === 'ESCROW_HELD') {
-          await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx);
+          await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx, undefined);
+        } else if (['ESCROW_HELD', 'DISPUTED'].includes(order.escrowStatus)) {
+          await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx, orderId);
         }
       }
     });
@@ -562,6 +585,63 @@ export class PaymentService {
 
     this.logger.log(`Admin triggered refund for order ${orderId}`);
     return { message: 'Refund initiated. Buyer will receive their money back within 5–10 business days.' };
+  }
+
+  // ─── Admin: resolve a disputed order ─────────────────────────────────────
+
+  async adminResolveDispute(
+    orderId: string,
+    decision: 'REFUND_BUYER' | 'RELEASE_SELLER',
+    adminId?: string,
+  ): Promise<{ message: string }> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.escrowStatus !== EscrowStatus.DISPUTED) {
+      throw new BadRequestException('This order is not currently under dispute');
+    }
+
+    this.logger.log(
+      `Admin ${adminId ?? 'unknown'} resolving dispute for order ${orderId} — decision: ${decision}`,
+    );
+
+    // Record the resolution decision on the order.
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { disputeResolvedAt: new Date(), disputeDecision: decision },
+    });
+
+    if (decision === 'REFUND_BUYER') {
+      // Reset to ESCROW_HELD so adminRefundOrder works (it checks for paid payment + non-terminal state).
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { escrowStatus: EscrowStatus.ESCROW_HELD },
+      });
+      return this.adminRefundOrder(orderId);
+    }
+
+    // RELEASE_SELLER — move funds to seller despite dispute.
+    // Reset dispute state so releaseEscrowInternal's state check passes.
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { escrowStatus: EscrowStatus.ESCROW_HELD },
+    });
+    await this.releaseEscrowInternal(orderId);
+
+    // Notify both parties.
+    if (order.buyerId) {
+      this.notificationService?.notify(
+        order.buyerId, 'dispute', 'Dispute resolved',
+        'The dispute has been reviewed. Funds have been released to the seller.',
+      ).catch(() => undefined);
+    }
+    if (order.sellerId) {
+      this.notificationService?.notify(
+        order.sellerId, 'dispute', 'Dispute resolved in your favour',
+        'The admin has reviewed and released the disputed funds to you.',
+      ).catch(() => undefined);
+    }
+
+    return { message: 'Dispute resolved. Funds released to seller.' };
   }
 
   // ─── Admin: list all orders with escrow context ───────────────────────────
@@ -649,6 +729,16 @@ export class PaymentService {
     if (payment.status === 'Paid') return payment; // already done
 
     const order = payment.order;
+
+    // Check for a linked service booking BEFORE the transaction so we can:
+    // 1. Skip delivery code generation for service orders
+    // 2. Auto-confirm the booking after escrow is funded
+    const linkedBooking = await this.prisma.serviceBooking.findUnique({
+      where:  { orderId: order.id },
+      select: { id: true, buyerId: true, sellerId: true, status: true },
+    });
+    const isServiceOrder = !!linkedBooking;
+
     const { feePercent, feeFixed } = this.getFeeConfig();
     const commission = calculateCommission(order.price, feePercent, feeFixed);
 
@@ -659,22 +749,25 @@ export class PaymentService {
         data: { status: 'Paid', paidAt: new Date(paidAt), verifiedAt: new Date() },
       });
 
-      // 2. Update order: ESCROW_HELD + financial fields + delivery code
-      const deliveryCode = generateVerificationCode();
-      const deliveryCodeExpires = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72h
+      // 2. Update order: ESCROW_HELD + financial fields
+      //    Delivery code is only relevant for product orders — service orders use the
+      //    booking completion flow instead.
+      const codeFields = isServiceOrder ? {} : {
+        deliveryCode:        generateVerificationCode(),
+        deliveryCodeExpires: new Date(Date.now() + 72 * 60 * 60 * 1000), // 72h
+      };
       await tx.order.update({
         where: { id: order.id },
         data: {
-          escrowStatus:       EscrowStatus.ESCROW_HELD,
-          status:             escrowToStatus(EscrowStatus.ESCROW_HELD),
-          paymentStatus:      'Paid',
-          paymentReference:   reference,
-          totalAmount:        commission.totalAmount,
-          platformFee:        commission.platformFee,
-          sellerAmount:       commission.sellerAmount,
-          sellerId:           sellerId,
-          deliveryCode,
-          deliveryCodeExpires,
+          escrowStatus:     EscrowStatus.ESCROW_HELD,
+          status:           escrowToStatus(EscrowStatus.ESCROW_HELD),
+          paymentStatus:    'Paid',
+          paymentReference: reference,
+          totalAmount:      commission.totalAmount,
+          platformFee:      commission.platformFee,
+          sellerAmount:     commission.sellerAmount,
+          sellerId,
+          ...codeFields,
         },
       });
 
@@ -697,13 +790,17 @@ export class PaymentService {
     });
 
     // 5. Notify buyer + seller
+    const releaseNote = isServiceOrder
+      ? `GHS ${commission.sellerAmount.toFixed(2)} will be released to the seller once the service is complete.`
+      : `Payment for your listing is held in escrow (GHS ${commission.sellerAmount.toFixed(2)} coming to you after delivery confirmation).`;
+
     this.notificationService?.notify(
       payment.userId, 'payment', '✅ Payment confirmed',
       `GHS ${commission.totalAmount.toFixed(2)} is held in escrow. The seller has been notified.`,
     ).catch(() => undefined);
     this.notificationService?.notify(
       sellerId, 'payment', '🔒 Payment received',
-      `Payment for your listing is held in escrow (GHS ${commission.sellerAmount.toFixed(2)} coming to you after delivery confirmation).`,
+      releaseNote,
     ).catch(() => undefined);
 
     this.logger.log(
@@ -716,11 +813,7 @@ export class PaymentService {
       paymentStatus: 'Paid',
     });
 
-    // Auto-confirm the linked service booking (if this order was created for a service)
-    const linkedBooking = await this.prisma.serviceBooking.findUnique({
-      where:  { orderId: order.id },
-      select: { id: true, buyerId: true, sellerId: true, status: true },
-    });
+    // Auto-confirm the linked service booking
     if (linkedBooking && linkedBooking.status === 'ACCEPTED') {
       await this.prisma.serviceBooking.update({
         where: { id: linkedBooking.id },

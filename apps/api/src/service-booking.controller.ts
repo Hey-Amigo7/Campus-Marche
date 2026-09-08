@@ -79,8 +79,14 @@ export class ServiceBookingController {
   }
 
   @Patch(':id/complete')
-  @ApiOperation({ summary: 'Mark service as completed and release escrow (seller)' })
+  @ApiOperation({ summary: 'Seller marks service as done — enters AWAITING_CONFIRMATION (buyer has 48 h to confirm)' })
   complete(@Param('id') id: string, @AuthUser() user: { id: string }) {
     return this.bookingService.complete(id, user.id);
+  }
+
+  @Patch(':id/confirm-completion')
+  @ApiOperation({ summary: 'Buyer confirms service was delivered — releases escrow to seller' })
+  confirmCompletion(@Param('id') id: string, @AuthUser() user: { id: string }) {
+    return this.bookingService.confirmCompletion(id, user.id);
   }
 }

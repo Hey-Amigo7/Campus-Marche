@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarCheck, CalendarX2, Check, ChevronRight, Clock, Loader2, X } from "lucide-react";
+import { CalendarCheck, CalendarX2, Check, CheckCircle2, ChevronRight, Clock, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useSWRConfig } from "swr";
@@ -20,8 +20,9 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
   ACCEPTED:   { bg: "rgba(59,130,246,0.10)",  color: "#2563EB", label: "Accepted — awaiting payment" },
   DECLINED:   { bg: "rgba(239,68,68,0.10)",   color: "#DC2626", label: "Declined" },
   CONFIRMED:  { bg: "rgba(22,163,74,0.10)",   color: "#16A34A", label: "Confirmed" },
-  IN_SERVICE: { bg: "rgba(168,85,247,0.10)",  color: "#9333EA", label: "In progress" },
-  COMPLETED:  { bg: "rgba(22,163,74,0.10)",   color: "#16A34A", label: "Completed" },
+  IN_SERVICE:             { bg: "rgba(168,85,247,0.10)",  color: "#9333EA", label: "In progress" },
+  AWAITING_CONFIRMATION:  { bg: "rgba(217,119,6,0.10)",  color: "#B45309", label: "Awaiting your confirmation" },
+  COMPLETED:              { bg: "rgba(22,163,74,0.10)",  color: "#16A34A", label: "Completed" },
   CANCELLED:  { bg: "rgba(113,113,122,0.10)", color: "#71717A", label: "Cancelled" },
 };
 
@@ -143,13 +144,30 @@ function BookingCard({ booking, isSeller, onAction }: {
         )}
 
         {isSeller && booking.status === "IN_SERVICE" && (
-          <button type="button" onClick={() => act(() => api.completeService(booking.id), "complete", "Service completed. Payment will be released.")}
+          <button type="button" onClick={() => act(() => api.completeService(booking.id), "complete", "Service marked complete. The buyer has 48 hours to confirm.")}
             disabled={!!loading}
             className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black text-white disabled:opacity-50"
             style={{ background: "var(--green)" }}>
             {loading === "complete" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
             Complete Service
           </button>
+        )}
+
+        {/* Buyer confirms service delivery — releases escrow to seller */}
+        {!isSeller && booking.status === "AWAITING_CONFIRMATION" && (
+          <div className="w-full space-y-2">
+            <button type="button"
+              onClick={() => act(() => api.confirmServiceCompletion(booking.id), "confirm", "Service confirmed. Payment has been released to the seller.")}
+              disabled={!!loading}
+              className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+              style={{ background: "var(--green)" }}>
+              {loading === "confirm" ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+              Confirm service complete
+            </button>
+            <p className="text-[10px] leading-4 font-semibold" style={{ color: "var(--subtle)" }}>
+              If you don&apos;t respond, the service will be marked complete automatically after 48 hours and payment will be released.
+            </p>
+          </div>
         )}
 
         {/* Pay link for accepted bookings (buyer) */}
@@ -197,6 +215,15 @@ function BookingCard({ booking, isSeller, onAction }: {
           </>
         )}
 
+        {/* Dispute link from AWAITING_CONFIRMATION */}
+        {!isSeller && booking.status === "AWAITING_CONFIRMATION" && booking.orderId && (
+          <Link href={`/orders/${booking.orderId}?dispute=1`}
+            className="flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-bold"
+            style={{ color: "#DC2626", border: "1px solid rgba(239,68,68,0.20)", background: "rgba(239,68,68,0.06)" }}>
+            Raise dispute
+          </Link>
+        )}
+
         {/* Link to order for all */}
         {booking.orderId && booking.status !== "ACCEPTED" && (
           <Link href={`/orders/${booking.orderId}`}
@@ -239,7 +266,7 @@ export default function BookingsPage() {
 
   const shown = tab === "buyer" ? buyerBookings : sellerBookings;
 
-  const activeStatuses: ServiceBookingStatus[] = ["REQUESTED", "ACCEPTED", "CONFIRMED", "IN_SERVICE"];
+  const activeStatuses: ServiceBookingStatus[] = ["REQUESTED", "ACCEPTED", "CONFIRMED", "IN_SERVICE", "AWAITING_CONFIRMATION"];
   const active = shown.filter(b => activeStatuses.includes(b.status as ServiceBookingStatus));
   const past   = shown.filter(b => !activeStatuses.includes(b.status as ServiceBookingStatus));
 

@@ -1057,7 +1057,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     <textarea
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
-                      placeholder="e.g. The item was damaged on arrival / I never received the package"
+                      placeholder={isServiceOrder
+                        ? "e.g. The service was not delivered as agreed / The seller did not show up"
+                        : "e.g. The item was damaged on arrival / I never received the package"}
                       rows={3}
                       minLength={10}
                       maxLength={500}
@@ -1123,7 +1125,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <h3 className="mb-4 text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>
                 {isServiceOrder ? "Payment progress" : "Order progress"}
               </h3>
-              <OrderTimeline status={order.status} escrowStatus={order.escrowStatus} />
+              <OrderTimeline status={order.status} escrowStatus={order.escrowStatus} isServiceOrder={isServiceOrder} />
             </div>
 
             {/* Order meta */}
