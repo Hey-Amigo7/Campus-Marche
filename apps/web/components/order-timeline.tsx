@@ -2,26 +2,35 @@
 
 import { CheckCircle2, Circle, XCircle } from "lucide-react";
 
-const STEPS = [
+const PRODUCT_STEPS = [
   { label: "Order placed",      description: "Your order has been received" },
   { label: "Payment confirmed", description: "Funds held securely in escrow" },
   { label: "Out for delivery",  description: "On the way to you" },
   { label: "Completed",         description: "Item received · funds released to seller" },
 ];
 
-// Escrow states that mean payment is confirmed
-const PAID_ESCROW     = new Set(["ESCROW_HELD", "PROCESSING", "SHIPPED", "DELIVERED", "RELEASE_PENDING", "RELEASED"]);
-// Escrow states that mean delivery is in progress or done
-const DELIVERY_ESCROW = new Set(["SHIPPED", "DELIVERED", "RELEASE_PENDING", "RELEASED"]);
-// Order statuses that mean delivery is in progress or done
-const DELIVERY_STATUS = new Set(["Out for delivery", "Delivered", "Releasing funds", "Completed"]);
-// Buyer has confirmed delivery (payout side is irrelevant to the buyer's view)
-const COMPLETE_ESCROW = new Set(["RELEASE_PENDING", "RELEASED"]);
-const COMPLETE_STATUS = new Set(["Releasing funds", "Completed"]);
+const SERVICE_STEPS = [
+  { label: "Booking created",   description: "Your booking request was sent" },
+  { label: "Payment confirmed", description: "Funds held securely in escrow" },
+  { label: "Service complete",  description: "Seller marked service as done" },
+  { label: "Completed",         description: "Funds released to seller" },
+];
 
-function isDone(step: number, status: string, escrow: string): boolean {
+// Escrow states that mean payment is confirmed
+const PAID_ESCROW      = new Set(["ESCROW_HELD", "PROCESSING", "SHIPPED", "DELIVERED", "RELEASE_PENDING", "RELEASED"]);
+// Product: delivery is in progress or done
+const DELIVERY_ESCROW  = new Set(["SHIPPED", "DELIVERED", "RELEASE_PENDING", "RELEASED"]);
+const DELIVERY_STATUS  = new Set(["Out for delivery", "Delivered", "Releasing funds", "Completed"]);
+// Product: buyer confirmed delivery
+const COMPLETE_ESCROW  = new Set(["RELEASE_PENDING", "RELEASED"]);
+const COMPLETE_STATUS  = new Set(["Releasing funds", "Completed"]);
+// Service: service marked complete
+const SVC_DONE_ESCROW  = new Set(["RELEASE_PENDING", "RELEASED"]);
+const SVC_DONE_STATUS  = new Set(["Releasing funds", "Completed"]);
+
+function isDoneProduct(step: number, status: string, escrow: string): boolean {
   switch (step) {
-    case 0: return true; // order exists = always done
+    case 0: return true;
     case 1: return PAID_ESCROW.has(escrow);
     case 2: return DELIVERY_ESCROW.has(escrow) || DELIVERY_STATUS.has(status);
     case 3: return COMPLETE_ESCROW.has(escrow) || COMPLETE_STATUS.has(status);
@@ -29,7 +38,21 @@ function isDone(step: number, status: string, escrow: string): boolean {
   }
 }
 
-export function OrderTimeline({ status, escrowStatus }: { status: string; escrowStatus?: string }) {
+function isDoneService(step: number, status: string, escrow: string): boolean {
+  switch (step) {
+    case 0: return true;
+    case 1: return PAID_ESCROW.has(escrow);
+    case 2: return SVC_DONE_ESCROW.has(escrow) || SVC_DONE_STATUS.has(status);
+    case 3: return escrow === "RELEASED" || status === "Completed";
+    default: return false;
+  }
+}
+
+export function OrderTimeline({ status, escrowStatus, isServiceOrder }: {
+  status: string;
+  escrowStatus?: string;
+  isServiceOrder?: boolean;
+}) {
   const escrow = escrowStatus ?? "PENDING_PAYMENT";
 
   if (status === "Cancelled" || escrow === "REFUNDED" || escrow === "FAILED") {
@@ -72,6 +95,8 @@ export function OrderTimeline({ status, escrowStatus }: { status: string; escrow
     );
   }
 
+  const STEPS = isServiceOrder ? SERVICE_STEPS : PRODUCT_STEPS;
+  const isDone = isServiceOrder ? isDoneService : isDoneProduct;
   const done = STEPS.map((_, i) => isDone(i, status, escrow));
   // The active step is the first one that isn't done yet
   const activeIndex = done.findIndex((d) => !d);

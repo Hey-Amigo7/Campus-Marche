@@ -159,7 +159,7 @@ export class OrderService {
   async updateStatus(id: string, userId: string, newStatus: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { product: { select: { sellerId: true } } },
+      include: { product: { select: { sellerId: true, listingType: true } } },
     });
 
     if (!order) throw new NotFoundException('Order not found');
@@ -168,6 +168,13 @@ export class OrderService {
     const isSeller = order.product.sellerId === userId;
 
     if (!isBuyer && !isSeller) throw new ForbiddenException('You can only update your own orders');
+
+    // Service orders never go through delivery stages — escrow release is triggered by
+    // ServiceBookingService.complete() instead.
+    const DELIVERY_TRANSITIONS = ['Out for delivery', 'Shipped', 'Delivered'];
+    if (order.product.listingType === 'service' && DELIVERY_TRANSITIONS.includes(newStatus)) {
+      throw new BadRequestException('Service orders do not have delivery stages');
+    }
 
     const allowedTransitions = isBuyer
       ? ALLOWED_BUYER_TRANSITIONS[order.status]

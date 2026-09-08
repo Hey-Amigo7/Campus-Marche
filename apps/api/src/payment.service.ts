@@ -344,6 +344,7 @@ export class PaymentService {
         product: {
           select: {
             sellerId: true,
+            listingType: true,
             seller: { select: { name: true, business: { select: { momoProvider: true, momoPhone: true } } } },
           },
         },
@@ -383,12 +384,22 @@ export class PaymentService {
 
     await this.payoutService.createEscrowPayout(sellerId, orderId, sellerAmount, payoutMethod, momoPhone);
 
-    this.notificationService?.notify(
-      order.buyerId, 'escrow', 'Delivery confirmed', 'Thank you! Funds are being released to the seller.',
-    ).catch(() => undefined);
-    this.notificationService?.notify(
-      sellerId, 'escrow', '🎉 Payment incoming', 'The buyer confirmed delivery. Your payout is being processed.',
-    ).catch(() => undefined);
+    const isServiceOrder = order.product.listingType === 'service';
+    if (isServiceOrder) {
+      this.notificationService?.notify(
+        order.buyerId, 'escrow', 'Service complete', 'Your service session is complete. Funds are being released to the seller.',
+      ).catch(() => undefined);
+      this.notificationService?.notify(
+        sellerId, 'escrow', '🎉 Payment incoming', 'Service marked complete. Your payout is being processed.',
+      ).catch(() => undefined);
+    } else {
+      this.notificationService?.notify(
+        order.buyerId, 'escrow', 'Delivery confirmed', 'Thank you! Funds are being released to the seller.',
+      ).catch(() => undefined);
+      this.notificationService?.notify(
+        sellerId, 'escrow', '🎉 Payment incoming', 'The buyer confirmed delivery. Your payout is being processed.',
+      ).catch(() => undefined);
+    }
 
     this.chatGateway?.emitOrderUpdated(orderId, {
       escrowStatus: EscrowStatus.RELEASE_PENDING,
@@ -649,6 +660,16 @@ export class PaymentService {
     if (payment.status === 'Paid') return payment; // already done
 
     const order = payment.order;
+
+    // Check for a linked service booking BEFORE the transaction so we can:
+    // 1. Skip delivery code generation for service orders
+    // 2. Auto-confirm the booking after escrow is funded
+    const linkedBooking = await this.prisma.serviceBooking.findUnique({
+      where:  { orderId: order.id },
+      select: { id: true, buyerId: true, sellerId: true, status: true },
+    });
+    const isServiceOrder = !!linkedBooking;
+
     const { feePercent, feeFixed } = this.getFeeConfig();
     const commission = calculateCommission(order.price, feePercent, feeFixed);
 
@@ -659,22 +680,25 @@ export class PaymentService {
         data: { status: 'Paid', paidAt: new Date(paidAt), verifiedAt: new Date() },
       });
 
-      // 2. Update order: ESCROW_HELD + financial fields + delivery code
-      const deliveryCode = generateVerificationCode();
-      const deliveryCodeExpires = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72h
+      // 2. Update order: ESCROW_HELD + financial fields
+      //    Delivery code is only relevant for product orders — service orders use the
+      //    booking completion flow instead.
+      const codeFields = isServiceOrder ? {} : {
+        deliveryCode:        generateVerificationCode(),
+        deliveryCodeExpires: new Date(Date.now() + 72 * 60 * 60 * 1000), // 72h
+      };
       await tx.order.update({
         where: { id: order.id },
         data: {
-          escrowStatus:       EscrowStatus.ESCROW_HELD,
-          status:             escrowToStatus(EscrowStatus.ESCROW_HELD),
-          paymentStatus:      'Paid',
-          paymentReference:   reference,
-          totalAmount:        commission.totalAmount,
-          platformFee:        commission.platformFee,
-          sellerAmount:       commission.sellerAmount,
-          sellerId:           sellerId,
-          deliveryCode,
-          deliveryCodeExpires,
+          escrowStatus:     EscrowStatus.ESCROW_HELD,
+          status:           escrowToStatus(EscrowStatus.ESCROW_HELD),
+          paymentStatus:    'Paid',
+          paymentReference: reference,
+          totalAmount:      commission.totalAmount,
+          platformFee:      commission.platformFee,
+          sellerAmount:     commission.sellerAmount,
+          sellerId,
+          ...codeFields,
         },
       });
 
@@ -697,13 +721,17 @@ export class PaymentService {
     });
 
     // 5. Notify buyer + seller
+    const releaseNote = isServiceOrder
+      ? `GHS ${commission.sellerAmount.toFixed(2)} will be released to the seller once the service is complete.`
+      : `Payment for your listing is held in escrow (GHS ${commission.sellerAmount.toFixed(2)} coming to you after delivery confirmation).`;
+
     this.notificationService?.notify(
       payment.userId, 'payment', '✅ Payment confirmed',
       `GHS ${commission.totalAmount.toFixed(2)} is held in escrow. The seller has been notified.`,
     ).catch(() => undefined);
     this.notificationService?.notify(
       sellerId, 'payment', '🔒 Payment received',
-      `Payment for your listing is held in escrow (GHS ${commission.sellerAmount.toFixed(2)} coming to you after delivery confirmation).`,
+      releaseNote,
     ).catch(() => undefined);
 
     this.logger.log(
@@ -716,11 +744,7 @@ export class PaymentService {
       paymentStatus: 'Paid',
     });
 
-    // Auto-confirm the linked service booking (if this order was created for a service)
-    const linkedBooking = await this.prisma.serviceBooking.findUnique({
-      where:  { orderId: order.id },
-      select: { id: true, buyerId: true, sellerId: true, status: true },
-    });
+    // Auto-confirm the linked service booking
     if (linkedBooking && linkedBooking.status === 'ACCEPTED') {
       await this.prisma.serviceBooking.update({
         where: { id: linkedBooking.id },
