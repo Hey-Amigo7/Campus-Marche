@@ -203,6 +203,8 @@ model Order {
   // Dispute
   disputeReason        String?
   disputedAt           DateTime?
+  disputeResolvedAt    DateTime?
+  disputeDecision      String?     // "REFUND_BUYER" | "RELEASE_SELLER"
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -236,6 +238,7 @@ model PaymentTransaction {
   accessCode       String?
   paidAt           DateTime?
   verifiedAt       DateTime?
+  refundedAt       DateTime?
   metadata         String    @default("")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -261,8 +264,28 @@ model Wallet {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String             @unique
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+}
+
+// Immutable audit trail of every balance change on a wallet.
+model WalletTransaction {
+  id        String   @id @default(cuid())
+  // CREDIT_PENDING | PENDING_TO_AVAILABLE | DEBIT_AVAILABLE | REFUND_AVAILABLE | REVERSE_PENDING | FINALIZE_WITHDRAWAL
+  type      String
+  amount    Float
+  orderId   String?
+  payoutId  String?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  walletId  String
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([orderId])
+  @@index([createdAt])
 }
 
 // ─── Payouts ──────────────────────────────────────────────────────────────────
@@ -319,6 +342,7 @@ model PlatformRevenue {
   feeFixed     Float    @default(0)
   totalAmount  Float
   sellerAmount Float
+  reversedAt   DateTime?
   recordedAt   DateTime @default(now())
 
   orderId String  @unique
@@ -663,6 +687,7 @@ model ServiceBooking {
   notes         String?
   cancelReason  String?
   cancelledById String?
+  completedAt   DateTime?  // set when seller marks complete; used for 48h auto-confirm timer
 
   orderId       String?  @unique
   order         Order?   @relation(fields: [orderId], references: [id])

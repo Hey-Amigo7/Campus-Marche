@@ -552,19 +552,31 @@ export class PaymentService {
     const data = (await res.json()) as { status: boolean; message: string };
     if (!data.status) throw new BadRequestException(`Paystack refund failed: ${data.message}`);
 
-    // Optimistically update order — webhook will confirm final state
+    // Optimistically update order — refund.processed webhook will confirm final state.
     await this.prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: orderId },
         data: { escrowStatus: EscrowStatus.REFUNDED, paymentStatus: 'Refunded', status: 'Refunded' },
       });
 
+      // Mark the PaymentTransaction as refunded so the ledger is consistent.
+      await tx.paymentTransaction.update({
+        where: { reference: payment.reference },
+        data: { status: 'Refunded', refundedAt: new Date() },
+      });
+
+      // Mark platform revenue as reversed — fee was not collected.
+      await tx.platformRevenue.updateMany({
+        where: { orderId },
+        data: { reversedAt: new Date() },
+      });
+
       if (order.sellerId && order.sellerAmount) {
         const releasedToAvailable = ['RELEASE_PENDING', 'DELIVERED'].includes(order.escrowStatus);
         if (releasedToAvailable) {
-          await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx);
-        } else if (order.escrowStatus === 'ESCROW_HELD') {
-          await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx);
+          await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx, undefined);
+        } else if (['ESCROW_HELD', 'DISPUTED'].includes(order.escrowStatus)) {
+          await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx, orderId);
         }
       }
     });
@@ -573,6 +585,63 @@ export class PaymentService {
 
     this.logger.log(`Admin triggered refund for order ${orderId}`);
     return { message: 'Refund initiated. Buyer will receive their money back within 5–10 business days.' };
+  }
+
+  // ─── Admin: resolve a disputed order ─────────────────────────────────────
+
+  async adminResolveDispute(
+    orderId: string,
+    decision: 'REFUND_BUYER' | 'RELEASE_SELLER',
+    adminId?: string,
+  ): Promise<{ message: string }> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.escrowStatus !== EscrowStatus.DISPUTED) {
+      throw new BadRequestException('This order is not currently under dispute');
+    }
+
+    this.logger.log(
+      `Admin ${adminId ?? 'unknown'} resolving dispute for order ${orderId} — decision: ${decision}`,
+    );
+
+    // Record the resolution decision on the order.
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { disputeResolvedAt: new Date(), disputeDecision: decision },
+    });
+
+    if (decision === 'REFUND_BUYER') {
+      // Reset to ESCROW_HELD so adminRefundOrder works (it checks for paid payment + non-terminal state).
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { escrowStatus: EscrowStatus.ESCROW_HELD },
+      });
+      return this.adminRefundOrder(orderId);
+    }
+
+    // RELEASE_SELLER — move funds to seller despite dispute.
+    // Reset dispute state so releaseEscrowInternal's state check passes.
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { escrowStatus: EscrowStatus.ESCROW_HELD },
+    });
+    await this.releaseEscrowInternal(orderId);
+
+    // Notify both parties.
+    if (order.buyerId) {
+      this.notificationService?.notify(
+        order.buyerId, 'dispute', 'Dispute resolved',
+        'The dispute has been reviewed. Funds have been released to the seller.',
+      ).catch(() => undefined);
+    }
+    if (order.sellerId) {
+      this.notificationService?.notify(
+        order.sellerId, 'dispute', 'Dispute resolved in your favour',
+        'The admin has reviewed and released the disputed funds to you.',
+      ).catch(() => undefined);
+    }
+
+    return { message: 'Dispute resolved. Funds released to seller.' };
   }
 
   // ─── Admin: list all orders with escrow context ───────────────────────────

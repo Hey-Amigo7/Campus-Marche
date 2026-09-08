@@ -105,17 +105,22 @@ export class OrderService {
 
     const role: 'buyer' | 'seller' | 'delivery' = isBuyer ? 'buyer' : isSeller ? 'seller' : 'delivery';
 
+    // Verification codes are stripped server-side — only the authorised party receives them.
+    // Seller/delivery person sees pickupCode; buyer sees deliveryCode.
+    // This prevents a seller from fetching the buyer's delivery code via direct API calls.
+    const canSeePickup   = isSeller || isDelivery;
+    const canSeeDelivery = isBuyer;
+
     return {
       ...order,
       role,
       meetupLocation: order.product.location,
       counterpart: isBuyer ? order.product.seller.name : order.buyer.name,
       counterpartId: isBuyer ? order.product.seller.id : order.buyer.id,
-      // Verification codes: only visible to the authorised party
-      pickupCode:         isSeller ? order.pickupCode         : undefined,
-      pickupCodeExpires:  isSeller ? order.pickupCodeExpires  : undefined,
-      deliveryCode:       isBuyer  ? order.deliveryCode       : undefined,
-      deliveryCodeExpires: isBuyer ? order.deliveryCodeExpires : undefined,
+      pickupCode:          canSeePickup   ? order.pickupCode          : undefined,
+      pickupCodeExpires:   canSeePickup   ? order.pickupCodeExpires   : undefined,
+      deliveryCode:        canSeeDelivery ? order.deliveryCode        : undefined,
+      deliveryCodeExpires: canSeeDelivery ? order.deliveryCodeExpires : undefined,
     };
   }
 

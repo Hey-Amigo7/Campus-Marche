@@ -541,6 +541,13 @@ export const api = {
       { method: "PATCH", strict: true },
     ),
 
+  confirmServiceCompletion: (id: string) =>
+    request<{ id: string; status: string }>(
+      `/service-bookings/${id}/confirm-completion`,
+      { id: "", status: "" },
+      { method: "PATCH", strict: true },
+    ),
+
   saveServiceAvailability: (productId: string, data: Partial<import("@/types").ServiceAvailability>) =>
     request<import("@/types").ServiceAvailability>(
       `/service-bookings/availability/${productId}`,

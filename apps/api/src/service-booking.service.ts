@@ -78,12 +78,12 @@ export class ServiceBookingService {
 
       const timeStr = `${String(slotHour).padStart(2, '0')}:${String(slotMin).padStart(2, '0')}`;
 
-      // Count confirmed/accepted bookings at this exact slot
+      // Count only paid bookings (CONFIRMED, IN_SERVICE, AWAITING_CONFIRMATION) for slot availability.
       const conflicting = await this.prisma.serviceBooking.count({
         where: {
           productId,
           scheduledAt: slotDate,
-          status: { in: ['REQUESTED', 'ACCEPTED', 'CONFIRMED', 'IN_SERVICE'] },
+          status: { in: ['CONFIRMED', 'IN_SERVICE', 'AWAITING_CONFIRMATION'] },
         },
       });
 
@@ -130,12 +130,13 @@ export class ServiceBookingService {
       throw new BadRequestException('The requested time is outside the seller\'s available hours');
     }
 
-    // Check slot capacity
+    // Check confirmed slot capacity — only count paid/active bookings.
+    // REQUESTED / ACCEPTED have not cleared payment so they do not own the slot.
     const conflicting = await this.prisma.serviceBooking.count({
       where: {
         productId: data.productId,
         scheduledAt: data.scheduledAt,
-        status: { in: ['REQUESTED', 'ACCEPTED', 'CONFIRMED', 'IN_SERVICE'] },
+        status: { in: ['CONFIRMED', 'IN_SERVICE', 'AWAITING_CONFIRMATION'] },
       },
     });
     if (conflicting >= av.maxBookingsPerDay) {
@@ -175,8 +176,7 @@ export class ServiceBookingService {
   }
 
   async getForUser(userId: string) {
-    // Catch-all: promote any ACCEPTED bookings whose linked order is already paid
-    // (handles edge cases where the webhook fired before this fix was deployed)
+    // Catch-all: promote any ACCEPTED bookings whose linked order is already paid.
     await this.prisma.serviceBooking.updateMany({
       where: {
         OR:     [{ buyerId: userId }, { sellerId: userId }],
@@ -185,6 +185,40 @@ export class ServiceBookingService {
       },
       data: { status: 'CONFIRMED' },
     });
+
+    // Auto-release: buyer did not confirm within 48 h → complete the booking and release escrow.
+    const AUTO_RELEASE_HOURS = parseInt(
+      process.env['SERVICE_COMPLETION_AUTO_RELEASE_HOURS'] ?? '48',
+      10,
+    );
+    const autoReleaseCutoff = new Date(Date.now() - AUTO_RELEASE_HOURS * 60 * 60 * 1000);
+    const pendingRelease = await this.prisma.serviceBooking.findMany({
+      where: {
+        OR:          [{ buyerId: userId }, { sellerId: userId }],
+        status:      'AWAITING_CONFIRMATION',
+        completedAt: { lt: autoReleaseCutoff },
+        orderId:     { not: null },
+      },
+      select: { id: true, orderId: true, sellerId: true, buyerId: true },
+    });
+    for (const b of pendingRelease) {
+      try {
+        await this.prisma.serviceBooking.update({ where: { id: b.id }, data: { status: 'COMPLETED' } });
+        if (b.orderId && this.paymentService) {
+          await this.paymentService.releaseEscrowInternal(b.orderId);
+        }
+        this.notificationService
+          ?.notify(
+            b.sellerId,
+            'booking',
+            'Service auto-completed',
+            'The 48-hour confirmation window expired. Payment has been auto-released to you.',
+          )
+          .catch(() => undefined);
+      } catch {
+        // Leave in AWAITING_CONFIRMATION and retry on next fetch.
+      }
+    }
 
     return this.prisma.serviceBooking.findMany({
       where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
@@ -342,18 +376,54 @@ export class ServiceBookingService {
       throw new BadRequestException('Booking must be in-service before it can be completed');
     }
 
-    await this.prisma.serviceBooking.update({ where: { id }, data: { status: 'COMPLETED' } });
+    await this.prisma.serviceBooking.update({
+      where: { id },
+      data: { status: 'AWAITING_CONFIRMATION', completedAt: new Date() },
+    });
 
-    // Release escrow on the linked order
+    // Notify buyer — they must confirm or dispute within 48 hours.
+    // If no action, the system auto-releases on the next getForUser() call.
+    this.notificationService
+      ?.notify(
+        booking.buyerId,
+        'booking',
+        'Service marked complete',
+        'The seller has marked your service session as done. Please confirm or raise a dispute within 48 hours.',
+      )
+      .catch(() => undefined);
+
+    return { message: 'Service marked complete. Awaiting buyer confirmation (auto-releases after 48 h).' };
+  }
+
+  // Buyer explicitly confirms the service was delivered as agreed → release escrow.
+  async confirmCompletion(id: string, buyerId: string) {
+    const booking = await this.prisma.serviceBooking.findUnique({ where: { id } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.buyerId !== buyerId) throw new ForbiddenException('Only the buyer can confirm service completion');
+    if (booking.status !== 'AWAITING_CONFIRMATION') {
+      throw new BadRequestException('This booking is not awaiting confirmation');
+    }
+
+    // Release escrow before updating booking so a failed release keeps booking in AWAITING_CONFIRMATION
     if (booking.orderId && this.paymentService) {
       await this.paymentService.releaseEscrowInternal(booking.orderId);
     }
 
+    const updated = await this.prisma.serviceBooking.update({
+      where: { id },
+      data: { status: 'COMPLETED' },
+    });
+
     this.notificationService
-      ?.notify(booking.buyerId, 'booking', 'Service completed', 'Your service session is complete. Payment has been released to the seller.')
+      ?.notify(
+        booking.sellerId,
+        'booking',
+        'Service completion confirmed',
+        'The buyer has confirmed the service was completed. Payment is being released to you.',
+      )
       .catch(() => undefined);
 
-    return { message: 'Service marked as complete. Payment is being released to the seller.' };
+    return updated;
   }
 
   // Called by PaymentService after escrow is funded for the linked Order

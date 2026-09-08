@@ -229,6 +229,7 @@ export type ServiceBookingStatus =
   | "DECLINED"
   | "CONFIRMED"
   | "IN_SERVICE"
+  | "AWAITING_CONFIRMATION"
   | "COMPLETED"
   | "CANCELLED";
 

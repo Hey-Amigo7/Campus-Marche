@@ -31,6 +31,12 @@ class GrantEventsDto {
   canEdit: boolean;
 }
 
+class ResolveDisputeDto {
+  @IsString()
+  @IsIn(['REFUND_BUYER', 'RELEASE_SELLER'])
+  decision: 'REFUND_BUYER' | 'RELEASE_SELLER';
+}
+
 class SendWarningDto {
   @IsString()
   @IsNotEmpty()
@@ -241,6 +247,16 @@ export class AdminController {
   @ApiOperation({ summary: 'Trigger Paystack refund to buyer for an escrow-held order' })
   refundOrder(@Param('id') id: string) {
     return this.paymentService.adminRefundOrder(id);
+  }
+
+  @Post('orders/:id/resolve-dispute')
+  @ApiOperation({ summary: 'Resolve a disputed order — refund buyer or release to seller' })
+  resolveDispute(
+    @Param('id') id: string,
+    @Body() dto: ResolveDisputeDto,
+    @AuthUser() admin: { id: string },
+  ) {
+    return this.paymentService.adminResolveDispute(id, dto.decision, admin.id);
   }
 
   @Get('logs')
