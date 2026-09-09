@@ -143,8 +143,8 @@ export class ServiceBookingService {
       throw new BadRequestException('This time slot is fully booked. Please choose another time.');
     }
 
-    const feePercent = parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '2.5');
-    const feeFixed   = parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')    ?? '0');
+    const feePercent = parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT')!);
+    const feeFixed   = parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')!);
     const commission = calculateCommission(product.price, feePercent, feeFixed);
 
     const booking = await this.prisma.serviceBooking.create({
@@ -203,10 +203,13 @@ export class ServiceBookingService {
     });
     for (const b of pendingRelease) {
       try {
-        await this.prisma.serviceBooking.update({ where: { id: b.id }, data: { status: 'COMPLETED' } });
+        // Financial release MUST succeed before the booking is marked COMPLETED.
+        // Reversing this order causes the hairdressing-incident class of bugs:
+        // booking shows COMPLETED while the seller's funds were never released.
         if (b.orderId && this.paymentService) {
           await this.paymentService.releaseEscrowInternal(b.orderId);
         }
+        await this.prisma.serviceBooking.update({ where: { id: b.id }, data: { status: 'COMPLETED' } });
         this.notificationService
           ?.notify(
             b.sellerId,
@@ -216,7 +219,7 @@ export class ServiceBookingService {
           )
           .catch(() => undefined);
       } catch {
-        // Leave in AWAITING_CONFIRMATION and retry on next fetch.
+        // releaseEscrowInternal threw — leave booking in AWAITING_CONFIRMATION and retry on next fetch.
       }
     }
 

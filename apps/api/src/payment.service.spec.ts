@@ -6,6 +6,7 @@ import { PaymentService } from './payment.service';
 import { PrismaService } from './prisma.service';
 import { WalletService } from './wallet.service';
 import { PayoutService } from './payout.service';
+import { ghsToPesewas } from './commission.engine';
 
 const makeMockTx = () => ({
   order:              { update: jest.fn(), updateMany: jest.fn() },
@@ -23,9 +24,10 @@ const mockPrisma = {
     update:     jest.fn(),
     updateMany: jest.fn(),
   },
-  paymentTransaction: { findUnique: jest.fn(), update: jest.fn() },
+  paymentTransaction: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
   payout:             { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   webhookLog:         { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+  serviceBooking:     { findUnique: jest.fn(), update: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -47,10 +49,12 @@ const mockPayout = {
 };
 
 const mockConfig = {
-  get: jest.fn((key: string, defaultVal?: string) => {
-    if (key === 'PAYOUT_AUTO_APPROVE')  return 'true';
-    if (key === 'PAYSTACK_SECRET_KEY')  return 'sk_test_abc123';
-    return defaultVal ?? undefined;
+  get: jest.fn((key: string) => {
+    if (key === 'PAYOUT_AUTO_APPROVE')     return 'true';
+    if (key === 'PAYSTACK_SECRET_KEY')     return 'sk_test_abc123';
+    if (key === 'MARKETPLACE_FEE_PERCENT') return '3';
+    if (key === 'MARKETPLACE_FEE_FLAT')    return '0';
+    return undefined;
   }),
 };
 
@@ -310,6 +314,195 @@ describe('PaymentService', () => {
     it('throws BadRequestException for non-releasable escrow states', async () => {
       mockPrisma.order.findUnique.mockResolvedValue({ ...escrowOrder, escrowStatus: 'RELEASED' });
       await expect(service.releaseEscrowInternal('order-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── A1: fundEscrow uses stored commission, never recalculates existing orders ─
+
+  describe('fundEscrow — stored commission source of truth', () => {
+    // Helper to call the private fundEscrow method
+    const callFundEscrow = (svc: PaymentService, ref: string, paidAt: string, sellerId: string) =>
+      (svc as unknown as { fundEscrow: (r: string, p: string, s: string) => Promise<unknown> })
+        .fundEscrow(ref, paidAt, sellerId);
+
+    const makePaymentWithOrder = (orderOverrides = {}) => ({
+      reference: 'ref-stored',
+      status: 'Pending',
+      userId: 'buyer-1',
+      orderId: 'order-1',
+      order: {
+        id:           'order-1',
+        price:        100,
+        totalAmount:  102.50,  // stored at 2.5% — historical value
+        platformFee:  2.50,
+        sellerAmount: 100,
+        escrowStatus: 'PAYMENT_INITIALIZED',
+        sellerId:     null,
+        ...orderOverrides,
+      },
+    });
+
+    beforeEach(() => {
+      mockTx.order.update.mockResolvedValue({});
+      mockTx.paymentTransaction.update.mockResolvedValue({});
+      mockTx.platformRevenue.upsert.mockResolvedValue({});
+      mockWallet.creditPending.mockResolvedValue(undefined);
+      mockPrisma.serviceBooking.findUnique.mockResolvedValue(null);
+      mockPrisma.serviceBooking.update.mockResolvedValue({});
+    });
+
+    it('uses stored totalAmount/platformFee/sellerAmount even when current config is 3%', async () => {
+      // Order was created at 2.5% (historical). Config is now 3%.
+      // fundEscrow must NOT recalculate — it must use the stored 2.5% values.
+      mockPrisma.paymentTransaction.findUnique.mockResolvedValue(
+        makePaymentWithOrder({ totalAmount: 102.50, platformFee: 2.50, sellerAmount: 100 }),
+      );
+
+      await callFundEscrow(service, 'ref-stored', new Date().toISOString(), 'seller-1');
+
+      // Seller wallet credited with stored sellerAmount (100), not recalculated
+      expect(mockWallet.creditPending).toHaveBeenCalledWith('seller-1', 100, mockTx);
+
+      // PlatformRevenue created with stored platformFee (2.50), not current 3%
+      expect(mockTx.platformRevenue.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ feeAmount: 2.50, sellerAmount: 100, totalAmount: 102.50 }),
+        }),
+      );
+
+      // Order updated with stored values
+      expect(mockTx.order.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ totalAmount: 102.50, platformFee: 2.50, sellerAmount: 100 }),
+        }),
+      );
+    });
+
+    it('uses current config only for legacy orders where totalAmount = 0', async () => {
+      // Legacy order predating commission storage
+      mockPrisma.paymentTransaction.findUnique.mockResolvedValue(
+        makePaymentWithOrder({ totalAmount: 0, platformFee: 0, sellerAmount: 0, price: 100 }),
+      );
+
+      await callFundEscrow(service, 'ref-stored', new Date().toISOString(), 'seller-1');
+
+      // Config says 3%, so legacy order should calculate at 3%
+      expect(mockWallet.creditPending).toHaveBeenCalledWith('seller-1', 100, mockTx);
+      expect(mockTx.platformRevenue.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ feeAmount: 3, totalAmount: 103 }),
+        }),
+      );
+    });
+
+    it('is idempotent: returns early if payment already Paid', async () => {
+      mockPrisma.paymentTransaction.findUnique.mockResolvedValue({
+        ...makePaymentWithOrder(),
+        status: 'Paid',
+      });
+
+      await callFundEscrow(service, 'ref-stored', new Date().toISOString(), 'seller-1');
+
+      expect(mockWallet.creditPending).not.toHaveBeenCalled();
+      expect(mockTx.platformRevenue.upsert).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── B: ghsToPesewas — Paystack unit conversion ──────────────────────────────
+
+  describe('ghsToPesewas — Paystack boundary conversion', () => {
+    it('converts 0 GHS to 0 pesewas', () => {
+      expect(ghsToPesewas(0)).toBe(0);
+    });
+
+    it('converts 1 GHS to 100 pesewas', () => {
+      expect(ghsToPesewas(1)).toBe(100);
+    });
+
+    it('converts 10.50 GHS to 1050 pesewas', () => {
+      expect(ghsToPesewas(10.50)).toBe(1050);
+    });
+
+    it('rounds 10.505 GHS to a deterministic integer', () => {
+      expect(Number.isInteger(ghsToPesewas(10.505))).toBe(true);
+    });
+
+    it('converts a typical marketplace total — 102.50 GHS → 10250 pesewas', () => {
+      expect(ghsToPesewas(102.50)).toBe(10250);
+    });
+
+    it('throws for NaN', () => {
+      expect(() => ghsToPesewas(NaN)).toThrow();
+    });
+
+    it('throws for Infinity', () => {
+      expect(() => ghsToPesewas(Infinity)).toThrow();
+    });
+
+    it('throws for negative values', () => {
+      expect(() => ghsToPesewas(-1)).toThrow();
+    });
+  });
+
+  // ─── B: initializeOrderPayment — Paystack receives stored pesewa amount ──────
+
+  describe('initializeOrderPayment — Paystack amount uses stored totalAmount', () => {
+    const storedOrder = {
+      id:           'order-pay-1',
+      buyerId:      'buyer-1',
+      price:        100,
+      totalAmount:  102.50,  // order stored at 2.5%
+      platformFee:  2.50,
+      sellerAmount: 100,
+      escrowStatus: 'PENDING_PAYMENT',
+      buyer:   { id: 'buyer-1', email: 'buyer@test.com' },
+      product: { id: 'prod-1', title: 'Widget', sellerId: 'seller-1' },
+    };
+
+    it('sends stored totalAmount in pesewas even when current config is 3%', async () => {
+      // Config mock returns 3% (set globally in beforeEach).
+      // This order was created when the fee was 2.5%, so totalAmount=102.50.
+      // initializeOrderPayment must send 10250 pesewas — not 10300 (which would be 3%).
+      mockPrisma.order.findUnique.mockResolvedValue(storedOrder);
+
+      const fetchSpy = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            status: true,
+            data: {
+              authorization_url: 'https://checkout.paystack.com/abc',
+              access_code:       'ac_123',
+              reference:         'CM-ref-123',
+            },
+          }),
+      } as unknown as Response);
+      global.fetch = fetchSpy;
+
+      // initializeOrderPayment uses array-style $transaction([create, update])
+      mockPrisma.$transaction.mockImplementation(async (ops: unknown) => {
+        if (Array.isArray(ops)) return Promise.all(ops as Promise<unknown>[]);
+        return (ops as (tx: typeof mockTx) => Promise<unknown>)(mockTx);
+      });
+      mockPrisma.paymentTransaction.create.mockResolvedValue({ id: 'tx-1', authorizationUrl: 'https://checkout.paystack.com/abc' });
+      mockPrisma.order.update.mockResolvedValue({});
+
+      await service.initializeOrderPayment('order-pay-1', 'buyer-1');
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body as string) as { amount: number; currency: string };
+      // 102.50 GHS × 100 = 10250 pesewas (stored 2.5% value — NOT 10300 = 3% of 100)
+      expect(body.amount).toBe(10250);
+      expect(body.currency).toBe('GHS');
+    });
+
+    it('is idempotent: throws BadRequestException if order already paid', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...storedOrder,
+        escrowStatus: 'ESCROW_HELD',
+      });
+
+      await expect(service.initializeOrderPayment('order-pay-1', 'buyer-1')).rejects.toThrow(BadRequestException);
     });
   });
 });

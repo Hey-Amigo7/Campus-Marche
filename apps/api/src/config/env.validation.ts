@@ -23,9 +23,9 @@ export type ApiEnv = {
   UPLOAD_DIR?: string;
   ADMIN_EMAIL?: string;
   ADMIN_PASSWORD?: string;
-  // Marketplace commission
-  MARKETPLACE_FEE_PERCENT?: string;
-  MARKETPLACE_FEE_FLAT?: string;
+  // Marketplace commission — REQUIRED; startup fails if absent or malformed
+  MARKETPLACE_FEE_PERCENT: string;
+  MARKETPLACE_FEE_FLAT: string;
   // Payout
   PAYOUT_AUTO_APPROVE?: string;
   // Admin bootstrap secret (required to call POST /auth/bootstrap-admin)
@@ -88,8 +88,24 @@ export function validateEnv(config: Record<string, string | undefined>): ApiEnv 
     UPLOAD_DIR: config.UPLOAD_DIR,
     ADMIN_EMAIL: config.ADMIN_EMAIL,
     ADMIN_PASSWORD: config.ADMIN_PASSWORD,
-    MARKETPLACE_FEE_PERCENT: config.MARKETPLACE_FEE_PERCENT,
-    MARKETPLACE_FEE_FLAT: config.MARKETPLACE_FEE_FLAT,
+    MARKETPLACE_FEE_PERCENT: (() => {
+      const raw = config.MARKETPLACE_FEE_PERCENT;
+      if (!raw) throw new Error('MARKETPLACE_FEE_PERCENT is required — declare it in your environment (e.g. MARKETPLACE_FEE_PERCENT=3)');
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        throw new Error(`MARKETPLACE_FEE_PERCENT must be a number between 0 and 100, got "${raw}"`);
+      }
+      return raw;
+    })(),
+    MARKETPLACE_FEE_FLAT: (() => {
+      const raw = config.MARKETPLACE_FEE_FLAT;
+      if (raw === undefined || raw === '') throw new Error('MARKETPLACE_FEE_FLAT is required — declare it in your environment (e.g. MARKETPLACE_FEE_FLAT=0)');
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new Error(`MARKETPLACE_FEE_FLAT must be a non-negative number, got "${raw}"`);
+      }
+      return raw;
+    })(),
     PAYOUT_AUTO_APPROVE: config.PAYOUT_AUTO_APPROVE,
     ADMIN_SETUP_KEY: config.ADMIN_SETUP_KEY,
     UNSPLASH_ACCESS_KEY: config.UNSPLASH_ACCESS_KEY,

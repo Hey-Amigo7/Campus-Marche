@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PayoutMethod, PayoutStatus, UserRole } from '@prisma/client';
-import { MOMO_BANK_CODES } from './commission.engine';
+import { ghsToPesewas, MOMO_BANK_CODES } from './commission.engine';
 import type { ChatGateway } from './chat.gateway';
 import type { NotificationService } from './notification.service';
 import { PrismaService } from './prisma.service';
@@ -260,7 +260,7 @@ export class PayoutService {
       throw recipientErr;
     }
 
-    const amountInPesewas = Math.round(payout.amount * 100);
+    const amountInPesewas = ghsToPesewas(payout.amount);
 
     let transferData: PaystackTransferResponse;
     try {

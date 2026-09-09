@@ -134,8 +134,8 @@ export class OrderService {
     if (product.sellerId === data.buyerId) throw new BadRequestException('You cannot buy your own listing');
 
     // Calculate commission at order-creation time so amounts are locked in
-    const feePercent = parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '2.5');
-    const feeFixed   = parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')    ?? '0');
+    const feePercent = parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT')!);
+    const feeFixed   = parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')!);
     const commission = calculateCommission(product.price, feePercent, feeFixed);
 
     const order = await this.prisma.order.create({
