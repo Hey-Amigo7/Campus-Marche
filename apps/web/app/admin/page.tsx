@@ -1418,62 +1418,68 @@ function PayoutsTab() {
             )}
 
             {/* Expanded order context */}
-            {isExpanded && order && (
-              <div className="border-t border-slate-100 bg-slate-50/60 px-4 pb-4 pt-3">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Escrow &amp; Transaction Detail</p>
+            {isExpanded && (
+              order ? (
+                <div className="border-t border-slate-100 bg-slate-50/60 px-4 pb-4 pt-3">
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Escrow &amp; Transaction Detail</p>
 
-                {/* Amounts breakdown */}
-                <div className="mb-3 grid grid-cols-3 gap-2 text-center">
-                  {[
-                    { label: "Buyer paid", value: formatCurrency(order.totalAmount) },
-                    { label: "Platform fee", value: formatCurrency(order.platformFee) },
-                    { label: "Seller gets", value: formatCurrency(order.sellerAmount) },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="rounded-xl bg-white px-3 py-2" style={{ border: "1px solid rgba(226,232,240,0.70)" }}>
-                      <p className="text-[10px] font-semibold text-slate-400">{label}</p>
-                      <p className="mt-0.5 text-sm font-black text-slate-800">{value}</p>
-                    </div>
-                  ))}
+                  {/* Amounts breakdown */}
+                  <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                    {[
+                      { label: "Buyer paid", value: formatCurrency(order.totalAmount) },
+                      { label: "Platform fee", value: formatCurrency(order.platformFee) },
+                      { label: "Seller gets", value: formatCurrency(order.sellerAmount) },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="rounded-xl bg-white px-3 py-2" style={{ border: "1px solid rgba(226,232,240,0.70)" }}>
+                        <p className="text-[10px] font-semibold text-slate-400">{label}</p>
+                        <p className="mt-0.5 text-sm font-black text-slate-800">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Escrow journey */}
+                  <div className="space-y-1.5">
+                    {[
+                      { label: "Order placed", done: true, time: order.createdAt },
+                      { label: payment ? `Payment of ${formatCurrency(payment.amount)} received` : "Payment pending", done: !!payment && payment.status === "Paid", time: payment?.paidAt ?? null },
+                      { label: "Funds held in escrow", done: ESCROW_DONE_STATES.has(order.escrowStatus), time: null },
+                      { label: "Buyer confirmed delivery", done: !!order.deliveryConfirmedAt, time: order.deliveryConfirmedAt },
+                      { label: "Payout sent to seller", done: payout.status === "COMPLETED", time: payout.completedAt ?? null },
+                    ].map(({ label, done, time }) => (
+                      <div key={label} className="flex items-center gap-2.5">
+                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${done ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"}`}>
+                          {done ? "✓" : "·"}
+                        </span>
+                        <span className={`text-xs font-semibold ${done ? "text-slate-700" : "text-slate-400"}`}>{label}</span>
+                        {time && <span className="ml-auto text-[10px] text-slate-400">{formatRelativeDate(time)}</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Payment reference */}
+                  {order.paymentReference && (
+                    <p className="mt-3 text-[10px] font-mono text-slate-400">
+                      Paystack ref: {order.paymentReference}
+                    </p>
+                  )}
+
+                  {/* Refund button inside expanded view for non-PENDING payouts */}
+                  {canRefundBuyer && payout.status !== "PENDING" && (
+                    <button
+                      onClick={() => setConfirm({ type: "refund", payoutId: payout.id, orderId: order.id })}
+                      disabled={!!acting}
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      <ArrowDownCircle className="h-3.5 w-3.5" />
+                      Refund to Buyer
+                    </button>
+                  )}
                 </div>
-
-                {/* Escrow journey */}
-                <div className="space-y-1.5">
-                  {[
-                    { label: "Order placed", done: true, time: order.createdAt },
-                    { label: payment ? `Payment of ${formatCurrency(payment.amount / 100)} received` : "Payment pending", done: !!payment && payment.status === "Paid", time: payment?.paidAt ?? null },
-                    { label: "Funds held in escrow", done: ESCROW_DONE_STATES.has(order.escrowStatus), time: null },
-                    { label: "Buyer confirmed delivery", done: !!order.deliveryConfirmedAt, time: order.deliveryConfirmedAt },
-                    { label: "Payout sent to seller", done: payout.status === "COMPLETED", time: payout.completedAt ?? null },
-                  ].map(({ label, done, time }) => (
-                    <div key={label} className="flex items-center gap-2.5">
-                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${done ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"}`}>
-                        {done ? "✓" : "·"}
-                      </span>
-                      <span className={`text-xs font-semibold ${done ? "text-slate-700" : "text-slate-400"}`}>{label}</span>
-                      {time && <span className="ml-auto text-[10px] text-slate-400">{formatRelativeDate(time)}</span>}
-                    </div>
-                  ))}
+              ) : (
+                <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+                  <p className="text-xs text-slate-400">No linked order — the original order may have been deleted.</p>
                 </div>
-
-                {/* Payment reference */}
-                {order.paymentReference && (
-                  <p className="mt-3 text-[10px] font-mono text-slate-400">
-                    Paystack ref: {order.paymentReference}
-                  </p>
-                )}
-
-                {/* Refund button inside expanded view for non-PENDING payouts */}
-                {canRefundBuyer && payout.status !== "PENDING" && (
-                  <button
-                    onClick={() => setConfirm({ type: "refund", payoutId: payout.id, orderId: order.id })}
-                    disabled={!!acting}
-                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
-                  >
-                    <ArrowDownCircle className="h-3.5 w-3.5" />
-                    Refund to Buyer
-                  </button>
-                )}
-              </div>
+              )
             )}
           </div>
         );
