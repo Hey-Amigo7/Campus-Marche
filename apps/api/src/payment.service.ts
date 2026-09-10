@@ -354,6 +354,7 @@ export class PaymentService {
 
     if (!order) throw new NotFoundException('Order not found');
     const releasableStates: EscrowStatus[] = [EscrowStatus.ESCROW_HELD, EscrowStatus.SHIPPED, EscrowStatus.DELIVERED];
+    // Pre-check (not atomic — the real atomic guard is updateMany inside the transaction below).
     if (!releasableStates.includes(order.escrowStatus as EscrowStatus)) {
       throw new BadRequestException(`Cannot release escrow — current status is ${order.escrowStatus}`);
     }
@@ -375,21 +376,32 @@ export class PaymentService {
     // between the two cannot leave availableBalance inflated with no corresponding payout.
     // A crash after commit leaves a PENDING payout that admin can retry-process safely.
     let createdPayoutId: string | null = null;
+    let releaseWon = false;
     await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+      // Atomic claim: transitions releasable states → RELEASE_PENDING in one conditional write.
+      // Two concurrent release calls cannot both see count > 0 for the same order — the second
+      // sees count=0 (state already moved) and aborts cleanly without double-crediting the wallet.
+      const { count } = await tx.order.updateMany({
+        where: { id: orderId, escrowStatus: { in: releasableStates } },
         data: {
           escrowStatus: EscrowStatus.RELEASE_PENDING,
           status: 'Releasing funds',
           deliveryConfirmedAt: new Date(),
         },
       });
+      if (count === 0) return; // concurrent call already won — abort cleanly
+
+      releaseWon = true;
       await this.walletService.pendingToAvailable(sellerId, sellerAmount, tx);
       const payout = await tx.payout.create({
         data: { sellerId, orderId, amount: sellerAmount, payoutMethod },
       });
       createdPayoutId = payout.id;
     });
+
+    if (!releaseWon) {
+      throw new BadRequestException('Escrow was already released or is not in a releasable state');
+    }
 
     // Network calls must not run inside a DB transaction.
     const autoApprove = this.config.get<string>('PAYOUT_AUTO_APPROVE') !== 'false';
@@ -455,18 +467,28 @@ export class PaymentService {
     this.logger.log(`Webhook: ${eventType} ref=${reference}`);
 
     // ── Idempotency check ────────────────────────────────────────────────────
-    const existing = await this.prisma.webhookLog.findFirst({
-      where: { reference, eventType, processed: true },
+    // Check for ANY existing log (processed or not). A failed prior attempt leaves a
+    // processed=false record — creating a new one would throw P2002 (unique [eventType, reference]).
+    // Instead, reuse the existing record so the retry can mark it processed on success.
+    const existingLog = await this.prisma.webhookLog.findFirst({
+      where: { reference, eventType },
     });
-    if (existing) {
+    if (existingLog?.processed) {
       this.logger.log(`Webhook duplicate skipped: ${eventType} ${reference}`);
       return { received: true };
     }
 
-    // ── Log the event ────────────────────────────────────────────────────────
-    const log = await this.prisma.webhookLog.create({
-      data: { eventType, reference, payload: rawBody.toString(), verified: true },
-    });
+    // ── Log the event (or reuse a failed prior attempt) ──────────────────────
+    let log: { id: string };
+    if (existingLog) {
+      // Retry path: a prior delivery failed — reuse the existing log record.
+      this.logger.log(`Webhook retry detected: ${eventType} ${reference} (prior attempt failed — retrying)`);
+      log = existingLog;
+    } else {
+      log = await this.prisma.webhookLog.create({
+        data: { eventType, reference, payload: rawBody.toString(), verified: true },
+      });
+    }
 
     try {
       if (eventType === 'charge.success') {
@@ -581,10 +603,18 @@ export class PaymentService {
 
     // Optimistically update order — refund.processed webhook will confirm final state.
     await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+      // Re-read current escrowStatus inside the transaction to avoid stale-read race.
+      // The outer `order` variable may reflect state from before a concurrent transition.
+      const fresh = await tx.order.findUnique({ where: { id: orderId }, select: { escrowStatus: true } });
+      const freshEscrow = fresh?.escrowStatus ?? order.escrowStatus;
+
+      // Atomic claim: only the first concurrent refund wins the DB write.
+      // count=0 means a concurrent call already transitioned to a terminal state — skip all wallet mutations.
+      const { count } = await tx.order.updateMany({
+        where: { id: orderId, escrowStatus: { notIn: ['REFUNDED', 'FAILED'] } },
         data: { escrowStatus: EscrowStatus.REFUNDED, paymentStatus: 'Refunded', status: 'Refunded' },
       });
+      if (count === 0) return;
 
       // Mark the PaymentTransaction as refunded so the ledger is consistent.
       await tx.paymentTransaction.update({
@@ -599,13 +629,13 @@ export class PaymentService {
       });
 
       if (order.sellerId && order.sellerAmount) {
-        if (order.escrowStatus === 'RELEASE_PENDING') {
+        if (freshEscrow === 'RELEASE_PENDING') {
           // pendingToAvailable already ran — funds are in availableBalance; debit them back.
           await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx, undefined);
-        } else if (order.escrowStatus === 'RELEASED') {
+        } else if (freshEscrow === 'RELEASED') {
           // Payout already completed — record the debt obligation; admin must recover separately.
           await this.walletService.recordSellerDebt(order.sellerId, order.sellerAmount, tx, orderId);
-        } else if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED', 'DISPUTED'].includes(order.escrowStatus)) {
+        } else if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED', 'DISPUTED'].includes(freshEscrow)) {
           // Funds still in pendingBalance; reverse the credit.
           await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx, orderId);
         }
@@ -716,24 +746,31 @@ export class PaymentService {
       return;
     }
 
-    // Already in a terminal refund/failed state — skip
+    // Quick pre-check (not atomic — the updateMany inside the transaction is the real guard).
     if (['REFUNDED', 'FAILED'].includes(order.escrowStatus)) return;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: order.id },
+      // Re-read current escrowStatus inside the transaction to avoid stale-read race.
+      // The outer `order` variable may reflect state from before a concurrent transition.
+      const fresh = await tx.order.findUnique({ where: { id: order.id }, select: { escrowStatus: true } });
+      const freshEscrow = fresh?.escrowStatus ?? order.escrowStatus;
+
+      // Atomic claim: prevents duplicate wallet mutations from concurrent refund events.
+      const { count } = await tx.order.updateMany({
+        where: { id: order.id, escrowStatus: { notIn: ['REFUNDED', 'FAILED'] } },
         data: {
           escrowStatus:  EscrowStatus.REFUNDED,
           paymentStatus: 'Refunded',
           status:        'Refunded',
         },
       });
+      if (count === 0) return; // concurrent call already transitioned — skip wallet mutations
 
-      // Reverse wallet balance based on where funds currently sit.
+      // Reverse wallet balance based on where funds actually sat at transaction time.
       if (order.sellerId && order.sellerAmount) {
-        if (order.escrowStatus === 'RELEASE_PENDING') {
+        if (freshEscrow === 'RELEASE_PENDING') {
           await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx);
-        } else if (order.escrowStatus === 'RELEASED') {
+        } else if (freshEscrow === 'RELEASED') {
           await this.walletService.recordSellerDebt(order.sellerId, order.sellerAmount, tx, order.id);
         } else {
           await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx);
@@ -802,12 +839,18 @@ export class PaymentService {
       revFeeFixed   = c.feeFixed;
     }
 
+    let funded = false;
     await this.prisma.$transaction(async (tx) => {
-      // 1. Mark payment as paid
-      await tx.paymentTransaction.update({
-        where: { reference },
+      // 1. Mark payment as paid — conditional updateMany is the atomic idempotency guard.
+      //    Two concurrent charge.success / verify calls cannot both fund escrow:
+      //    the second sees count=0 (status already 'Paid') and aborts without double-crediting.
+      const { count } = await tx.paymentTransaction.updateMany({
+        where: { reference, status: { not: 'Paid' } },
         data: { status: 'Paid', paidAt: new Date(paidAt), verifiedAt: new Date() },
       });
+      if (count === 0) return; // already funded by a concurrent call — skip
+
+      funded = true;
 
       // 2. Update order: ESCROW_HELD + financial fields
       //    Delivery code is only relevant for product orders — service orders use the
@@ -848,6 +891,8 @@ export class PaymentService {
         update: {},
       });
     });
+
+    if (!funded) return payment; // concurrent call already funded — idempotent no-op
 
     // 5. Notify buyer + seller
     const releaseNote = isServiceOrder
