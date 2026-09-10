@@ -174,6 +174,92 @@ describe('ServiceBookingService', () => {
     });
   });
 
+  // ─── Null paymentService guard — hairdressing-incident prevention ────────────
+
+  describe('null paymentService guard', () => {
+    describe('confirmCompletion — throws when orderId present but paymentService is null', () => {
+      const awaitingBooking = {
+        id:       'booking-null-guard',
+        orderId:  'order-with-escrow',
+        buyerId:  'buyer-1',
+        sellerId: 'seller-1',
+        status:   'AWAITING_CONFIRMATION',
+      };
+
+      beforeEach(() => {
+        mockPrisma.serviceBooking.findUnique.mockResolvedValue(awaitingBooking);
+        // Remove paymentService so it is null (simulates @Optional() DI gap)
+        (service as unknown as { paymentService: null }).paymentService = null;
+      });
+
+      afterEach(() => {
+        // Restore for other tests
+        (service as unknown as { paymentService: typeof mockPaymentService }).paymentService = mockPaymentService;
+      });
+
+      it('throws BadRequestException instead of silently skipping escrow release', async () => {
+        await expect(service.confirmCompletion('booking-null-guard', 'buyer-1')).rejects.toThrow(BadRequestException);
+      });
+
+      it('does not mark booking COMPLETED when paymentService is null', async () => {
+        await expect(service.confirmCompletion('booking-null-guard', 'buyer-1')).rejects.toThrow();
+        expect(mockPrisma.serviceBooking.update).not.toHaveBeenCalled();
+      });
+
+      it('does NOT throw when orderId is null (no escrow to release)', async () => {
+        mockPrisma.serviceBooking.findUnique.mockResolvedValue({ ...awaitingBooking, orderId: null });
+        mockPrisma.serviceBooking.update.mockResolvedValue({ ...awaitingBooking, orderId: null, status: 'COMPLETED' });
+
+        await expect(service.confirmCompletion('booking-null-guard', 'buyer-1')).resolves.not.toThrow();
+        expect(mockPrisma.serviceBooking.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { status: 'COMPLETED' } }),
+        );
+      });
+    });
+
+    describe('getForUser auto-release — skips booking entirely (continue) when paymentService is null', () => {
+      const makeBooking = (id: string, orderId: string) => ({
+        id, orderId, sellerId: 'seller-1', buyerId: 'buyer-1',
+      });
+
+      beforeEach(() => {
+        mockPrisma.serviceBooking.updateMany.mockResolvedValue({ count: 0 });
+        (service as unknown as { paymentService: null }).paymentService = null;
+      });
+
+      afterEach(() => {
+        (service as unknown as { paymentService: typeof mockPaymentService }).paymentService = mockPaymentService;
+      });
+
+      it('does not mark booking COMPLETED when paymentService is null and orderId is present', async () => {
+        mockPrisma.serviceBooking.findMany
+          .mockResolvedValueOnce([makeBooking('booking-skip', 'order-skip')])
+          .mockResolvedValueOnce([]);
+
+        await service.getForUser('seller-1');
+
+        const completedCalls = (mockPrisma.serviceBooking.update.mock.calls as unknown[][]).filter((args) => {
+          const arg = args[0] as { data?: { status?: string } } | undefined;
+          return arg?.data?.status === 'COMPLETED';
+        });
+        expect(completedCalls).toHaveLength(0);
+      });
+
+      it('still marks booking COMPLETED when orderId is null (no escrow, paymentService not needed)', async () => {
+        mockPrisma.serviceBooking.findMany
+          .mockResolvedValueOnce([{ ...makeBooking('booking-no-order', ''), orderId: null }])
+          .mockResolvedValueOnce([]);
+        mockPrisma.serviceBooking.update.mockResolvedValue({});
+
+        await service.getForUser('seller-1');
+
+        expect(mockPrisma.serviceBooking.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { status: 'COMPLETED' } }),
+        );
+      });
+    });
+  });
+
   // ─── Fee config: no 2.5% fallback ────────────────────────────────────────────
 
   describe('fee configuration — no silent 2.5% fallback', () => {

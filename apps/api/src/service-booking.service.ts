@@ -206,7 +206,10 @@ export class ServiceBookingService {
         // Financial release MUST succeed before the booking is marked COMPLETED.
         // Reversing this order causes the hairdressing-incident class of bugs:
         // booking shows COMPLETED while the seller's funds were never released.
-        if (b.orderId && this.paymentService) {
+        if (b.orderId) {
+          // If paymentService is unavailable, skip this booking entirely rather than
+          // silently marking COMPLETED without releasing escrow.
+          if (!this.paymentService) continue;
           await this.paymentService.releaseEscrowInternal(b.orderId);
         }
         await this.prisma.serviceBooking.update({ where: { id: b.id }, data: { status: 'COMPLETED' } });
@@ -407,8 +410,11 @@ export class ServiceBookingService {
       throw new BadRequestException('This booking is not awaiting confirmation');
     }
 
-    // Release escrow before updating booking so a failed release keeps booking in AWAITING_CONFIRMATION
-    if (booking.orderId && this.paymentService) {
+    // Release escrow before updating booking so a failed release keeps booking in AWAITING_CONFIRMATION.
+    // If paymentService is unavailable and an order exists, throw rather than silently skipping
+    // the release — that would mark the booking COMPLETED while escrow remains held.
+    if (booking.orderId) {
+      if (!this.paymentService) throw new BadRequestException('Service payment release is unavailable — contact support');
       await this.paymentService.releaseEscrowInternal(booking.orderId);
     }
 

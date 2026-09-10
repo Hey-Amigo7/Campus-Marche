@@ -204,6 +204,24 @@ export class AdminController {
     return this.adminService.backfillEscrowStates();
   }
 
+  @Post('reconcile-service-bookings')
+  @ApiOperation({ summary: 'Fix COMPLETED service bookings with stale escrow — state-only where financial ops already ran, otherwise runs release/payout safely' })
+  reconcileServiceBookings() {
+    return this.paymentService.reconcileServiceBookings();
+  }
+
+  @Get('audit')
+  @ApiOperation({ summary: 'Read-only financial consistency audit — classifies every inconsistency as A (ok), B (state patch), C (safe financial op), or D (manual review)' })
+  runFinancialAudit() {
+    return this.paymentService.runFinancialAudit();
+  }
+
+  @Post('reconcile')
+  @ApiOperation({ summary: 'Apply safe audit fixes — patches category B (state-only) and C (safe financial ops); category D findings are skipped and returned for manual review' })
+  applyAuditFixes() {
+    return this.paymentService.applyAuditFixes();
+  }
+
   @Get('export/csv')
   @ApiOperation({ summary: 'Export users as CSV' })
   async exportCsv(@Res() res: Response) {
@@ -258,5 +276,24 @@ export class AdminController {
   @ApiQuery({ name: 'page', required: false })
   getLogs(@Query('page') page?: string) {
     return this.adminService.getLogs(page ? parseInt(page, 10) : 1);
+  }
+
+  @Get('webhooks')
+  @ApiOperation({ summary: 'List webhook logs — defaults to failed (unprocessed with error)' })
+  @ApiQuery({ name: 'status', required: false, enum: ['failed', 'processed', 'all'] })
+  @ApiQuery({ name: 'skip', required: false })
+  @ApiQuery({ name: 'take', required: false })
+  listWebhooks(
+    @Query('status') status: 'failed' | 'processed' | 'all' = 'failed',
+    @Query('skip') skip = 0,
+    @Query('take') take = 50,
+  ) {
+    return this.paymentService.listWebhookLogs(status, +skip, +take);
+  }
+
+  @Post('webhooks/:id/retry')
+  @ApiOperation({ summary: 'Retry a failed webhook log by re-running its stored payload' })
+  retryWebhook(@Param('id') id: string) {
+    return this.paymentService.retryWebhookLog(id);
   }
 }
