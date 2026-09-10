@@ -90,6 +90,7 @@ export class OrderService {
         },
         tracking: true,
         deliveryPerson: { select: { id: true, name: true, avatar: true, phone: true } },
+        serviceBooking: { select: { id: true, status: true, scheduledAt: true } },
       },
     });
 

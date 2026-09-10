@@ -24,9 +24,11 @@ const DELIVERY_STATUS  = new Set(["Out for delivery", "Delivered", "Releasing fu
 // Product: buyer confirmed delivery
 const COMPLETE_ESCROW  = new Set(["RELEASE_PENDING", "RELEASED"]);
 const COMPLETE_STATUS  = new Set(["Releasing funds", "Completed"]);
-// Service: service marked complete
-const SVC_DONE_ESCROW  = new Set(["RELEASE_PENDING", "RELEASED"]);
-const SVC_DONE_STATUS  = new Set(["Releasing funds", "Completed"]);
+// Service: service marked complete (by seller or auto-release)
+const SVC_DONE_ESCROW    = new Set(["RELEASE_PENDING", "RELEASED"]);
+const SVC_DONE_STATUS    = new Set(["Releasing funds", "Completed"]);
+// Booking statuses that mean the service itself is done (seller finished, awaiting buyer confirm or already confirmed)
+const SVC_DONE_BOOKING   = new Set(["AWAITING_CONFIRMATION", "COMPLETED"]);
 
 function isDoneProduct(step: number, status: string, escrow: string): boolean {
   switch (step) {
@@ -38,20 +40,21 @@ function isDoneProduct(step: number, status: string, escrow: string): boolean {
   }
 }
 
-function isDoneService(step: number, status: string, escrow: string): boolean {
+function isDoneService(step: number, status: string, escrow: string, bookingStatus?: string): boolean {
   switch (step) {
     case 0: return true;
     case 1: return PAID_ESCROW.has(escrow);
-    case 2: return SVC_DONE_ESCROW.has(escrow) || SVC_DONE_STATUS.has(status);
+    case 2: return SVC_DONE_ESCROW.has(escrow) || SVC_DONE_STATUS.has(status) || (bookingStatus != null && SVC_DONE_BOOKING.has(bookingStatus));
     case 3: return escrow === "RELEASED" || status === "Completed";
     default: return false;
   }
 }
 
-export function OrderTimeline({ status, escrowStatus, isServiceOrder }: {
+export function OrderTimeline({ status, escrowStatus, isServiceOrder, bookingStatus }: {
   status: string;
   escrowStatus?: string;
   isServiceOrder?: boolean;
+  bookingStatus?: string;
 }) {
   const escrow = escrowStatus ?? "PENDING_PAYMENT";
 
@@ -96,7 +99,9 @@ export function OrderTimeline({ status, escrowStatus, isServiceOrder }: {
   }
 
   const STEPS = isServiceOrder ? SERVICE_STEPS : PRODUCT_STEPS;
-  const isDone = isServiceOrder ? isDoneService : isDoneProduct;
+  const isDone = isServiceOrder
+    ? (i: number, s: string, e: string) => isDoneService(i, s, e, bookingStatus)
+    : isDoneProduct;
   const done = STEPS.map((_, i) => isDone(i, status, escrow));
   // The active step is the first one that isn't done yet
   const activeIndex = done.findIndex((d) => !d);

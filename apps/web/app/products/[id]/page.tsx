@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, BookmarkCheck, CalendarCheck, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Share2, Star } from "lucide-react";
+import { Bookmark, BookmarkCheck, CalendarCheck, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Loader2, MapPin, Share2, Star } from "lucide-react";
 import { notFound } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -432,7 +432,7 @@ function ServiceBookingPanel({ product }: { product: import("@/types").Product }
       <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "#A1A1AA" }}>
         Seller availability
       </p>
-      <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: "#71717A" }}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold" style={{ color: "#71717A" }}>
         <Clock className="h-3.5 w-3.5 shrink-0" style={{ color: "#16A34A" }} />
         <span>{fmtHour(availability.startHour)} – {fmtHour(availability.endHour)}</span>
         <span style={{ color: "#D4D4D8" }}>·</span>
@@ -529,10 +529,27 @@ function ServiceBookingPanel({ product }: { product: import("@/types").Product }
       {/* Seller schedule — conditions the buyer is agreeing to */}
       {ConditionsCard}
 
-      {/* Date strip — only available days */}
+      {/* Date selection — mobile: compact select / sm+: horizontal scroll strip */}
       <div>
         <p className="mb-2 text-sm font-black" style={{ color: "#09090B" }}>Choose a date</p>
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+
+        {/* Mobile compact select */}
+        <div className="relative sm:hidden">
+          <select
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="w-full cursor-pointer appearance-none rounded-xl py-2.5 pl-3 pr-9 text-sm font-semibold outline-none"
+            style={{ background: "#F4F4F5", border: "1px solid #E4E4E7", color: "#09090B" }}
+          >
+            {dateOptions.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "#71717A" }} />
+        </div>
+
+        {/* Desktop horizontal strip */}
+        <div className="hidden sm:flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {dateOptions.map(({ value, label }) => (
             <button key={value} type="button" onClick={() => setSelectedDate(value)}
               className="shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all"

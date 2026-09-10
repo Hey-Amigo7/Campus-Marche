@@ -209,6 +209,7 @@ export type Order = {
   deliveryVerifiedAt?: string | null;
   disputeReason?: string | null;
   disputedAt?: string | null;
+  serviceBooking?: { id: string; status: string; scheduledAt: string } | null;
 };
 
 export type ServiceAvailability = {
