@@ -987,6 +987,309 @@ export class PaymentService {
     return { checked: stuckBookings.length, fixed, skipped, details };
   }
 
+  // ─── Read-only financial consistency audit ────────────────────────────────
+
+  async runFinancialAudit(): Promise<{
+    runAt: string;
+    findings: Array<{
+      category: 'A' | 'B' | 'C' | 'D';
+      type: string;
+      entityType: string;
+      entityId: string;
+      description: string;
+      suggestedAction: string;
+    }>;
+    summary: { A: number; B: number; C: number; D: number };
+  }> {
+    const runAt = new Date().toISOString();
+    const findings: Array<{
+      category: 'A' | 'B' | 'C' | 'D';
+      type: string;
+      entityType: string;
+      entityId: string;
+      description: string;
+      suggestedAction: string;
+    }> = [];
+
+    // ── 1. All RELEASE_PENDING orders — classify by payout state ──────────────
+    const releasePendingOrders = await this.prisma.order.findMany({
+      where: { escrowStatus: 'RELEASE_PENDING' },
+      include: { payouts: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+    for (const order of releasePendingOrders) {
+      const payout = order.payouts[0] ?? null;
+      if (!payout) {
+        findings.push({ category: 'D', type: 'RELEASE_PENDING_NO_PAYOUT', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASE_PENDING but has no payout record — funds may be stuck in available balance`,
+          suggestedAction: 'Manual review: verify wallet balance and create payout manually if needed' });
+      } else if (payout.status === 'COMPLETED' || payout.status === 'REVERSED') {
+        findings.push({ category: 'B', type: 'RELEASE_PENDING_PAYOUT_TERMINAL', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASE_PENDING but payout ${payout.id} is ${payout.status} — state-only patch needed`,
+          suggestedAction: 'Patch order escrowStatus to RELEASED (no financial ops)' });
+      } else if (payout.status === 'PENDING' || payout.status === 'APPROVED') {
+        findings.push({ category: 'C', type: 'RELEASE_PENDING_UNPROCESSED_PAYOUT', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASE_PENDING with ${payout.status} payout ${payout.id} — process payout`,
+          suggestedAction: 'Call processPayout to transfer funds to seller' });
+      } else if (payout.status === 'FAILED') {
+        findings.push({ category: 'C', type: 'RELEASE_PENDING_FAILED_PAYOUT', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASE_PENDING with FAILED payout ${payout.id} — reset and retry`,
+          suggestedAction: 'Reset payout to PENDING and call processPayout' });
+      } else {
+        findings.push({ category: 'D', type: 'RELEASE_PENDING_BLOCKED_PAYOUT', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASE_PENDING with payout ${payout.id} in state ${payout.status} — cannot auto-fix`,
+          suggestedAction: 'Manual review: check payout state with Paystack and resolve manually' });
+      }
+    }
+
+    // ── 2. COMPLETED service bookings where escrow was never released ──────────
+    const stuckBookings = await this.prisma.serviceBooking.findMany({
+      where: {
+        status: 'COMPLETED',
+        orderId: { not: null },
+        order: { escrowStatus: { in: ['ESCROW_HELD', 'SHIPPED', 'DELIVERED', 'DISPUTED', 'PENDING_PAYMENT', 'PAYMENT_INITIALIZED'] } },
+      },
+      include: { order: { select: { escrowStatus: true } } },
+    });
+    for (const booking of stuckBookings) {
+      const escrow = booking.order?.escrowStatus ?? 'UNKNOWN';
+      if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED'].includes(escrow)) {
+        findings.push({ category: 'C', type: 'COMPLETED_BOOKING_ESCROW_HELD', entityType: 'booking', entityId: booking.id,
+          description: `Service booking ${booking.id} is COMPLETED but order ${booking.orderId!} is ${escrow} — release never ran`,
+          suggestedAction: 'Call releaseEscrowInternal to release funds to seller' });
+      } else if (escrow === 'DISPUTED') {
+        findings.push({ category: 'D', type: 'COMPLETED_BOOKING_DISPUTED', entityType: 'booking', entityId: booking.id,
+          description: `Service booking ${booking.id} is COMPLETED but order ${booking.orderId!} is DISPUTED`,
+          suggestedAction: 'Resolve dispute first, then release if appropriate' });
+      } else {
+        findings.push({ category: 'D', type: 'COMPLETED_BOOKING_UNEXPECTED_ESCROW', entityType: 'booking', entityId: booking.id,
+          description: `Service booking ${booking.id} is COMPLETED but order ${booking.orderId!} is ${escrow} — unexpected state`,
+          suggestedAction: 'Manual review: verify financial state and correct manually' });
+      }
+    }
+
+    // ── 2b. CANCELLED/DECLINED service bookings with active escrow ───────────────
+    // When a booking is cancelled after the buyer already paid, the escrow must be
+    // refunded. If it isn't, the buyer's money sits in ESCROW_HELD indefinitely.
+    // This check is separate from Check 2 (which only looks at COMPLETED bookings).
+    const cancelledWithEscrow = await this.prisma.serviceBooking.findMany({
+      where: {
+        status: { in: ['CANCELLED', 'DECLINED'] },
+        orderId: { not: null },
+        order: { escrowStatus: { in: ['ESCROW_HELD', 'SHIPPED', 'DELIVERED', 'RELEASE_PENDING'] } },
+      },
+      include: { order: { select: { escrowStatus: true } } },
+    });
+    for (const booking of cancelledWithEscrow) {
+      const escrow = booking.order?.escrowStatus ?? 'UNKNOWN';
+      findings.push({ category: 'D', type: 'CANCELLED_BOOKING_ESCROW_HELD', entityType: 'booking', entityId: booking.id,
+        description: `Service booking ${booking.id} is ${booking.status} but order ${booking.orderId!} is ${escrow} — buyer payment of this order may need refunding`,
+        suggestedAction: `Manual review: if refund is appropriate, call POST /admin/orders/${booking.orderId!}/refund` });
+    }
+
+    // ── 3. RELEASED orders — verify at least one COMPLETED or REVERSED payout ──
+    const releasedOrders = await this.prisma.order.findMany({
+      where: { escrowStatus: 'RELEASED' },
+      include: { payouts: { select: { id: true, status: true } } },
+    });
+    for (const order of releasedOrders) {
+      const hasTerminalPayout = order.payouts.some(p => p.status === 'COMPLETED' || p.status === 'REVERSED');
+      if (order.payouts.length === 0) {
+        findings.push({ category: 'D', type: 'RELEASED_NO_PAYOUT', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASED but has no payout records — possible manual state patch`,
+          suggestedAction: 'Manual review: verify seller received funds outside the system' });
+      } else if (!hasTerminalPayout) {
+        const statuses = order.payouts.map(p => p.status).join(', ');
+        findings.push({ category: 'D', type: 'RELEASED_INCOMPLETE_PAYOUT', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASED but all payouts have non-terminal status: ${statuses}`,
+          suggestedAction: 'Manual review: reconcile payout state with Paystack' });
+      } else {
+        findings.push({ category: 'A', type: 'RELEASED_CORRECT', entityType: 'order', entityId: order.id,
+          description: `Order ${order.id} is RELEASED with a COMPLETED/REVERSED payout — consistent`,
+          suggestedAction: 'No action needed' });
+      }
+    }
+
+    // ── 4. Stuck 'Refunding' PaymentTransactions ─────────────────────────────
+    const refundingTxs = await this.prisma.paymentTransaction.findMany({
+      where: { status: 'Refunding' },
+      include: { order: { select: { id: true, escrowStatus: true } } },
+    });
+    for (const tx of refundingTxs) {
+      if (tx.order.escrowStatus === 'REFUNDED') {
+        findings.push({ category: 'B', type: 'STUCK_REFUNDING_TX_ORDER_REFUNDED', entityType: 'order', entityId: tx.orderId,
+          description: `PaymentTransaction ${tx.id} is 'Refunding' but order ${tx.orderId} is already REFUNDED — state-only patch`,
+          suggestedAction: 'Patch PaymentTransaction status to Refunded' });
+      } else {
+        findings.push({ category: 'D', type: 'STUCK_REFUNDING_TX', entityType: 'order', entityId: tx.orderId,
+          description: `PaymentTransaction ${tx.id} is stuck as 'Refunding' — Paystack webhook may still arrive`,
+          suggestedAction: 'Manual review: check Paystack dashboard and await webhook or update manually' });
+      }
+    }
+
+    // ── 5. Duplicate active payouts per order ────────────────────────────────
+    const activePayouts = await this.prisma.payout.findMany({
+      where: { status: { in: ['PENDING', 'APPROVED', 'PROCESSING'] }, orderId: { not: null } },
+      select: { id: true, orderId: true, status: true },
+    });
+    const payoutsByOrder: Record<string, Array<{ id: string; status: string }>> = {};
+    for (const p of activePayouts) {
+      const key = p.orderId!;
+      (payoutsByOrder[key] ??= []).push({ id: p.id, status: p.status });
+    }
+    for (const [orderId, payouts] of Object.entries(payoutsByOrder)) {
+      if (payouts.length > 1) {
+        findings.push({ category: 'D', type: 'DUPLICATE_ACTIVE_PAYOUTS', entityType: 'order', entityId: orderId,
+          description: `Order ${orderId} has ${payouts.length} active payouts (${payouts.map(p => `${p.id}:${p.status}`).join(', ')}) — double-pay risk`,
+          suggestedAction: 'Manual review: cancel all but one active payout, then process the remaining one' });
+      }
+    }
+
+    // ── 6. Failed webhook logs ───────────────────────────────────────────────
+    const failedWebhooks = await this.prisma.webhookLog.findMany({
+      where: { processed: false, error: { not: null } },
+      select: { id: true, eventType: true, reference: true, error: true },
+    });
+    for (const log of failedWebhooks) {
+      findings.push({ category: 'C', type: 'FAILED_WEBHOOK', entityType: 'webhook', entityId: log.id,
+        description: `Webhook log ${log.id} (${log.eventType} ref=${log.reference ?? 'N/A'}) failed with: ${log.error}`,
+        suggestedAction: 'Call retryWebhookLog to reprocess' });
+    }
+
+    // ── 7. Wallet balance integrity ──────────────────────────────────────────
+    // Recompute each wallet's balances from the immutable WalletTransaction ledger
+    // and flag any divergence over 0.01 GHS for manual review.
+    const wallets = await this.prisma.wallet.findMany({
+      where: { OR: [{ availableBalance: { gt: 0 } }, { pendingBalance: { gt: 0 } }, { totalEarnings: { gt: 0 } }] },
+      select: { id: true, userId: true, availableBalance: true, pendingBalance: true, totalEarnings: true, totalWithdrawn: true },
+    });
+    if (wallets.length > 0) {
+      const txAggregates = await this.prisma.walletTransaction.groupBy({
+        by: ['walletId', 'type'],
+        where: { walletId: { in: wallets.map(w => w.id) } },
+        _sum: { amount: true },
+      });
+      const txMap: Record<string, Record<string, number>> = {};
+      for (const row of txAggregates) {
+        (txMap[row.walletId] ??= {})[row.type] = row._sum.amount ?? 0;
+      }
+      const get = (wId: string, t: string) => txMap[wId]?.[t] ?? 0;
+      const THRESHOLD = 0.01;
+      for (const wallet of wallets) {
+        const computedPending    = get(wallet.id, 'CREDIT_PENDING') - get(wallet.id, 'PENDING_TO_AVAILABLE') - get(wallet.id, 'REVERSE_PENDING');
+        const computedAvailable  = get(wallet.id, 'PENDING_TO_AVAILABLE') - get(wallet.id, 'DEBIT_AVAILABLE') + get(wallet.id, 'REFUND_AVAILABLE') + get(wallet.id, 'TRANSFER_REVERSED');
+        const computedEarnings   = get(wallet.id, 'PENDING_TO_AVAILABLE');
+        const computedWithdrawn  = get(wallet.id, 'FINALIZE_WITHDRAWAL') - get(wallet.id, 'TRANSFER_REVERSED');
+        const diffs: string[] = [];
+        if (Math.abs(computedPending   - wallet.pendingBalance)   > THRESHOLD) diffs.push(`pendingBalance stored=${wallet.pendingBalance} computed=${computedPending.toFixed(4)}`);
+        if (Math.abs(computedAvailable - wallet.availableBalance) > THRESHOLD) diffs.push(`availableBalance stored=${wallet.availableBalance} computed=${computedAvailable.toFixed(4)}`);
+        if (Math.abs(computedEarnings  - wallet.totalEarnings)    > THRESHOLD) diffs.push(`totalEarnings stored=${wallet.totalEarnings} computed=${computedEarnings.toFixed(4)}`);
+        if (Math.abs(computedWithdrawn - wallet.totalWithdrawn)   > THRESHOLD) diffs.push(`totalWithdrawn stored=${wallet.totalWithdrawn} computed=${computedWithdrawn.toFixed(4)}`);
+        if (diffs.length > 0) {
+          findings.push({ category: 'D', type: 'WALLET_BALANCE_MISMATCH', entityType: 'wallet', entityId: wallet.userId,
+            description: `Wallet for user ${wallet.userId} has mismatched balances: ${diffs.join('; ')}`,
+            suggestedAction: 'Manual review: audit WalletTransaction records and correct stored balances if safe' });
+        }
+      }
+    }
+
+    const summary = { A: 0, B: 0, C: 0, D: 0 };
+    for (const f of findings) summary[f.category]++;
+    this.logger.log(`runFinancialAudit complete — A=${summary.A} B=${summary.B} C=${summary.C} D=${summary.D}`);
+    return { runAt, findings, summary };
+  }
+
+  // ─── Apply audit fixes (B=state-only, C=safe financial ops; D=skipped) ────
+
+  async applyAuditFixes(): Promise<{
+    runAt: string;
+    applied: Array<{ entityId: string; entityType: string; action: string }>;
+    skipped: Array<{ entityId: string; entityType: string; category: 'D'; reason: string }>;
+    errors:  Array<{ entityId: string; entityType: string; error: string }>;
+  }> {
+    const runAt  = new Date().toISOString();
+    const applied: Array<{ entityId: string; entityType: string; action: string }> = [];
+    const skipped: Array<{ entityId: string; entityType: string; category: 'D'; reason: string }> = [];
+    const errors:  Array<{ entityId: string; entityType: string; error: string }> = [];
+
+    const audit = await this.runFinancialAudit();
+
+    for (const finding of audit.findings) {
+      if (finding.category === 'A') continue;
+      if (finding.category === 'D') {
+        skipped.push({ entityId: finding.entityId, entityType: finding.entityType, category: 'D', reason: finding.description });
+        continue;
+      }
+
+      try {
+        // ── B fixes ────────────────────────────────────────────────────────────
+
+        if (finding.type === 'RELEASE_PENDING_PAYOUT_TERMINAL') {
+          const { count } = await this.prisma.order.updateMany({
+            where: { id: finding.entityId, escrowStatus: 'RELEASE_PENDING' },
+            data:  { escrowStatus: 'RELEASED', status: 'Completed' },
+          });
+          if (count > 0) applied.push({ entityId: finding.entityId, entityType: 'order', action: 'Patched RELEASE_PENDING → RELEASED (payout already terminal, no financial ops)' });
+
+        } else if (finding.type === 'STUCK_REFUNDING_TX_ORDER_REFUNDED') {
+          const { count } = await this.prisma.paymentTransaction.updateMany({
+            where: { orderId: finding.entityId, status: 'Refunding' },
+            data:  { status: 'Refunded', refundedAt: new Date() },
+          });
+          if (count > 0) applied.push({ entityId: finding.entityId, entityType: 'order', action: "Patched PaymentTransaction 'Refunding' → 'Refunded'" });
+
+        // ── C fixes ────────────────────────────────────────────────────────────
+
+        } else if (finding.type === 'RELEASE_PENDING_UNPROCESSED_PAYOUT') {
+          const order = await this.prisma.order.findUnique({
+            where: { id: finding.entityId },
+            include: { payouts: { orderBy: { createdAt: 'desc' }, take: 1 } },
+          });
+          const payout = order?.payouts[0];
+          if (payout && (payout.status === 'PENDING' || payout.status === 'APPROVED')) {
+            await this.payoutService.processPayout(payout.id);
+            applied.push({ entityId: finding.entityId, entityType: 'order', action: `Processed ${payout.status} payout ${payout.id}` });
+          }
+
+        } else if (finding.type === 'RELEASE_PENDING_FAILED_PAYOUT') {
+          const order = await this.prisma.order.findUnique({
+            where: { id: finding.entityId },
+            include: { payouts: { orderBy: { createdAt: 'desc' }, take: 1 } },
+          });
+          const payout = order?.payouts[0];
+          if (payout && payout.status === 'FAILED') {
+            await this.prisma.payout.update({
+              where: { id: payout.id },
+              data:  { status: PayoutStatus.PENDING, failureReason: null, transferCode: null },
+            });
+            await this.payoutService.processPayout(payout.id);
+            applied.push({ entityId: finding.entityId, entityType: 'order', action: `Reset FAILED payout ${payout.id} to PENDING and processed` });
+          }
+
+        } else if (finding.type === 'COMPLETED_BOOKING_ESCROW_HELD') {
+          const booking = await this.prisma.serviceBooking.findUnique({
+            where: { id: finding.entityId },
+            select: { orderId: true },
+          });
+          if (booking?.orderId) {
+            await this.releaseEscrowInternal(booking.orderId);
+            applied.push({ entityId: finding.entityId, entityType: 'booking', action: `Released escrow for order ${booking.orderId}` });
+          }
+
+        } else if (finding.type === 'FAILED_WEBHOOK') {
+          const result = await this.retryWebhookLog(finding.entityId);
+          applied.push({ entityId: finding.entityId, entityType: 'webhook', action: `Retried webhook: ${result.message}` });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push({ entityId: finding.entityId, entityType: finding.entityType, error: msg });
+        this.logger.error(`applyAuditFixes: ${finding.type} on ${finding.entityId} failed: ${msg}`);
+      }
+    }
+
+    this.logger.log(`applyAuditFixes complete — applied=${applied.length} skipped=${skipped.length} errors=${errors.length}`);
+    return { runAt, applied, skipped, errors };
+  }
+
   /**
    * Core escrow funding logic.
    * Called from: verify(), checkMomoStatus(), handleChargeSuccess().

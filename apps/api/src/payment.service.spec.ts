@@ -23,11 +23,14 @@ const mockPrisma = {
     findFirst:  jest.fn(),
     update:     jest.fn(),
     updateMany: jest.fn(),
+    findMany:   jest.fn(),
   },
-  paymentTransaction: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
-  payout:             { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-  webhookLog:         { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+  paymentTransaction: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
+  payout:             { create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+  webhookLog:         { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), findMany: jest.fn() },
   serviceBooking:     { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+  wallet:             { findMany: jest.fn() },
+  walletTransaction:  { groupBy: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -65,6 +68,14 @@ describe('PaymentService', () => {
     jest.clearAllMocks();
     mockTx = makeMockTx();
     mockPrisma.$transaction.mockImplementation(async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx));
+
+    // Default audit-path mocks so existing tests don't fail on unrelated findMany calls
+    mockPrisma.order.findMany.mockResolvedValue([]);
+    mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+    mockPrisma.payout.findMany.mockResolvedValue([]);
+    mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+    mockPrisma.wallet.findMany.mockResolvedValue([]);
+    mockPrisma.walletTransaction.groupBy.mockResolvedValue([]);
 
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -853,6 +864,404 @@ describe('PaymentService', () => {
       });
 
       await expect(service.initializeOrderPayment('order-pay-1', 'buyer-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── runFinancialAudit — read-only discovery ────────────────────────────────
+
+  describe('runFinancialAudit', () => {
+    const emptyAuditSetup = () => {
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+    };
+
+    it('returns empty findings when everything is consistent', async () => {
+      emptyAuditSetup();
+
+      const result = await service.runFinancialAudit();
+
+      expect(result.findings).toHaveLength(0);
+      expect(result.summary).toEqual({ A: 0, B: 0, C: 0, D: 0 });
+      expect(result.runAt).toBeTruthy();
+    });
+
+    it('classifies RELEASE_PENDING + COMPLETED payout as category B', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-rp', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'payout-1', status: 'COMPLETED' }] }])
+        .mockResolvedValueOnce([]); // RELEASED orders check
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'order-rp');
+      expect(finding?.category).toBe('B');
+      expect(finding?.type).toBe('RELEASE_PENDING_PAYOUT_TERMINAL');
+      expect(result.summary.B).toBe(1);
+    });
+
+    it('classifies RELEASE_PENDING + PENDING payout as category C', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-rp2', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'payout-2', status: 'PENDING' }] }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'order-rp2');
+      expect(finding?.category).toBe('C');
+      expect(finding?.type).toBe('RELEASE_PENDING_UNPROCESSED_PAYOUT');
+    });
+
+    it('classifies RELEASE_PENDING + FAILED payout as category C', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-rpf', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'payout-f', status: 'FAILED' }] }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'order-rpf');
+      expect(finding?.category).toBe('C');
+      expect(finding?.type).toBe('RELEASE_PENDING_FAILED_PAYOUT');
+    });
+
+    it('classifies RELEASE_PENDING + CANCELLED payout as category D', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-rpd', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'payout-c', status: 'CANCELLED' }] }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'order-rpd');
+      expect(finding?.category).toBe('D');
+      expect(finding?.type).toBe('RELEASE_PENDING_BLOCKED_PAYOUT');
+    });
+
+    it('classifies RELEASE_PENDING + no payout as category D', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-rpnp', escrowStatus: 'RELEASE_PENDING', payouts: [] }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'order-rpnp');
+      expect(finding?.category).toBe('D');
+      expect(finding?.type).toBe('RELEASE_PENDING_NO_PAYOUT');
+    });
+
+    it('classifies COMPLETED booking with ESCROW_HELD order as category C', async () => {
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([{
+        id: 'booking-stuck',
+        orderId: 'order-stuck',
+        order: { escrowStatus: 'ESCROW_HELD' },
+      }]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'booking-stuck');
+      expect(finding?.category).toBe('C');
+      expect(finding?.type).toBe('COMPLETED_BOOKING_ESCROW_HELD');
+    });
+
+    it('classifies RELEASED order with COMPLETED payout as category A', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([]) // RELEASE_PENDING orders
+        .mockResolvedValueOnce([{ id: 'order-ok', escrowStatus: 'RELEASED', payouts: [{ id: 'p1', status: 'COMPLETED' }] }]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'order-ok');
+      expect(finding?.category).toBe('A');
+      expect(result.summary.A).toBe(1);
+    });
+
+    it('classifies RELEASED order with no payout as category D', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'order-nop', escrowStatus: 'RELEASED', payouts: [] }]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'order-nop');
+      expect(finding?.category).toBe('D');
+      expect(finding?.type).toBe('RELEASED_NO_PAYOUT');
+    });
+
+    it('classifies failed webhook logs as category C', async () => {
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([{
+        id: 'wh-failed',
+        eventType: 'charge.success',
+        reference: 'ref-1',
+        error: 'DB timeout',
+      }]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'wh-failed');
+      expect(finding?.category).toBe('C');
+      expect(finding?.type).toBe('FAILED_WEBHOOK');
+    });
+
+    it('flags wallet balance mismatch (stored vs computed) as category D', async () => {
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([{
+        id: 'wallet-1', userId: 'user-mismatch',
+        availableBalance: 100, pendingBalance: 0, totalEarnings: 100, totalWithdrawn: 0,
+      }]);
+      // Ledger says: PENDING_TO_AVAILABLE = 80 (not 100)
+      mockPrisma.walletTransaction.groupBy.mockResolvedValue([
+        { walletId: 'wallet-1', type: 'PENDING_TO_AVAILABLE', _sum: { amount: 80 } },
+      ]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.type === 'WALLET_BALANCE_MISMATCH');
+      expect(finding?.category).toBe('D');
+      expect(finding?.entityId).toBe('user-mismatch');
+      expect(finding?.description).toContain('availableBalance');
+    });
+
+    it('regression: hairdressing booking fixed by reconcile — RELEASED+COMPLETED payout — appears only as Category A, no action-needed findings', async () => {
+      // Represents the two hairdressing bookings that were stuck in ESCROW_HELD, fixed by
+      // reconcileServiceBookings(), and are now RELEASED with COMPLETED payouts.
+      // The audit MUST classify them as Category A only — they are financially correct.
+      // They must NOT appear in Check 2 (stuck escrow) because their order is RELEASED.
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([])   // Check 1: no RELEASE_PENDING orders
+        .mockResolvedValueOnce([{    // Check 3: RELEASED orders
+          id: 'order-hairdressing-fixed',
+          escrowStatus: 'RELEASED',
+          payouts: [{ id: 'payout-completed', status: 'COMPLETED' }],
+        }]);
+      // Check 2 queries serviceBooking WHERE escrowStatus IN stuck list.
+      // order is RELEASED — DB correctly excludes it → empty result.
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      // Appears exactly once, as Category A — not a B/C/D finding
+      const forOrder = result.findings.filter(f => f.entityId === 'order-hairdressing-fixed');
+      expect(forOrder).toHaveLength(1);
+      expect(forOrder[0].category).toBe('A');
+      expect(forOrder[0].type).toBe('RELEASED_CORRECT');
+      // Confirm: no action-needed findings at all for this scenario
+      expect(result.summary).toEqual({ A: 1, B: 0, C: 0, D: 0 });
+    });
+
+    it('regression: CANCELLED booking with ESCROW_HELD order — coverage gap — appears as Category D (not invisible)', async () => {
+      // A service booking cancelled after the buyer already paid. The escrow is still
+      // ESCROW_HELD and no refund has been initiated. Previously invisible to the audit.
+      // Check 2b must catch this and report Category D (manual review: refund buyer).
+      mockPrisma.order.findMany.mockResolvedValue([]); // no RELEASE_PENDING, no RELEASED
+      mockPrisma.serviceBooking.findMany
+        .mockResolvedValueOnce([])   // Check 2: COMPLETED bookings — none
+        .mockResolvedValueOnce([{    // Check 2b: CANCELLED bookings with active escrow
+          id: 'booking-cancelled-paid',
+          status: 'CANCELLED',
+          orderId: 'order-photoshoot',
+          order: { escrowStatus: 'ESCROW_HELD' },
+        }]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.runFinancialAudit();
+
+      const finding = result.findings.find(f => f.entityId === 'booking-cancelled-paid');
+      expect(finding).toBeDefined();
+      expect(finding?.category).toBe('D');
+      expect(finding?.type).toBe('CANCELLED_BOOKING_ESCROW_HELD');
+      expect(finding?.description).toContain('order-photoshoot');
+      expect(finding?.suggestedAction).toContain('refund');
+      expect(result.summary.D).toBe(1);
+    });
+
+    it('does NOT flag wallet when stored values match ledger', async () => {
+      // Wallet state: seller earned 100 (CREDIT_PENDING→PENDING_TO_AVAILABLE), all now available.
+      // pendingBalance=0, availableBalance=100, totalEarnings=100, totalWithdrawn=0
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([{
+        id: 'wallet-2', userId: 'user-ok',
+        availableBalance: 100, pendingBalance: 0, totalEarnings: 100, totalWithdrawn: 0,
+      }]);
+      // Ledger: CREDIT_PENDING=100, PENDING_TO_AVAILABLE=100 → pending=0, available=100, earnings=100, withdrawn=0
+      mockPrisma.walletTransaction.groupBy.mockResolvedValue([
+        { walletId: 'wallet-2', type: 'CREDIT_PENDING',        _sum: { amount: 100 } },
+        { walletId: 'wallet-2', type: 'PENDING_TO_AVAILABLE',  _sum: { amount: 100 } },
+      ]);
+
+      const result = await service.runFinancialAudit();
+
+      const mismatch = result.findings.find(f => f.type === 'WALLET_BALANCE_MISMATCH');
+      expect(mismatch).toBeUndefined();
+    });
+  });
+
+  // ─── applyAuditFixes — B and C fixes, D skipped ─────────────────────────────
+
+  describe('applyAuditFixes', () => {
+    const emptyAuditSetup = () => {
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+    };
+
+    it('returns empty arrays when audit finds no inconsistencies', async () => {
+      emptyAuditSetup();
+
+      const result = await service.applyAuditFixes();
+
+      expect(result.applied).toHaveLength(0);
+      expect(result.skipped).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('B fix: patches RELEASE_PENDING → RELEASED when payout is COMPLETED', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-b', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'p1', status: 'COMPLETED' }] }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.applyAuditFixes();
+
+      expect(mockPrisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'order-b', escrowStatus: 'RELEASE_PENDING' }, data: { escrowStatus: 'RELEASED', status: 'Completed' } }),
+      );
+      expect(result.applied).toHaveLength(1);
+      expect(result.applied[0].action).toContain('RELEASED');
+    });
+
+    it('C fix: calls processPayout for PENDING payout on RELEASE_PENDING order', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-c', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'payout-c', status: 'PENDING' }] }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+      // applyAuditFixes re-fetches the order to get fresh payout state
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order-c', payouts: [{ id: 'payout-c', status: 'PENDING' }],
+      });
+
+      const result = await service.applyAuditFixes();
+
+      expect(mockPayout.processPayout).toHaveBeenCalledWith('payout-c');
+      expect(result.applied[0].action).toContain('payout-c');
+    });
+
+    it('D finding: skipped with reason, no financial ops performed', async () => {
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([{ id: 'order-d', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'p-cancel', status: 'CANCELLED' }] }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      const result = await service.applyAuditFixes();
+
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].category).toBe('D');
+      expect(result.applied).toHaveLength(0);
+      expect(mockPayout.processPayout).not.toHaveBeenCalled();
+    });
+
+    it('error during fix: records in errors array without propagating, continues to next finding', async () => {
+      // Two findings: first C (processPayout will throw), second B (updateMany should still run)
+      mockPrisma.order.findMany
+        .mockResolvedValueOnce([
+          { id: 'order-err', escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'payout-err', status: 'PENDING' }] },
+          { id: 'order-b2',  escrowStatus: 'RELEASE_PENDING', payouts: [{ id: 'payout-done', status: 'COMPLETED' }] },
+        ])
+        .mockResolvedValueOnce([]);
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+      mockPrisma.paymentTransaction.findMany.mockResolvedValue([]);
+      mockPrisma.payout.findMany.mockResolvedValue([]);
+      mockPrisma.webhookLog.findMany.mockResolvedValue([]);
+      mockPrisma.wallet.findMany.mockResolvedValue([]);
+
+      // First finding: re-fetch returns PENDING payout, processPayout throws
+      mockPrisma.order.findUnique.mockResolvedValue({ id: 'order-err', payouts: [{ id: 'payout-err', status: 'PENDING' }] });
+      mockPayout.processPayout.mockRejectedValue(new Error('Paystack down'));
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.applyAuditFixes();
+
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].entityId).toBe('order-err');
+      // B fix for the second order should still run
+      expect(result.applied).toHaveLength(1);
+      expect(result.applied[0].entityId).toBe('order-b2');
     });
   });
 

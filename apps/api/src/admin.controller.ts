@@ -210,6 +210,18 @@ export class AdminController {
     return this.paymentService.reconcileServiceBookings();
   }
 
+  @Get('audit')
+  @ApiOperation({ summary: 'Read-only financial consistency audit — classifies every inconsistency as A (ok), B (state patch), C (safe financial op), or D (manual review)' })
+  runFinancialAudit() {
+    return this.paymentService.runFinancialAudit();
+  }
+
+  @Post('reconcile')
+  @ApiOperation({ summary: 'Apply safe audit fixes — patches category B (state-only) and C (safe financial ops); category D findings are skipped and returned for manual review' })
+  applyAuditFixes() {
+    return this.paymentService.applyAuditFixes();
+  }
+
   @Get('export/csv')
   @ApiOperation({ summary: 'Export users as CSV' })
   async exportCsv(@Res() res: Response) {
