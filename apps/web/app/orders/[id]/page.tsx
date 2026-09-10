@@ -233,6 +233,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   // Status update
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
+  // Service booking actions
+  const [serviceActionLoading, setServiceActionLoading] = useState<string | null>(null);
+
   // Buyer cancel (unpaid orders only)
   const [cancelStep, setCancelStep] = useState<"idle" | "confirm">("idle");
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -435,9 +438,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     <AuthGate>
       <div className="container-shell py-8 md:py-10">
         {/* Back link */}
-        <Link href="/orders" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
+        <Link href={isServiceOrder ? "/bookings" : "/orders"} className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
           <ArrowLeft className="h-4 w-4" />
-          Back to orders
+          {isServiceOrder ? "Back to bookings" : "Back to orders"}
         </Link>
 
         {/* Header */}
@@ -1022,25 +1025,122 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </section>
             ) : null}
 
-            {/* ── SERVICE: ESCROW HELD NOTICE ── */}
-            {isServiceOrder && isPaid && isActive ? (
-              <section className="rounded-2xl p-5" style={{ background: "rgba(114,204,35,0.06)", border: "1px solid rgba(114,204,35,0.25)" }}>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 shrink-0" style={{ color: "var(--green)" }} />
-                  <h2 className="text-base font-black" style={{ color: "#14532D" }}>Payment secured in escrow</h2>
-                </div>
-                <p className="mt-2 text-sm leading-6" style={{ color: "#166534" }}>
-                  Your payment is held safely. The seller will receive it automatically once the service is marked complete.
-                </p>
-                <Link
-                  href="/bookings"
-                  className="mt-4 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black text-white w-full"
-                  style={{ background: "var(--green)" }}
-                >
-                  View booking details
-                </Link>
-              </section>
-            ) : null}
+            {/* ── SERVICE: BOOKING ACTIONS ── */}
+            {isServiceOrder && isPaid && isActive ? (() => {
+              const booking = order.serviceBooking;
+              const bStatus = booking?.status ?? "";
+
+              async function handleServiceAction(action: () => Promise<unknown>, key: string, successMsg: string) {
+                setServiceActionLoading(key);
+                try {
+                  await action();
+                  toast(successMsg);
+                  await mutate();
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : "Action failed.");
+                } finally {
+                  setServiceActionLoading(null);
+                }
+              }
+
+              const statusStyles: Record<string, { bg: string; color: string; label: string }> = {
+                REQUESTED:             { bg: "rgba(217,119,6,0.10)",   color: "#B45309", label: "Awaiting seller confirmation" },
+                ACCEPTED:              { bg: "rgba(59,130,246,0.10)",  color: "#2563EB", label: "Accepted" },
+                CONFIRMED:             { bg: "rgba(22,163,74,0.10)",   color: "#16A34A", label: "Confirmed — ready to start" },
+                IN_SERVICE:            { bg: "rgba(168,85,247,0.10)",  color: "#9333EA", label: "In progress" },
+                AWAITING_CONFIRMATION: { bg: "rgba(217,119,6,0.10)",   color: "#B45309", label: "Awaiting your confirmation" },
+                COMPLETED:             { bg: "rgba(22,163,74,0.10)",   color: "#16A34A", label: "Completed" },
+                CANCELLED:             { bg: "rgba(113,113,122,0.10)", color: "#71717A", label: "Cancelled" },
+              };
+              const bStyle = statusStyles[bStatus] ?? { bg: "rgba(226,232,240,0.60)", color: "#64748B", label: bStatus };
+
+              return (
+                <section className="rounded-2xl p-5 space-y-4" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", border: "1px solid rgba(226,232,240,0.70)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)" }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 shrink-0" style={{ color: "#5A9460" }} />
+                      <span className="text-sm font-black text-slate-950">Service booking</span>
+                    </div>
+                    {bStatus ? (
+                      <span className="rounded-full px-2.5 py-1 text-xs font-black" style={{ background: bStyle.bg, color: bStyle.color }}>
+                        {bStyle.label}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <p className="text-sm font-semibold" style={{ color: "#166534" }}>
+                    Payment is held securely in escrow and will be released to the seller once the service is confirmed complete.
+                  </p>
+
+                  {/* Buyer: confirm service done */}
+                  {role === "buyer" && bStatus === "AWAITING_CONFIRMATION" ? (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        disabled={serviceActionLoading === "confirm"}
+                        onClick={() => booking && handleServiceAction(
+                          () => api.confirmServiceCompletion(booking.id),
+                          "confirm",
+                          "Service confirmed. Payment has been released to the seller."
+                        )}
+                        className="w-full rounded-xl px-4 py-3 text-sm font-black text-white disabled:opacity-50 transition-all hover:opacity-90"
+                        style={{ background: "#5A9460" }}
+                      >
+                        {serviceActionLoading === "confirm" ? <Loader2 className="inline h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="inline h-4 w-4 mr-1.5" />}
+                        Confirm service complete
+                      </button>
+                      <p className="text-xs font-semibold text-slate-400">
+                        If you don&apos;t respond, payment will be released automatically after 48 hours.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {/* Seller: mark in progress */}
+                  {role === "seller" && bStatus === "CONFIRMED" ? (
+                    <button
+                      type="button"
+                      disabled={serviceActionLoading === "start"}
+                      onClick={() => booking && handleServiceAction(
+                        () => api.startService(booking.id),
+                        "start",
+                        "Service marked as in progress."
+                      )}
+                      className="w-full rounded-xl px-4 py-3 text-sm font-black text-white disabled:opacity-50 transition-all hover:opacity-90"
+                      style={{ background: "#5A9460" }}
+                    >
+                      {serviceActionLoading === "start" ? <Loader2 className="inline h-4 w-4 animate-spin mr-1.5" /> : <Square className="inline h-4 w-4 mr-1.5" />}
+                      Mark In Progress
+                    </button>
+                  ) : null}
+
+                  {/* Seller: complete service */}
+                  {role === "seller" && bStatus === "IN_SERVICE" ? (
+                    <button
+                      type="button"
+                      disabled={serviceActionLoading === "complete"}
+                      onClick={() => booking && handleServiceAction(
+                        () => api.completeService(booking.id),
+                        "complete",
+                        "Service marked complete. The buyer has 48 hours to confirm."
+                      )}
+                      className="w-full rounded-xl px-4 py-3 text-sm font-black text-white disabled:opacity-50 transition-all hover:opacity-90"
+                      style={{ background: "#5A9460" }}
+                    >
+                      {serviceActionLoading === "complete" ? <Loader2 className="inline h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="inline h-4 w-4 mr-1.5" />}
+                      Complete Service
+                    </button>
+                  ) : null}
+
+                  <Link
+                    href="/bookings"
+                    className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+                    style={{ background: "rgba(226,232,240,0.50)", border: "1px solid rgba(226,232,240,0.80)" }}
+                  >
+                    View full booking details
+                  </Link>
+                </section>
+              );
+            })() : null}
 
             {/* ── DISPUTE ── */}
             {isPaid && isActive && !isDisputed && (role === "buyer" || role === "seller") ? (
@@ -1125,7 +1225,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <h3 className="mb-4 text-sm font-black uppercase tracking-wide" style={{ color: "#94A3B8" }}>
                 {isServiceOrder ? "Payment progress" : "Order progress"}
               </h3>
-              <OrderTimeline status={order.status} escrowStatus={order.escrowStatus} isServiceOrder={isServiceOrder} />
+              <OrderTimeline status={order.status} escrowStatus={order.escrowStatus} isServiceOrder={isServiceOrder} bookingStatus={order.serviceBooking?.status} />
             </div>
 
             {/* Order meta */}

@@ -35,7 +35,19 @@
       "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" status)",
       "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" log --oneline -5)",
       "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" diff --stat HEAD)",
-      "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" add apps/api/src/admin.controller.ts apps/api/src/admin.module.ts apps/api/src/admin.service.ts apps/api/src/contact.service.ts apps/api/src/email.service.ts apps/web/app/admin/page.tsx apps/web/app/contact/page.tsx apps/web/components/footer.tsx apps/web/lib/api.ts .claude/settings.local.json)"
+      "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" add apps/api/src/admin.controller.ts apps/api/src/admin.module.ts apps/api/src/admin.service.ts apps/api/src/contact.service.ts apps/api/src/email.service.ts apps/web/app/admin/page.tsx apps/web/app/contact/page.tsx apps/web/components/footer.tsx apps/web/lib/api.ts .claude/settings.local.json)",
+      "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" add apps/api/src/admin.controller.ts apps/api/src/admin.module.ts apps/api/src/admin.service.ts apps/api/src/contact.service.ts apps/api/src/email.service.ts apps/web/app/admin/page.tsx apps/web/app/contact/page.tsx apps/web/components/footer.tsx apps/web/lib/api.ts)",
+      "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" status --short)",
+      "Bash(git -C 'c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche' commit -m ' *)",
+      "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" push origin develop)",
+      "Bash(git -C \"c:\\\\Users\\\\Hey Amigo\\\\Github\\\\campus-marche\" add apps/api/src/email.service.ts)",
+      "Bash(mkdir -p \"c:/Users/Hey Amigo/Github/campus-marche/apps/api/prisma/migrations/20260906000001_add_order_verification_codes\" && echo \"created\")",
+      "Bash(node -e \"require.resolve\\('sharp'\\)\")",
+      "Bash(node -e \"require.resolve\\('apps/web/node_modules/sharp'\\)\")",
+      "Bash(node -e \"const s = require\\('sharp'\\); console.log\\('sharp OK', typeof s\\);\")",
+      "Bash(mkdir -p \"c:/Users/Hey Amigo/Github/campus-marche/apps/web/app/icon-maskable\")",
+      "Bash(pnpm tsc *)",
+      "Bash(npx jest *)"
     ]
   }
 }
