@@ -10,7 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EscrowStatus, PayoutMethod } from '@prisma/client';
+import { EscrowStatus, PayoutMethod, PayoutStatus } from '@prisma/client';
 import { calculateCommission, escrowToStatus, generateVerificationCode, ghsToPesewas, isEscrowPaid } from './commission.engine';
 import type { NotificationService } from './notification.service';
 import type { ChatGateway } from './chat.gateway';
@@ -405,9 +405,14 @@ export class PaymentService {
 
     // Network calls must not run inside a DB transaction.
     const autoApprove = this.config.get<string>('PAYOUT_AUTO_APPROVE') !== 'false';
+    // Track whether processPayout ran successfully so we know which escrowStatus to emit.
+    // processPayout emits RELEASED internally (test mode) or relies on transfer.success webhook (live).
+    // When it succeeds, we must not override that emission with a stale RELEASE_PENDING.
+    let payoutAutoProcessed = false;
     if (createdPayoutId && autoApprove) {
       try {
         await this.payoutService.processPayout(createdPayoutId, momoPhone);
+        payoutAutoProcessed = true;
       } catch (err) {
         this.logger.error(`releaseEscrowInternal: auto-process payout ${createdPayoutId} failed: ${err instanceof Error ? err.message : String(err)}`);
         await this.prisma.payout.update({
@@ -436,10 +441,15 @@ export class PaymentService {
       ).catch(() => undefined);
     }
 
-    this.chatGateway?.emitOrderUpdated(orderId, {
-      escrowStatus: EscrowStatus.RELEASE_PENDING,
-      paymentStatus: 'Paid',
-    });
+    // Only emit RELEASE_PENDING when the payout was not auto-processed to a terminal state.
+    // In test mode processPayout already emitted RELEASED; overriding it here would leave
+    // the frontend showing the wrong (stale) escrow state until the next page load.
+    if (!payoutAutoProcessed) {
+      this.chatGateway?.emitOrderUpdated(orderId, {
+        escrowStatus: EscrowStatus.RELEASE_PENDING,
+        paymentStatus: 'Paid',
+      });
+    }
 
     return { message: 'Delivery confirmed. Funds are being released to the seller.' };
   }
@@ -518,6 +528,80 @@ export class PaymentService {
     return { received: true };
   }
 
+  // ─── Admin: list webhook logs ─────────────────────────────────────────────
+
+  async listWebhookLogs(status: 'failed' | 'processed' | 'all' = 'failed', skip = 0, take = 50) {
+    const where =
+      status === 'failed'   ? { processed: false, error: { not: null as null } } :
+      status === 'processed' ? { processed: true } :
+      {};
+    const [data, total] = await Promise.all([
+      this.prisma.webhookLog.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+      this.prisma.webhookLog.count({ where }),
+    ]);
+    return { data, total, skip, take };
+  }
+
+  // ─── Admin: retry a failed webhook ───────────────────────────────────────
+
+  async retryWebhookLog(logId: string): Promise<{ retried: boolean; message: string }> {
+    const log = await this.prisma.webhookLog.findUnique({ where: { id: logId } });
+    if (!log) throw new NotFoundException('Webhook log not found');
+    if (log.processed) {
+      return { retried: false, message: 'Already processed — no retry needed' };
+    }
+
+    let event: PaystackWebhookEvent;
+    try {
+      event = JSON.parse(log.payload) as PaystackWebhookEvent;
+    } catch {
+      throw new BadRequestException('Stored payload is not valid JSON — cannot retry');
+    }
+
+    const { event: eventType, data } = event;
+    const reference = data.reference ?? '';
+
+    try {
+      if (eventType === 'charge.success') {
+        await this.handleChargeSuccess(data, reference);
+      } else if (eventType === 'transfer.success') {
+        const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
+        await this.payoutService.handleTransferSuccess(transferCode, reference);
+      } else if (eventType === 'transfer.failed') {
+        const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
+        const reason = (data as unknown as { reason?: string }).reason;
+        await this.payoutService.handleTransferFailed(transferCode, reference, reason);
+      } else if (eventType === 'transfer.reversed') {
+        const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
+        const reason = (data as unknown as { reason?: string }).reason;
+        await this.payoutService.handleTransferReversed(transferCode, reference, reason);
+      } else if (eventType === 'refund.processed' || eventType === 'refund.failed') {
+        await this.handleRefund(data);
+      } else {
+        await this.prisma.webhookLog.update({
+          where: { id: logId },
+          data: { processed: true, error: `No handler for event type: ${eventType}` },
+        });
+        return { retried: false, message: `No handler registered for event type: ${eventType}` };
+      }
+
+      await this.prisma.webhookLog.update({
+        where: { id: logId },
+        data: { processed: true, error: null },
+      });
+      this.logger.log(`Webhook log ${logId} retried successfully (${eventType} ${reference})`);
+      return { retried: true, message: `Successfully retried ${eventType} for reference ${reference}` };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.prisma.webhookLog.update({
+        where: { id: logId },
+        data: { error: `[retry] ${msg}` },
+      });
+      this.logger.error(`Webhook log ${logId} retry failed (${eventType}): ${msg}`);
+      throw err;
+    }
+  }
+
   // ─── Private: fund escrow after successful charge ─────────────────────────
 
   private async handleChargeSuccess(
@@ -585,42 +669,63 @@ export class PaymentService {
     }
 
     const payment = order.payments[0];
-    if (!payment || payment.status !== 'Paid') {
+    if (!payment || (payment.status !== 'Paid' && payment.status !== 'Refunding')) {
       throw new BadRequestException('No completed payment found for this order');
+    }
+    if (payment.status === 'Refunding') {
+      throw new ConflictException('A refund is already in progress for this order');
     }
 
     const secret = this.config.get<string>('PAYSTACK_SECRET_KEY');
     if (!secret) throw new BadRequestException('Paystack not configured');
 
-    const res = await fetch('https://api.paystack.co/refund', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transaction: payment.reference }),
+    // Atomically claim the refund slot: 'Paid' → 'Refunding'.
+    // A concurrent caller that also read status='Paid' will get count=0 here and abort.
+    const { count: claimed } = await this.prisma.paymentTransaction.updateMany({
+      where: { id: payment.id, status: 'Paid' },
+      data: { status: 'Refunding' },
     });
+    if (claimed === 0) {
+      throw new ConflictException('A refund is already in progress for this order');
+    }
 
-    const data = (await res.json()) as { status: boolean; message: string };
-    if (!data.status) throw new BadRequestException(`Paystack refund failed: ${data.message}`);
+    try {
+      const res = await fetch('https://api.paystack.co/refund', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction: payment.reference }),
+      });
+
+      const data = (await res.json()) as { status: boolean; message: string };
+      if (!data.status) throw new BadRequestException(`Paystack refund failed: ${data.message}`);
+    } catch (err) {
+      // Paystack call failed — restore status so admin can retry.
+      await this.prisma.paymentTransaction.updateMany({
+        where: { id: payment.id, status: 'Refunding' },
+        data: { status: 'Paid' },
+      });
+      throw err;
+    }
 
     // Optimistically update order — refund.processed webhook will confirm final state.
     await this.prisma.$transaction(async (tx) => {
       // Re-read current escrowStatus inside the transaction to avoid stale-read race.
-      // The outer `order` variable may reflect state from before a concurrent transition.
       const fresh = await tx.order.findUnique({ where: { id: orderId }, select: { escrowStatus: true } });
       const freshEscrow = fresh?.escrowStatus ?? order.escrowStatus;
 
-      // Atomic claim: only the first concurrent refund wins the DB write.
-      // count=0 means a concurrent call already transitioned to a terminal state — skip all wallet mutations.
+      // Always finalize the PaymentTransaction first — 'Refunding' must never be left as a
+      // stuck state regardless of whether this caller wins the order claim below.
+      await tx.paymentTransaction.updateMany({
+        where: { id: payment.id, status: { in: ['Refunding', 'Paid'] } },
+        data: { status: 'Refunded', refundedAt: new Date() },
+      });
+
+      // Atomic claim: only the first concurrent refund wins the order write.
       const { count } = await tx.order.updateMany({
         where: { id: orderId, escrowStatus: { notIn: ['REFUNDED', 'FAILED'] } },
         data: { escrowStatus: EscrowStatus.REFUNDED, paymentStatus: 'Refunded', status: 'Refunded' },
       });
       if (count === 0) return;
-
-      // Mark the PaymentTransaction as refunded so the ledger is consistent.
-      await tx.paymentTransaction.update({
-        where: { reference: payment.reference },
-        data: { status: 'Refunded', refundedAt: new Date() },
-      });
 
       // Mark platform revenue as reversed — fee was not collected.
       await tx.platformRevenue.updateMany({
@@ -630,13 +735,10 @@ export class PaymentService {
 
       if (order.sellerId && order.sellerAmount) {
         if (freshEscrow === 'RELEASE_PENDING') {
-          // pendingToAvailable already ran — funds are in availableBalance; debit them back.
           await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx, undefined);
         } else if (freshEscrow === 'RELEASED') {
-          // Payout already completed — record the debt obligation; admin must recover separately.
           await this.walletService.recordSellerDebt(order.sellerId, order.sellerAmount, tx, orderId);
         } else if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED', 'DISPUTED'].includes(freshEscrow)) {
-          // Funds still in pendingBalance; reverse the credit.
           await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx, orderId);
         }
       }
@@ -766,6 +868,13 @@ export class PaymentService {
       });
       if (count === 0) return; // concurrent call already transitioned — skip wallet mutations
 
+      // Finalize the PaymentTransaction — may be 'Refunding' if adminRefundOrder's Paystack
+      // call succeeded but its own transaction hasn't committed yet (crash or race window).
+      await tx.paymentTransaction.updateMany({
+        where: { orderId: order.id, status: { in: ['Refunding', 'Paid'] } },
+        data: { status: 'Refunded', refundedAt: new Date() },
+      });
+
       // Reverse wallet balance based on where funds actually sat at transaction time.
       if (order.sellerId && order.sellerAmount) {
         if (freshEscrow === 'RELEASE_PENDING') {
@@ -780,6 +889,102 @@ export class PaymentService {
 
     this.logger.log(`Refund processed: order ${order.id} → REFUNDED`);
     this.chatGateway?.emitOrderUpdated(order.id, { escrowStatus: 'REFUNDED', paymentStatus: 'Refunded' });
+  }
+
+  // ─── Admin: reconcile COMPLETED service bookings with stale escrow ──────────
+
+  async reconcileServiceBookings(): Promise<{
+    checked: number;
+    fixed: number;
+    skipped: Array<{ bookingId: string; orderId: string; reason: string }>;
+    details: Array<{ bookingId: string; orderId: string; action: string }>;
+  }> {
+    // Find service bookings that reached COMPLETED while their order is still non-terminal.
+    // This happens when the hairdressing-incident guard was not yet in place, or when
+    // releaseEscrowInternal threw after the booking was marked COMPLETED.
+    const stuckBookings = await this.prisma.serviceBooking.findMany({
+      where: {
+        status: 'COMPLETED',
+        orderId: { not: null },
+        order: { escrowStatus: { notIn: ['RELEASED', 'REFUNDED', 'FAILED'] } },
+      },
+      include: {
+        order: {
+          include: {
+            payouts: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
+        },
+      },
+    });
+
+    let fixed = 0;
+    const skipped: Array<{ bookingId: string; orderId: string; reason: string }> = [];
+    const details: Array<{ bookingId: string; orderId: string; action: string }> = [];
+
+    for (const booking of stuckBookings) {
+      const order = booking.order!;
+      const orderId = booking.orderId!;
+      const escrow = order.escrowStatus;
+      const payout = order.payouts[0] ?? null;
+
+      try {
+        if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED'].includes(escrow)) {
+          // Release never ran. pendingBalance still holds the funds — safe to release.
+          await this.releaseEscrowInternal(orderId);
+          details.push({ bookingId: booking.id, orderId, action: `Released from ${escrow}` });
+          fixed++;
+        } else if (escrow === 'RELEASE_PENDING') {
+          if (!payout) {
+            skipped.push({ bookingId: booking.id, orderId, reason: 'RELEASE_PENDING but no payout record — manual review needed' });
+            continue;
+          }
+
+          if (payout.status === 'COMPLETED' || payout.status === 'REVERSED') {
+            // Financial ops already happened. State-only patch — no balance changes.
+            const { count } = await this.prisma.order.updateMany({
+              where: { id: orderId, escrowStatus: 'RELEASE_PENDING' },
+              data: { escrowStatus: 'RELEASED', status: 'Completed' },
+            });
+            if (count > 0) {
+              details.push({ bookingId: booking.id, orderId, action: `State-patched RELEASE_PENDING → RELEASED (payout ${payout.id} was ${payout.status})` });
+              fixed++;
+            } else {
+              skipped.push({ bookingId: booking.id, orderId, reason: 'State-patch was a no-op — order may have moved concurrently' });
+            }
+          } else if (['PENDING', 'APPROVED'].includes(payout.status)) {
+            // availableBalance already credited by pendingToAvailable in the release tx.
+            // Process the existing payout — debitAvailable will move it out correctly.
+            await this.payoutService.processPayout(payout.id);
+            details.push({ bookingId: booking.id, orderId, action: `Processed ${payout.status} payout ${payout.id}` });
+            fixed++;
+          } else if (payout.status === 'FAILED') {
+            // Payout failed and debit was restored by refundAvailable.
+            // availableBalance holds the funds again — reset payout to PENDING and re-process.
+            await this.prisma.payout.update({
+              where: { id: payout.id },
+              data: { status: PayoutStatus.PENDING, failureReason: null, transferCode: null },
+            });
+            await this.payoutService.processPayout(payout.id);
+            details.push({ bookingId: booking.id, orderId, action: `Reset FAILED payout ${payout.id} to PENDING and re-processed` });
+            fixed++;
+          } else {
+            // PROCESSING / TRANSFER_UNKNOWN / CANCELLED — do not touch; webhook or admin should handle.
+            skipped.push({ bookingId: booking.id, orderId, reason: `Payout ${payout.id} is ${payout.status} — manual review needed` });
+          }
+        } else if (escrow === 'DISPUTED') {
+          skipped.push({ bookingId: booking.id, orderId, reason: 'Order is DISPUTED — resolve dispute before reconciling' });
+        } else {
+          skipped.push({ bookingId: booking.id, orderId, reason: `Unhandled escrowStatus ${escrow}` });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        skipped.push({ bookingId: booking.id, orderId, reason: `Error: ${msg}` });
+        this.logger.error(`reconcileServiceBookings: booking ${booking.id} (order ${orderId}) failed: ${msg}`);
+      }
+    }
+
+    this.logger.log(`reconcileServiceBookings complete — checked=${stuckBookings.length} fixed=${fixed} skipped=${skipped.length}`);
+    return { checked: stuckBookings.length, fixed, skipped, details };
   }
 
   /**

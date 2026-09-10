@@ -24,10 +24,10 @@ const mockPrisma = {
     update:     jest.fn(),
     updateMany: jest.fn(),
   },
-  paymentTransaction: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
+  paymentTransaction: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
   payout:             { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-  webhookLog:         { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-  serviceBooking:     { findUnique: jest.fn(), update: jest.fn() },
+  webhookLog:         { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+  serviceBooking:     { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -91,12 +91,15 @@ describe('PaymentService', () => {
       escrowStatus,
       sellerId:     'seller-1',
       sellerAmount: 100,
-      payments: [{ reference: 'ref-1', status: 'Paid' }],
+      payments: [{ id: 'pay-1', reference: 'ref-1', status: 'Paid' }],
     });
 
     beforeEach(() => {
+      // Pre-Paystack atomic claim: 'Paid' → 'Refunding'
+      mockPrisma.paymentTransaction.updateMany.mockResolvedValue({ count: 1 });
+      // Inside tx: 'Refunding' → 'Refunded', then order claim
+      mockTx.paymentTransaction.updateMany.mockResolvedValue({});
       mockTx.order.updateMany.mockResolvedValue({ count: 1 });
-      mockTx.paymentTransaction.update.mockResolvedValue({});
       mockTx.platformRevenue.updateMany.mockResolvedValue({});
     });
 
@@ -150,7 +153,7 @@ describe('PaymentService', () => {
       expect(mockWallet.reversePending).not.toHaveBeenCalled();
     });
 
-    it('concurrent refund: count=0 in updateMany → skips all wallet mutations', async () => {
+    it('concurrent refund: count=0 in order updateMany → skips all wallet mutations', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(makeOrder('ESCROW_HELD'));
       mockTx.order.findUnique.mockResolvedValue({ escrowStatus: 'ESCROW_HELD' });
       mockTx.order.updateMany.mockResolvedValue({ count: 0 }); // concurrent call won
@@ -160,6 +163,56 @@ describe('PaymentService', () => {
       expect(mockWallet.reversePending).not.toHaveBeenCalled();
       expect(mockWallet.debitAvailable).not.toHaveBeenCalled();
       expect(mockWallet.recordSellerDebt).not.toHaveBeenCalled();
+    });
+
+    it('payment status Refunding → throws ConflictException before reaching Paystack', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...makeOrder('ESCROW_HELD'),
+        payments: [{ id: 'pay-1', reference: 'ref-1', status: 'Refunding' }],
+      });
+
+      await expect(service.adminRefundOrder('order-1')).rejects.toThrow(ConflictException);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('concurrent pre-Paystack claim: paymentTransaction.updateMany count=0 → ConflictException', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(makeOrder('ESCROW_HELD'));
+      mockPrisma.paymentTransaction.updateMany.mockResolvedValue({ count: 0 }); // concurrent caller claimed first
+
+      await expect(service.adminRefundOrder('order-1')).rejects.toThrow(ConflictException);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('Paystack call failure → restores PaymentTransaction from Refunding back to Paid', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(makeOrder('ESCROW_HELD'));
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok:   false,
+        json: () => Promise.resolve({ status: false, message: 'Network error' }),
+      } as unknown as Response);
+
+      await expect(service.adminRefundOrder('order-1')).rejects.toThrow(BadRequestException);
+
+      // Should restore 'Refunding' → 'Paid' so admin can retry
+      expect(mockPrisma.paymentTransaction.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pay-1', status: 'Refunding' },
+          data:  { status: 'Paid' },
+        }),
+      );
+    });
+
+    it('uses paymentTransaction.updateMany WHERE status=Paid as atomic pre-Paystack claim (not update)', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(makeOrder('ESCROW_HELD'));
+      mockTx.order.findUnique.mockResolvedValue({ escrowStatus: 'ESCROW_HELD' });
+
+      await service.adminRefundOrder('order-1');
+
+      expect(mockPrisma.paymentTransaction.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pay-1', status: 'Paid' },
+          data:  { status: 'Refunding' },
+        }),
+      );
     });
   });
 
@@ -180,6 +233,7 @@ describe('PaymentService', () => {
 
     beforeEach(() => {
       mockTx.order.updateMany.mockResolvedValue({ count: 1 });
+      mockTx.paymentTransaction.updateMany.mockResolvedValue({});
     });
 
     it('Bug #4: DELIVERED → reversePending (not debitAvailable)', async () => {
@@ -242,13 +296,14 @@ describe('PaymentService', () => {
           ...disputedOrder,
           escrowStatus: 'ESCROW_HELD',
           sellerAmount: 100,
-          payments: [{ reference: 'ref-1', status: 'Paid' }],
+          payments: [{ id: 'pay-1', reference: 'ref-1', status: 'Paid' }],
         });
       mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
-      // adminRefundOrder → adminResolveDispute chain: mockTx needs the new atomic update+re-read setup
+      // adminRefundOrder chain: pre-Paystack claim + tx mocks
+      mockPrisma.paymentTransaction.updateMany.mockResolvedValue({ count: 1 });
       mockTx.order.findUnique.mockResolvedValue({ escrowStatus: 'ESCROW_HELD' });
       mockTx.order.updateMany.mockResolvedValue({ count: 1 });
-      mockTx.paymentTransaction.update.mockResolvedValue({});
+      mockTx.paymentTransaction.updateMany.mockResolvedValue({});
       mockTx.platformRevenue.updateMany.mockResolvedValue({});
 
       await service.adminResolveDispute('order-1', 'REFUND_BUYER');
@@ -565,6 +620,144 @@ describe('PaymentService', () => {
     });
   });
 
+  // ─── Seller debt serialization proof ────────────────────────────────────────
+
+  describe('recordSellerDebt serialization — only one caller can win the order claim', () => {
+    // Proof: adminRefundOrder and handleRefund both use tx.order.updateMany WHERE escrowStatus NOT IN terminal.
+    // The DB serializes the two transactions; only one sees count>0 and reaches recordSellerDebt.
+    // This test verifies that the loser (count=0) does NOT call recordSellerDebt.
+
+    const callHandleRefund = (svc: PaymentService, data: Record<string, unknown>) =>
+      (svc as unknown as { handleRefund: (d: Record<string, unknown>) => Promise<void> }).handleRefund(data);
+
+    it('handleRefund: count=0 → recordSellerDebt is never called (serialization loser skips all wallet ops)', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({
+        id: 'order-1', escrowStatus: 'RELEASED', paymentReference: 'ref-1',
+        sellerId: 'seller-1', sellerAmount: 100,
+      });
+      mockTx.order.findUnique.mockResolvedValue({ escrowStatus: 'RELEASED' });
+      mockTx.order.updateMany.mockResolvedValue({ count: 0 }); // serialization loser
+      mockTx.paymentTransaction.updateMany.mockResolvedValue({});
+
+      await callHandleRefund(service, { transaction_reference: 'ref-1' });
+
+      expect(mockWallet.recordSellerDebt).not.toHaveBeenCalled();
+    });
+
+    it('adminRefundOrder: count=0 in order updateMany → recordSellerDebt is never called', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'order-1', escrowStatus: 'RELEASED', sellerId: 'seller-1', sellerAmount: 100,
+        payments: [{ id: 'pay-1', reference: 'ref-1', status: 'Paid' }],
+      });
+      mockPrisma.paymentTransaction.updateMany.mockResolvedValue({ count: 1 });
+      mockTx.order.findUnique.mockResolvedValue({ escrowStatus: 'RELEASED' });
+      mockTx.paymentTransaction.updateMany.mockResolvedValue({});
+      mockTx.order.updateMany.mockResolvedValue({ count: 0 }); // serialization loser
+      mockTx.platformRevenue.updateMany.mockResolvedValue({});
+
+      await service.adminRefundOrder('order-1');
+
+      expect(mockWallet.recordSellerDebt).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── retryWebhookLog — webhook stuck-in-error recovery ───────────────────────
+
+  describe('retryWebhookLog (webhook stuck-in-error recovery)', () => {
+    const makeLog = (overrides: Record<string, unknown> = {}) => ({
+      id: 'log-1',
+      processed: false,
+      error: 'DB timeout',
+      eventType: 'charge.success',
+      reference: 'ref-1',
+      payload: JSON.stringify({
+        event: 'charge.success',
+        data: { reference: 'ref-1', paid_at: new Date().toISOString(), metadata: null },
+      }),
+      ...overrides,
+    });
+
+    it('throws NotFoundException for unknown log id', async () => {
+      mockPrisma.webhookLog.findUnique.mockResolvedValue(null);
+      await expect(service.retryWebhookLog('log-99')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns retried=false without updating when log is already processed', async () => {
+      mockPrisma.webhookLog.findUnique.mockResolvedValue(makeLog({ processed: true }));
+
+      const result = await service.retryWebhookLog('log-1');
+
+      expect(result.retried).toBe(false);
+      expect(mockPrisma.webhookLog.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when stored payload is not valid JSON', async () => {
+      mockPrisma.webhookLog.findUnique.mockResolvedValue(makeLog({ payload: 'not-json' }));
+      await expect(service.retryWebhookLog('log-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('marks log processed=true and clears error on successful charge.success retry', async () => {
+      mockPrisma.webhookLog.findUnique.mockResolvedValue(makeLog());
+      // handleChargeSuccess looks up payment; returning null triggers early return (no wallet ops)
+      mockPrisma.paymentTransaction.findUnique.mockResolvedValue(null);
+      mockPrisma.serviceBooking.findUnique.mockResolvedValue(null);
+      mockPrisma.webhookLog.update.mockResolvedValue({});
+
+      const result = await service.retryWebhookLog('log-1');
+
+      expect(result.retried).toBe(true);
+      expect(mockPrisma.webhookLog.update).toHaveBeenCalledWith({
+        where: { id: 'log-1' },
+        data: { processed: true, error: null },
+      });
+    });
+
+    it('marks log processed=true and clears error on successful transfer.success retry', async () => {
+      const payload = JSON.stringify({
+        event: 'transfer.success',
+        data: { reference: 'CM-PAYOUT-pay-1', transfer_code: 'TC_1' },
+      });
+      mockPrisma.webhookLog.findUnique.mockResolvedValue(makeLog({ eventType: 'transfer.success', payload }));
+      mockPayout.handleTransferSuccess.mockResolvedValue(undefined);
+      mockPrisma.webhookLog.update.mockResolvedValue({});
+
+      const result = await service.retryWebhookLog('log-1');
+
+      expect(result.retried).toBe(true);
+      expect(mockPayout.handleTransferSuccess).toHaveBeenCalledWith('TC_1', 'CM-PAYOUT-pay-1');
+      expect(mockPrisma.webhookLog.update).toHaveBeenCalledWith({
+        where: { id: 'log-1' },
+        data: { processed: true, error: null },
+      });
+    });
+
+    it('updates error with [retry] prefix and re-throws when handler fails again', async () => {
+      mockPrisma.webhookLog.findUnique.mockResolvedValue(makeLog());
+      mockPrisma.paymentTransaction.findUnique.mockRejectedValue(new Error('DB connection lost'));
+      mockPrisma.webhookLog.update.mockResolvedValue({});
+
+      await expect(service.retryWebhookLog('log-1')).rejects.toThrow('DB connection lost');
+      expect(mockPrisma.webhookLog.update).toHaveBeenCalledWith({
+        where: { id: 'log-1' },
+        data: { error: '[retry] DB connection lost' },
+      });
+    });
+
+    it('returns retried=false for unknown event type and marks log processed', async () => {
+      const payload = JSON.stringify({ event: 'unknown.event', data: { reference: 'ref-1' } });
+      mockPrisma.webhookLog.findUnique.mockResolvedValue(makeLog({ eventType: 'unknown.event', payload }));
+      mockPrisma.webhookLog.update.mockResolvedValue({});
+
+      const result = await service.retryWebhookLog('log-1');
+
+      expect(result.retried).toBe(false);
+      expect(result.message).toContain('No handler');
+      expect(mockPrisma.webhookLog.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ processed: true }) }),
+      );
+    });
+  });
+
   // ─── B: ghsToPesewas — Paystack unit conversion ──────────────────────────────
 
   describe('ghsToPesewas — Paystack boundary conversion', () => {
@@ -660,6 +853,142 @@ describe('PaymentService', () => {
       });
 
       await expect(service.initializeOrderPayment('order-pay-1', 'buyer-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── reconcileServiceBookings — safe reconcile for stale escrow ──────────────
+
+  describe('reconcileServiceBookings', () => {
+    const makeBooking = (escrowStatus: string, payoutStatus?: string) => ({
+      id:      'booking-1',
+      orderId: 'order-1',
+      order: {
+        id: 'order-1',
+        escrowStatus,
+        payouts: payoutStatus
+          ? [{ id: 'payout-1', status: payoutStatus }]
+          : [],
+      },
+    });
+
+    const escrowOrder = {
+      id:           'order-1',
+      escrowStatus: 'ESCROW_HELD',
+      sellerId:     'seller-1',
+      sellerAmount: 100,
+      price:        100,
+      buyerId:      'buyer-1',
+      product: {
+        sellerId:    'seller-1',
+        listingType: 'service',
+        seller: { name: 'Bob', business: { momoProvider: 'mtn', momoPhone: '0241234567' } },
+      },
+    };
+
+    beforeEach(() => {
+      mockTx.order.updateMany.mockResolvedValue({ count: 1 });
+      mockTx.payout.create.mockResolvedValue({ id: 'payout-1' });
+      mockWallet.pendingToAvailable.mockResolvedValue(undefined);
+      mockPayout.processPayout.mockResolvedValue(undefined);
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.payout.update.mockResolvedValue({});
+    });
+
+    it('returns empty result when no stuck bookings exist', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result).toEqual({ checked: 0, fixed: 0, skipped: [], details: [] });
+    });
+
+    it('ESCROW_HELD: calls releaseEscrowInternal and counts as fixed', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('ESCROW_HELD')]);
+      mockPrisma.order.findUnique.mockResolvedValue(escrowOrder);
+      const spy = jest.spyOn(service, 'releaseEscrowInternal').mockResolvedValue({
+        message: 'Delivery confirmed. Funds are being released to the seller.',
+      });
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(spy).toHaveBeenCalledWith('order-1');
+      expect(result.fixed).toBe(1);
+      expect(result.skipped).toHaveLength(0);
+    });
+
+    it('RELEASE_PENDING + COMPLETED payout: state-only order patch, no processPayout call', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'COMPLETED')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPrisma.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'order-1', escrowStatus: 'RELEASE_PENDING' },
+        data:  { escrowStatus: 'RELEASED', status: 'Completed' },
+      });
+      expect(mockPayout.processPayout).not.toHaveBeenCalled();
+      expect(result.fixed).toBe(1);
+    });
+
+    it('RELEASE_PENDING + PENDING payout: calls processPayout directly', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'PENDING')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPayout.processPayout).toHaveBeenCalledWith('payout-1');
+      expect(mockPrisma.payout.update).not.toHaveBeenCalled();
+      expect(result.fixed).toBe(1);
+    });
+
+    it('RELEASE_PENDING + FAILED payout: resets payout to PENDING then calls processPayout', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'FAILED')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPrisma.payout.update).toHaveBeenCalledWith({
+        where: { id: 'payout-1' },
+        data:  { status: 'PENDING', failureReason: null, transferCode: null },
+      });
+      expect(mockPayout.processPayout).toHaveBeenCalledWith('payout-1');
+      expect(result.fixed).toBe(1);
+    });
+
+    it('RELEASE_PENDING + no payout: adds to skipped with manual-review reason', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result.fixed).toBe(0);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].reason).toMatch(/no payout/i);
+    });
+
+    it('RELEASE_PENDING + PROCESSING payout: skipped (webhook or admin should handle)', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'PROCESSING')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPayout.processPayout).not.toHaveBeenCalled();
+      expect(result.fixed).toBe(0);
+      expect(result.skipped[0].reason).toMatch(/PROCESSING/);
+    });
+
+    it('DISPUTED: skipped with resolve-dispute-first reason', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('DISPUTED')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result.fixed).toBe(0);
+      expect(result.skipped[0].reason).toMatch(/DISPUTED/i);
+    });
+
+    it('error during release: counts as skipped with error message, does not propagate', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('ESCROW_HELD')]);
+      jest.spyOn(service, 'releaseEscrowInternal').mockRejectedValue(new Error('DB gone'));
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result.fixed).toBe(0);
+      expect(result.skipped[0].reason).toMatch(/DB gone/);
     });
   });
 });
