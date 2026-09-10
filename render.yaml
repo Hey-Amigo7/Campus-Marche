@@ -57,3 +57,7 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: MARKETPLACE_FEE_PERCENT
+        value: 3
+      - key: MARKETPLACE_FEE_FLAT
+        value: 0

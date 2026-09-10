@@ -92,3 +92,15 @@ export const MOMO_CHARGE_PROVIDERS: Record<string, 'mtn' | 'vod' | 'tgo'> = {
   TELECEL_CASH:    'vod',
   AIRTELTIGO_MONEY:'tgo',
 };
+
+/**
+ * Converts a GHS amount to integer pesewas for Paystack API calls.
+ * Paystack requires integer amounts in the smallest currency unit (pesewas for GHS).
+ * All calls to Paystack must go through this function — never inline `Math.round(x * 100)`.
+ */
+export function ghsToPesewas(ghs: number): number {
+  if (!Number.isFinite(ghs) || ghs < 0) {
+    throw new Error(`ghsToPesewas: invalid GHS amount "${ghs}"`);
+  }
+  return Math.round(ghs * 100);
+}

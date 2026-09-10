@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ghsToPesewas } from './commission.engine';
 import { PrismaService } from './prisma.service';
 import type { NotificationService } from './notification.service';
 
@@ -50,7 +51,7 @@ export class SubscriptionService {
     if (!user) throw new NotFoundException('User not found');
 
     const planDetails = PLANS[plan];
-    const amountKobo = planDetails.priceGhs * 100;
+    const amountInPesewas = ghsToPesewas(planDetails.priceGhs);
     const callbackUrl = this.config.get('FRONTEND_URL', 'http://localhost:3000') + '/subscription/confirm';
 
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -61,7 +62,7 @@ export class SubscriptionService {
       },
       body: JSON.stringify({
         email: user.email,
-        amount: amountKobo,
+        amount: amountInPesewas,
         currency: 'GHS',
         callback_url: callbackUrl,
         metadata: { userId, plan, type: 'subscription' },

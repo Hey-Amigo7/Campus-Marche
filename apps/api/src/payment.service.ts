@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EscrowStatus, PayoutMethod } from '@prisma/client';
-import { calculateCommission, escrowToStatus, generateVerificationCode, isEscrowPaid } from './commission.engine';
+import { calculateCommission, escrowToStatus, generateVerificationCode, ghsToPesewas, isEscrowPaid } from './commission.engine';
 import type { NotificationService } from './notification.service';
 import type { ChatGateway } from './chat.gateway';
 import { PayoutService } from './payout.service';
@@ -82,8 +82,8 @@ export class PaymentService {
 
   private getFeeConfig() {
     return {
-      feePercent: parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT') ?? '2.5'),
-      feeFixed:   parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')    ?? '0'),
+      feePercent: parseFloat(this.config.get<string>('MARKETPLACE_FEE_PERCENT')!),
+      feeFixed:   parseFloat(this.config.get<string>('MARKETPLACE_FEE_FLAT')!),
     };
   }
 
@@ -124,7 +124,7 @@ export class PaymentService {
       return tx;
     }
 
-    const amountInPesewas = Math.round(chargeAmount * 100);
+    const amountInPesewas = ghsToPesewas(chargeAmount);
 
     const res = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
@@ -225,7 +225,7 @@ export class PaymentService {
     const momoChargeAmount = order.totalAmount > 0
       ? order.totalAmount
       : calculateCommission(order.price, fp, ff).totalAmount;
-    const amountInPesewas = Math.round(momoChargeAmount * 100);
+    const amountInPesewas = ghsToPesewas(momoChargeAmount);
     const normalizedPhone = phone.replace(/\D/g, '').replace(/^0/, '233');
 
     const res = await fetch('https://api.paystack.co/charge', {
@@ -769,8 +769,38 @@ export class PaymentService {
     });
     const isServiceOrder = !!linkedBooking;
 
-    const { feePercent, feeFixed } = this.getFeeConfig();
-    const commission = calculateCommission(order.price, feePercent, feeFixed);
+    // Use the financial values that were locked in when this order was created.
+    // Commission is calculated once at order/booking creation and stored permanently.
+    // Reading live fee config here would silently alter the financial terms of an
+    // existing order if the configuration changed after the order was placed.
+    //
+    // Legacy path: orders created before commission-field storage have totalAmount = 0.
+    // For those orders only, calculate once from current config and store permanently.
+    // Modern orders (totalAmount > 0) always use their stored values unchanged.
+    let escrowTotal:   number;
+    let escrowFee:     number;
+    let escrowSeller:  number;
+    let revFeePercent: number;
+    let revFeeFixed:   number;
+
+    if (order.totalAmount > 0) {
+      escrowTotal   = order.totalAmount;
+      escrowFee     = order.platformFee;
+      escrowSeller  = order.sellerAmount > 0 ? order.sellerAmount : order.price;
+      // Derive feePercent from stored amounts for the PlatformRevenue record.
+      revFeePercent = order.price > 0 ? (order.platformFee / order.price) * 100 : 0;
+      revFeeFixed   = 0;
+    } else {
+      // Legacy order: commission was not stored at creation time. Calculate once.
+      this.logger.warn(`fundEscrow: order ${order.id} has no stored commission (legacy) — calculating from current config`);
+      const { feePercent, feeFixed } = this.getFeeConfig();
+      const c = calculateCommission(order.price, feePercent, feeFixed);
+      escrowTotal   = c.totalAmount;
+      escrowFee     = c.platformFee;
+      escrowSeller  = c.sellerAmount;
+      revFeePercent = c.feePercent;
+      revFeeFixed   = c.feeFixed;
+    }
 
     await this.prisma.$transaction(async (tx) => {
       // 1. Mark payment as paid
@@ -793,27 +823,27 @@ export class PaymentService {
           status:           escrowToStatus(EscrowStatus.ESCROW_HELD),
           paymentStatus:    'Paid',
           paymentReference: reference,
-          totalAmount:      commission.totalAmount,
-          platformFee:      commission.platformFee,
-          sellerAmount:     commission.sellerAmount,
+          totalAmount:      escrowTotal,
+          platformFee:      escrowFee,
+          sellerAmount:     escrowSeller,
           sellerId,
           ...codeFields,
         },
       });
 
       // 3. Credit seller pending balance
-      await this.walletService.creditPending(sellerId, commission.sellerAmount, tx);
+      await this.walletService.creditPending(sellerId, escrowSeller, tx);
 
       // 4. Record platform revenue (upsert — safe if webhook fires twice)
       await tx.platformRevenue.upsert({
         where: { orderId: order.id },
         create: {
           orderId:      order.id,
-          feeAmount:    commission.platformFee,
-          feePercent:   commission.feePercent,
-          feeFixed:     commission.feeFixed,
-          totalAmount:  commission.totalAmount,
-          sellerAmount: commission.sellerAmount,
+          feeAmount:    escrowFee,
+          feePercent:   revFeePercent,
+          feeFixed:     revFeeFixed,
+          totalAmount:  escrowTotal,
+          sellerAmount: escrowSeller,
         },
         update: {},
       });
@@ -821,12 +851,12 @@ export class PaymentService {
 
     // 5. Notify buyer + seller
     const releaseNote = isServiceOrder
-      ? `GHS ${commission.sellerAmount.toFixed(2)} will be released to the seller once the service is complete.`
-      : `Payment for your listing is held in escrow (GHS ${commission.sellerAmount.toFixed(2)} coming to you after delivery confirmation).`;
+      ? `GHS ${escrowSeller.toFixed(2)} will be released to the seller once the service is complete.`
+      : `Payment for your listing is held in escrow (GHS ${escrowSeller.toFixed(2)} coming to you after delivery confirmation).`;
 
     this.notificationService?.notify(
       payment.userId, 'payment', '✅ Payment confirmed',
-      `GHS ${commission.totalAmount.toFixed(2)} is held in escrow. The seller has been notified.`,
+      `GHS ${escrowTotal.toFixed(2)} is held in escrow. The seller has been notified.`,
     ).catch(() => undefined);
     this.notificationService?.notify(
       sellerId, 'payment', '🔒 Payment received',
@@ -834,7 +864,7 @@ export class PaymentService {
     ).catch(() => undefined);
 
     this.logger.log(
-      `Escrow funded: order=${order.id} total=${commission.totalAmount} fee=${commission.platformFee} seller=${commission.sellerAmount}`,
+      `Escrow funded: order=${order.id} total=${escrowTotal} fee=${escrowFee} seller=${escrowSeller}`,
     );
 
     // Push real-time update to anyone watching this order
