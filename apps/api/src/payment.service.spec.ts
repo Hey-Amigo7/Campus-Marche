@@ -27,7 +27,7 @@ const mockPrisma = {
   paymentTransaction: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
   payout:             { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   webhookLog:         { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  serviceBooking:     { findUnique: jest.fn(), update: jest.fn() },
+  serviceBooking:     { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -853,6 +853,142 @@ describe('PaymentService', () => {
       });
 
       await expect(service.initializeOrderPayment('order-pay-1', 'buyer-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── reconcileServiceBookings — safe reconcile for stale escrow ──────────────
+
+  describe('reconcileServiceBookings', () => {
+    const makeBooking = (escrowStatus: string, payoutStatus?: string) => ({
+      id:      'booking-1',
+      orderId: 'order-1',
+      order: {
+        id: 'order-1',
+        escrowStatus,
+        payouts: payoutStatus
+          ? [{ id: 'payout-1', status: payoutStatus }]
+          : [],
+      },
+    });
+
+    const escrowOrder = {
+      id:           'order-1',
+      escrowStatus: 'ESCROW_HELD',
+      sellerId:     'seller-1',
+      sellerAmount: 100,
+      price:        100,
+      buyerId:      'buyer-1',
+      product: {
+        sellerId:    'seller-1',
+        listingType: 'service',
+        seller: { name: 'Bob', business: { momoProvider: 'mtn', momoPhone: '0241234567' } },
+      },
+    };
+
+    beforeEach(() => {
+      mockTx.order.updateMany.mockResolvedValue({ count: 1 });
+      mockTx.payout.create.mockResolvedValue({ id: 'payout-1' });
+      mockWallet.pendingToAvailable.mockResolvedValue(undefined);
+      mockPayout.processPayout.mockResolvedValue(undefined);
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.payout.update.mockResolvedValue({});
+    });
+
+    it('returns empty result when no stuck bookings exist', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result).toEqual({ checked: 0, fixed: 0, skipped: [], details: [] });
+    });
+
+    it('ESCROW_HELD: calls releaseEscrowInternal and counts as fixed', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('ESCROW_HELD')]);
+      mockPrisma.order.findUnique.mockResolvedValue(escrowOrder);
+      const spy = jest.spyOn(service, 'releaseEscrowInternal').mockResolvedValue({
+        message: 'Delivery confirmed. Funds are being released to the seller.',
+      });
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(spy).toHaveBeenCalledWith('order-1');
+      expect(result.fixed).toBe(1);
+      expect(result.skipped).toHaveLength(0);
+    });
+
+    it('RELEASE_PENDING + COMPLETED payout: state-only order patch, no processPayout call', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'COMPLETED')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPrisma.order.updateMany).toHaveBeenCalledWith({
+        where: { id: 'order-1', escrowStatus: 'RELEASE_PENDING' },
+        data:  { escrowStatus: 'RELEASED', status: 'Completed' },
+      });
+      expect(mockPayout.processPayout).not.toHaveBeenCalled();
+      expect(result.fixed).toBe(1);
+    });
+
+    it('RELEASE_PENDING + PENDING payout: calls processPayout directly', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'PENDING')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPayout.processPayout).toHaveBeenCalledWith('payout-1');
+      expect(mockPrisma.payout.update).not.toHaveBeenCalled();
+      expect(result.fixed).toBe(1);
+    });
+
+    it('RELEASE_PENDING + FAILED payout: resets payout to PENDING then calls processPayout', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'FAILED')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPrisma.payout.update).toHaveBeenCalledWith({
+        where: { id: 'payout-1' },
+        data:  { status: 'PENDING', failureReason: null, transferCode: null },
+      });
+      expect(mockPayout.processPayout).toHaveBeenCalledWith('payout-1');
+      expect(result.fixed).toBe(1);
+    });
+
+    it('RELEASE_PENDING + no payout: adds to skipped with manual-review reason', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result.fixed).toBe(0);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].reason).toMatch(/no payout/i);
+    });
+
+    it('RELEASE_PENDING + PROCESSING payout: skipped (webhook or admin should handle)', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('RELEASE_PENDING', 'PROCESSING')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(mockPayout.processPayout).not.toHaveBeenCalled();
+      expect(result.fixed).toBe(0);
+      expect(result.skipped[0].reason).toMatch(/PROCESSING/);
+    });
+
+    it('DISPUTED: skipped with resolve-dispute-first reason', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('DISPUTED')]);
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result.fixed).toBe(0);
+      expect(result.skipped[0].reason).toMatch(/DISPUTED/i);
+    });
+
+    it('error during release: counts as skipped with error message, does not propagate', async () => {
+      mockPrisma.serviceBooking.findMany.mockResolvedValue([makeBooking('ESCROW_HELD')]);
+      jest.spyOn(service, 'releaseEscrowInternal').mockRejectedValue(new Error('DB gone'));
+
+      const result = await service.reconcileServiceBookings();
+
+      expect(result.fixed).toBe(0);
+      expect(result.skipped[0].reason).toMatch(/DB gone/);
     });
   });
 });

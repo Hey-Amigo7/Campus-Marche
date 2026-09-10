@@ -204,6 +204,12 @@ export class AdminController {
     return this.adminService.backfillEscrowStates();
   }
 
+  @Post('reconcile-service-bookings')
+  @ApiOperation({ summary: 'Fix COMPLETED service bookings with stale escrow — state-only where financial ops already ran, otherwise runs release/payout safely' })
+  reconcileServiceBookings() {
+    return this.paymentService.reconcileServiceBookings();
+  }
+
   @Get('export/csv')
   @ApiOperation({ summary: 'Export users as CSV' })
   async exportCsv(@Res() res: Response) {

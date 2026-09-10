@@ -10,7 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EscrowStatus, PayoutMethod } from '@prisma/client';
+import { EscrowStatus, PayoutMethod, PayoutStatus } from '@prisma/client';
 import { calculateCommission, escrowToStatus, generateVerificationCode, ghsToPesewas, isEscrowPaid } from './commission.engine';
 import type { NotificationService } from './notification.service';
 import type { ChatGateway } from './chat.gateway';
@@ -405,9 +405,14 @@ export class PaymentService {
 
     // Network calls must not run inside a DB transaction.
     const autoApprove = this.config.get<string>('PAYOUT_AUTO_APPROVE') !== 'false';
+    // Track whether processPayout ran successfully so we know which escrowStatus to emit.
+    // processPayout emits RELEASED internally (test mode) or relies on transfer.success webhook (live).
+    // When it succeeds, we must not override that emission with a stale RELEASE_PENDING.
+    let payoutAutoProcessed = false;
     if (createdPayoutId && autoApprove) {
       try {
         await this.payoutService.processPayout(createdPayoutId, momoPhone);
+        payoutAutoProcessed = true;
       } catch (err) {
         this.logger.error(`releaseEscrowInternal: auto-process payout ${createdPayoutId} failed: ${err instanceof Error ? err.message : String(err)}`);
         await this.prisma.payout.update({
@@ -436,10 +441,15 @@ export class PaymentService {
       ).catch(() => undefined);
     }
 
-    this.chatGateway?.emitOrderUpdated(orderId, {
-      escrowStatus: EscrowStatus.RELEASE_PENDING,
-      paymentStatus: 'Paid',
-    });
+    // Only emit RELEASE_PENDING when the payout was not auto-processed to a terminal state.
+    // In test mode processPayout already emitted RELEASED; overriding it here would leave
+    // the frontend showing the wrong (stale) escrow state until the next page load.
+    if (!payoutAutoProcessed) {
+      this.chatGateway?.emitOrderUpdated(orderId, {
+        escrowStatus: EscrowStatus.RELEASE_PENDING,
+        paymentStatus: 'Paid',
+      });
+    }
 
     return { message: 'Delivery confirmed. Funds are being released to the seller.' };
   }
@@ -879,6 +889,102 @@ export class PaymentService {
 
     this.logger.log(`Refund processed: order ${order.id} → REFUNDED`);
     this.chatGateway?.emitOrderUpdated(order.id, { escrowStatus: 'REFUNDED', paymentStatus: 'Refunded' });
+  }
+
+  // ─── Admin: reconcile COMPLETED service bookings with stale escrow ──────────
+
+  async reconcileServiceBookings(): Promise<{
+    checked: number;
+    fixed: number;
+    skipped: Array<{ bookingId: string; orderId: string; reason: string }>;
+    details: Array<{ bookingId: string; orderId: string; action: string }>;
+  }> {
+    // Find service bookings that reached COMPLETED while their order is still non-terminal.
+    // This happens when the hairdressing-incident guard was not yet in place, or when
+    // releaseEscrowInternal threw after the booking was marked COMPLETED.
+    const stuckBookings = await this.prisma.serviceBooking.findMany({
+      where: {
+        status: 'COMPLETED',
+        orderId: { not: null },
+        order: { escrowStatus: { notIn: ['RELEASED', 'REFUNDED', 'FAILED'] } },
+      },
+      include: {
+        order: {
+          include: {
+            payouts: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
+        },
+      },
+    });
+
+    let fixed = 0;
+    const skipped: Array<{ bookingId: string; orderId: string; reason: string }> = [];
+    const details: Array<{ bookingId: string; orderId: string; action: string }> = [];
+
+    for (const booking of stuckBookings) {
+      const order = booking.order!;
+      const orderId = booking.orderId!;
+      const escrow = order.escrowStatus;
+      const payout = order.payouts[0] ?? null;
+
+      try {
+        if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED'].includes(escrow)) {
+          // Release never ran. pendingBalance still holds the funds — safe to release.
+          await this.releaseEscrowInternal(orderId);
+          details.push({ bookingId: booking.id, orderId, action: `Released from ${escrow}` });
+          fixed++;
+        } else if (escrow === 'RELEASE_PENDING') {
+          if (!payout) {
+            skipped.push({ bookingId: booking.id, orderId, reason: 'RELEASE_PENDING but no payout record — manual review needed' });
+            continue;
+          }
+
+          if (payout.status === 'COMPLETED' || payout.status === 'REVERSED') {
+            // Financial ops already happened. State-only patch — no balance changes.
+            const { count } = await this.prisma.order.updateMany({
+              where: { id: orderId, escrowStatus: 'RELEASE_PENDING' },
+              data: { escrowStatus: 'RELEASED', status: 'Completed' },
+            });
+            if (count > 0) {
+              details.push({ bookingId: booking.id, orderId, action: `State-patched RELEASE_PENDING → RELEASED (payout ${payout.id} was ${payout.status})` });
+              fixed++;
+            } else {
+              skipped.push({ bookingId: booking.id, orderId, reason: 'State-patch was a no-op — order may have moved concurrently' });
+            }
+          } else if (['PENDING', 'APPROVED'].includes(payout.status)) {
+            // availableBalance already credited by pendingToAvailable in the release tx.
+            // Process the existing payout — debitAvailable will move it out correctly.
+            await this.payoutService.processPayout(payout.id);
+            details.push({ bookingId: booking.id, orderId, action: `Processed ${payout.status} payout ${payout.id}` });
+            fixed++;
+          } else if (payout.status === 'FAILED') {
+            // Payout failed and debit was restored by refundAvailable.
+            // availableBalance holds the funds again — reset payout to PENDING and re-process.
+            await this.prisma.payout.update({
+              where: { id: payout.id },
+              data: { status: PayoutStatus.PENDING, failureReason: null, transferCode: null },
+            });
+            await this.payoutService.processPayout(payout.id);
+            details.push({ bookingId: booking.id, orderId, action: `Reset FAILED payout ${payout.id} to PENDING and re-processed` });
+            fixed++;
+          } else {
+            // PROCESSING / TRANSFER_UNKNOWN / CANCELLED — do not touch; webhook or admin should handle.
+            skipped.push({ bookingId: booking.id, orderId, reason: `Payout ${payout.id} is ${payout.status} — manual review needed` });
+          }
+        } else if (escrow === 'DISPUTED') {
+          skipped.push({ bookingId: booking.id, orderId, reason: 'Order is DISPUTED — resolve dispute before reconciling' });
+        } else {
+          skipped.push({ bookingId: booking.id, orderId, reason: `Unhandled escrowStatus ${escrow}` });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        skipped.push({ bookingId: booking.id, orderId, reason: `Error: ${msg}` });
+        this.logger.error(`reconcileServiceBookings: booking ${booking.id} (order ${orderId}) failed: ${msg}`);
+      }
+    }
+
+    this.logger.log(`reconcileServiceBookings complete — checked=${stuckBookings.length} fixed=${fixed} skipped=${skipped.length}`);
+    return { checked: stuckBookings.length, fixed, skipped, details };
   }
 
   /**
