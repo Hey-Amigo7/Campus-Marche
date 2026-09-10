@@ -62,6 +62,7 @@ export class WalletService {
   /**
    * Lock available funds for an outgoing payout (called when payout is processed).
    * Decrements availableBalance. Fails if balance would go negative.
+   * Uses an atomic conditional updateMany to prevent negative balance under concurrent calls.
    */
   async debitAvailable(
     userId: string,
@@ -70,16 +71,24 @@ export class WalletService {
     payoutId?: string,
   ) {
     const client = tx ?? this.prisma;
+    // Pre-read for wallet ID (needed for the ledger entry) and an early, descriptive error.
     const wallet = await client.wallet.findUnique({ where: { userId } });
     if (!wallet || wallet.availableBalance < amount) {
       throw new BadRequestException(
         `Insufficient balance for payout — available: GHS ${(wallet?.availableBalance ?? 0).toFixed(2)}, required: GHS ${amount.toFixed(2)}`,
       );
     }
-    await client.wallet.update({
-      where: { userId },
+    // Atomic conditional decrement: WHERE availableBalance >= amount ensures two concurrent
+    // callers can't both decrement when only one has enough balance to cover the withdrawal.
+    const { count } = await client.wallet.updateMany({
+      where: { userId, availableBalance: { gte: amount } },
       data: { availableBalance: { decrement: amount } },
     });
+    if (count === 0) {
+      throw new BadRequestException(
+        `Insufficient balance — a concurrent withdrawal reduced the available balance. Please try again.`,
+      );
+    }
     await client.walletTransaction.create({
       data: { walletId: wallet.id, type: 'DEBIT_AVAILABLE', amount, payoutId },
     });
@@ -173,7 +182,24 @@ export class WalletService {
   ) {
     const client = tx ?? this.prisma;
     const wallet = await client.wallet.findUnique({ where: { userId } });
-    if (!wallet) return;
+    if (!wallet) {
+      // Loud failure: missing wallet means the debt will be unrecorded and unrecoverable.
+      throw new Error(
+        `recordSellerDebt: wallet not found for user ${userId} — cannot record debt for order ${orderId ?? 'unknown'}`,
+      );
+    }
+    // Idempotency: don't create a duplicate debt entry for the same order or payout.
+    if (orderId ?? payoutId) {
+      const existing = await client.walletTransaction.findFirst({
+        where: {
+          walletId: wallet.id,
+          type: 'SELLER_DEBT_RECORDED',
+          ...(orderId  ? { orderId }  : {}),
+          ...(payoutId ? { payoutId } : {}),
+        },
+      });
+      if (existing) return;
+    }
     await client.walletTransaction.create({
       data: { walletId: wallet.id, type: 'SELLER_DEBT_RECORDED', amount, orderId, payoutId },
     });
