@@ -223,5 +223,147 @@ describe('PayoutService', () => {
       expect(mockWallet.debitAvailable).not.toHaveBeenCalled();
       expect(mockWallet.recordSellerDebt).not.toHaveBeenCalled();
     });
+
+    it('duplicate transfer.success (payout already COMPLETED) → findFirst returns null → no wallet calls', async () => {
+      // findFirst filters status IN [PROCESSING, TRANSFER_UNKNOWN] — a COMPLETED payout is invisible.
+      mockPrisma.payout.findFirst.mockResolvedValue(null);
+
+      await expect(service.handleTransferSuccess('TC_1', 'CM-PAYOUT-pay-1')).resolves.not.toThrow();
+
+      expect(mockWallet.finalizeWithdrawal).not.toHaveBeenCalled();
+      expect(mockWallet.debitAvailable).not.toHaveBeenCalled();
+    });
+
+    it('concurrent transfer.success: count=0 from updateMany inside tx → second caller skips all wallet mutations', async () => {
+      // Both webhooks found the payout in PROCESSING, but the first committed.
+      // Second gets count=0 and must not double-finalize.
+      mockPrisma.payout.findFirst.mockResolvedValue({ ...unknownPayout, status: PayoutStatus.PROCESSING });
+      mockTx.payout.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.handleTransferSuccess('TC_1', 'CM-PAYOUT-pay-1');
+
+      expect(mockWallet.finalizeWithdrawal).not.toHaveBeenCalled();
+      expect(mockWallet.debitAvailable).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── handleTransferFailed ──────────────────────────────────────────────────
+
+  describe('handleTransferFailed — idempotency and balance routing', () => {
+    const processingPayout = { id: 'pay-1', sellerId: 'seller-1', amount: 100, status: PayoutStatus.PROCESSING };
+    const unknownPayoutF   = { id: 'pay-1', sellerId: 'seller-1', amount: 100, status: PayoutStatus.TRANSFER_UNKNOWN };
+
+    it('PROCESSING: refunds available balance (balance was debited in processPayout lock)', async () => {
+      mockPrisma.payout.findFirst.mockResolvedValue(processingPayout);
+      mockTx.payout.updateMany.mockResolvedValue({ count: 1 });
+      mockWallet.refundAvailable.mockResolvedValue(undefined);
+
+      await service.handleTransferFailed('TC_1', 'CM-PAYOUT-pay-1', 'Insufficient funds');
+
+      expect(mockWallet.refundAvailable).toHaveBeenCalledWith('seller-1', 100, mockTx, 'pay-1');
+    });
+
+    it('TRANSFER_UNKNOWN: does NOT call refundAvailable (balance was already restored in processPayout)', async () => {
+      mockPrisma.payout.findFirst.mockResolvedValue(unknownPayoutF);
+      mockTx.payout.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.handleTransferFailed('TC_1', 'CM-PAYOUT-pay-1');
+
+      expect(mockWallet.refundAvailable).not.toHaveBeenCalled();
+    });
+
+    it('duplicate transfer.failed: payout not found (already FAILED) → returns without wallet calls', async () => {
+      mockPrisma.payout.findFirst.mockResolvedValue(null);
+
+      await expect(service.handleTransferFailed('TC_1', 'CM-PAYOUT-pay-1')).resolves.not.toThrow();
+
+      expect(mockWallet.refundAvailable).not.toHaveBeenCalled();
+    });
+
+    it('concurrent transfer.failed: count=0 from updateMany → skips refundAvailable', async () => {
+      mockPrisma.payout.findFirst.mockResolvedValue(processingPayout);
+      mockTx.payout.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.handleTransferFailed('TC_1', 'CM-PAYOUT-pay-1');
+
+      expect(mockWallet.refundAvailable).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── handleTransferReversed ────────────────────────────────────────────────
+
+  describe('handleTransferReversed — reversal after completed payout', () => {
+    const completedPayout = { id: 'pay-1', sellerId: 'seller-1', amount: 100, status: PayoutStatus.COMPLETED, orderId: null };
+
+    it('COMPLETED: calls reverseWithdrawal and transitions status to REVERSED', async () => {
+      mockPrisma.payout.findFirst.mockResolvedValue(completedPayout);
+      mockTx.payout.updateMany.mockResolvedValue({ count: 1 });
+      mockWallet.reverseWithdrawal.mockResolvedValue(undefined);
+
+      await service.handleTransferReversed('TC_1', 'CM-PAYOUT-pay-1', 'Recipient account blocked');
+
+      expect(mockWallet.reverseWithdrawal).toHaveBeenCalledWith('seller-1', 100, mockTx, 'pay-1');
+      expect(mockTx.payout.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pay-1', status: PayoutStatus.COMPLETED },
+          data:  expect.objectContaining({ status: PayoutStatus.REVERSED }),
+        }),
+      );
+    });
+
+    it('duplicate transfer.reversed: findFirst returns null (already REVERSED) → no wallet calls', async () => {
+      mockPrisma.payout.findFirst.mockResolvedValue(null);
+
+      await expect(service.handleTransferReversed('TC_1', 'CM-PAYOUT-pay-1')).resolves.not.toThrow();
+
+      expect(mockWallet.reverseWithdrawal).not.toHaveBeenCalled();
+    });
+
+    it('concurrent transfer.reversed: count=0 from updateMany → skips reverseWithdrawal', async () => {
+      mockPrisma.payout.findFirst.mockResolvedValue(completedPayout);
+      mockTx.payout.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.handleTransferReversed('TC_1', 'CM-PAYOUT-pay-1');
+
+      expect(mockWallet.reverseWithdrawal).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── processPayout concurrency lock ───────────────────────────────────────
+
+  describe('processPayout — concurrent lock via payout.updateMany', () => {
+    const payoutWithSeller = {
+      id: 'pay-1', sellerId: 'seller-1', amount: 100,
+      status: PayoutStatus.PENDING, payoutMethod: 'MTN_MOMO', orderId: null,
+      seller: { name: 'Alice', business: null },
+    };
+
+    it('concurrent processPayout: count=0 from updateMany → aborts without debitAvailable or Paystack call', async () => {
+      mockPrisma.payout.findUnique.mockResolvedValue(payoutWithSeller);
+      mockTx.payout.updateMany.mockResolvedValue({ count: 0 });
+      mockConfig.get.mockReturnValue('sk_test_abc');
+
+      await service.processPayout('pay-1', '0241234567');
+
+      expect(mockWallet.debitAvailable).not.toHaveBeenCalled();
+    });
+
+    it('uses deterministic reference CM-PAYOUT-{payoutId} so Paystack deduplicates retries', async () => {
+      mockPrisma.payout.findUnique.mockResolvedValue(payoutWithSeller);
+      mockTx.payout.updateMany.mockResolvedValue({ count: 1 });
+      mockWallet.debitAvailable.mockResolvedValue(undefined);
+      mockConfig.get.mockReturnValue('sk_test_abc');
+      mockTx.payout.update.mockResolvedValue({});
+      mockWallet.finalizeWithdrawal.mockResolvedValue(undefined);
+      mockTx.order.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.processPayout('pay-1', '0241234567');
+
+      expect(mockTx.payout.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ transferReference: 'CM-PAYOUT-pay-1' }),
+        }),
+      );
+    });
   });
 });

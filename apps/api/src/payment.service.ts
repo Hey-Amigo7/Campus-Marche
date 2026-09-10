@@ -518,6 +518,80 @@ export class PaymentService {
     return { received: true };
   }
 
+  // ─── Admin: list webhook logs ─────────────────────────────────────────────
+
+  async listWebhookLogs(status: 'failed' | 'processed' | 'all' = 'failed', skip = 0, take = 50) {
+    const where =
+      status === 'failed'   ? { processed: false, error: { not: null as null } } :
+      status === 'processed' ? { processed: true } :
+      {};
+    const [data, total] = await Promise.all([
+      this.prisma.webhookLog.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+      this.prisma.webhookLog.count({ where }),
+    ]);
+    return { data, total, skip, take };
+  }
+
+  // ─── Admin: retry a failed webhook ───────────────────────────────────────
+
+  async retryWebhookLog(logId: string): Promise<{ retried: boolean; message: string }> {
+    const log = await this.prisma.webhookLog.findUnique({ where: { id: logId } });
+    if (!log) throw new NotFoundException('Webhook log not found');
+    if (log.processed) {
+      return { retried: false, message: 'Already processed — no retry needed' };
+    }
+
+    let event: PaystackWebhookEvent;
+    try {
+      event = JSON.parse(log.payload) as PaystackWebhookEvent;
+    } catch {
+      throw new BadRequestException('Stored payload is not valid JSON — cannot retry');
+    }
+
+    const { event: eventType, data } = event;
+    const reference = data.reference ?? '';
+
+    try {
+      if (eventType === 'charge.success') {
+        await this.handleChargeSuccess(data, reference);
+      } else if (eventType === 'transfer.success') {
+        const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
+        await this.payoutService.handleTransferSuccess(transferCode, reference);
+      } else if (eventType === 'transfer.failed') {
+        const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
+        const reason = (data as unknown as { reason?: string }).reason;
+        await this.payoutService.handleTransferFailed(transferCode, reference, reason);
+      } else if (eventType === 'transfer.reversed') {
+        const transferCode = (data as unknown as { transfer_code?: string }).transfer_code ?? '';
+        const reason = (data as unknown as { reason?: string }).reason;
+        await this.payoutService.handleTransferReversed(transferCode, reference, reason);
+      } else if (eventType === 'refund.processed' || eventType === 'refund.failed') {
+        await this.handleRefund(data);
+      } else {
+        await this.prisma.webhookLog.update({
+          where: { id: logId },
+          data: { processed: true, error: `No handler for event type: ${eventType}` },
+        });
+        return { retried: false, message: `No handler registered for event type: ${eventType}` };
+      }
+
+      await this.prisma.webhookLog.update({
+        where: { id: logId },
+        data: { processed: true, error: null },
+      });
+      this.logger.log(`Webhook log ${logId} retried successfully (${eventType} ${reference})`);
+      return { retried: true, message: `Successfully retried ${eventType} for reference ${reference}` };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.prisma.webhookLog.update({
+        where: { id: logId },
+        data: { error: `[retry] ${msg}` },
+      });
+      this.logger.error(`Webhook log ${logId} retry failed (${eventType}): ${msg}`);
+      throw err;
+    }
+  }
+
   // ─── Private: fund escrow after successful charge ─────────────────────────
 
   private async handleChargeSuccess(
@@ -585,42 +659,63 @@ export class PaymentService {
     }
 
     const payment = order.payments[0];
-    if (!payment || payment.status !== 'Paid') {
+    if (!payment || (payment.status !== 'Paid' && payment.status !== 'Refunding')) {
       throw new BadRequestException('No completed payment found for this order');
+    }
+    if (payment.status === 'Refunding') {
+      throw new ConflictException('A refund is already in progress for this order');
     }
 
     const secret = this.config.get<string>('PAYSTACK_SECRET_KEY');
     if (!secret) throw new BadRequestException('Paystack not configured');
 
-    const res = await fetch('https://api.paystack.co/refund', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transaction: payment.reference }),
+    // Atomically claim the refund slot: 'Paid' → 'Refunding'.
+    // A concurrent caller that also read status='Paid' will get count=0 here and abort.
+    const { count: claimed } = await this.prisma.paymentTransaction.updateMany({
+      where: { id: payment.id, status: 'Paid' },
+      data: { status: 'Refunding' },
     });
+    if (claimed === 0) {
+      throw new ConflictException('A refund is already in progress for this order');
+    }
 
-    const data = (await res.json()) as { status: boolean; message: string };
-    if (!data.status) throw new BadRequestException(`Paystack refund failed: ${data.message}`);
+    try {
+      const res = await fetch('https://api.paystack.co/refund', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction: payment.reference }),
+      });
+
+      const data = (await res.json()) as { status: boolean; message: string };
+      if (!data.status) throw new BadRequestException(`Paystack refund failed: ${data.message}`);
+    } catch (err) {
+      // Paystack call failed — restore status so admin can retry.
+      await this.prisma.paymentTransaction.updateMany({
+        where: { id: payment.id, status: 'Refunding' },
+        data: { status: 'Paid' },
+      });
+      throw err;
+    }
 
     // Optimistically update order — refund.processed webhook will confirm final state.
     await this.prisma.$transaction(async (tx) => {
       // Re-read current escrowStatus inside the transaction to avoid stale-read race.
-      // The outer `order` variable may reflect state from before a concurrent transition.
       const fresh = await tx.order.findUnique({ where: { id: orderId }, select: { escrowStatus: true } });
       const freshEscrow = fresh?.escrowStatus ?? order.escrowStatus;
 
-      // Atomic claim: only the first concurrent refund wins the DB write.
-      // count=0 means a concurrent call already transitioned to a terminal state — skip all wallet mutations.
+      // Always finalize the PaymentTransaction first — 'Refunding' must never be left as a
+      // stuck state regardless of whether this caller wins the order claim below.
+      await tx.paymentTransaction.updateMany({
+        where: { id: payment.id, status: { in: ['Refunding', 'Paid'] } },
+        data: { status: 'Refunded', refundedAt: new Date() },
+      });
+
+      // Atomic claim: only the first concurrent refund wins the order write.
       const { count } = await tx.order.updateMany({
         where: { id: orderId, escrowStatus: { notIn: ['REFUNDED', 'FAILED'] } },
         data: { escrowStatus: EscrowStatus.REFUNDED, paymentStatus: 'Refunded', status: 'Refunded' },
       });
       if (count === 0) return;
-
-      // Mark the PaymentTransaction as refunded so the ledger is consistent.
-      await tx.paymentTransaction.update({
-        where: { reference: payment.reference },
-        data: { status: 'Refunded', refundedAt: new Date() },
-      });
 
       // Mark platform revenue as reversed — fee was not collected.
       await tx.platformRevenue.updateMany({
@@ -630,13 +725,10 @@ export class PaymentService {
 
       if (order.sellerId && order.sellerAmount) {
         if (freshEscrow === 'RELEASE_PENDING') {
-          // pendingToAvailable already ran — funds are in availableBalance; debit them back.
           await this.walletService.debitAvailable(order.sellerId, order.sellerAmount, tx, undefined);
         } else if (freshEscrow === 'RELEASED') {
-          // Payout already completed — record the debt obligation; admin must recover separately.
           await this.walletService.recordSellerDebt(order.sellerId, order.sellerAmount, tx, orderId);
         } else if (['ESCROW_HELD', 'SHIPPED', 'DELIVERED', 'DISPUTED'].includes(freshEscrow)) {
-          // Funds still in pendingBalance; reverse the credit.
           await this.walletService.reversePending(order.sellerId, order.sellerAmount, tx, orderId);
         }
       }
@@ -765,6 +857,13 @@ export class PaymentService {
         },
       });
       if (count === 0) return; // concurrent call already transitioned — skip wallet mutations
+
+      // Finalize the PaymentTransaction — may be 'Refunding' if adminRefundOrder's Paystack
+      // call succeeded but its own transaction hasn't committed yet (crash or race window).
+      await tx.paymentTransaction.updateMany({
+        where: { orderId: order.id, status: { in: ['Refunding', 'Paid'] } },
+        data: { status: 'Refunded', refundedAt: new Date() },
+      });
 
       // Reverse wallet balance based on where funds actually sat at transaction time.
       if (order.sellerId && order.sellerAmount) {
