@@ -63,9 +63,20 @@ export class EventsManagementController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
   ) {
-    const data = { ...body };
-    if (data['eventDate']) data['eventDate'] = new Date(data['eventDate'] as string);
-    return this.adminService.updateEvent(id, data as Parameters<AdminService['updateEvent']>[1]);
+    // Explicitly pick allowed fields so extra client-supplied keys (e.g. creatorId)
+    // cannot slip through the TypeScript cast and reach Prisma.
+    const data: Parameters<AdminService['updateEvent']>[1] = {};
+    if ('title'             in body) data.title             = body['title'] as string;
+    if ('description'       in body) data.description       = body['description'] as string;
+    if ('location'          in body) data.location          = body['location'] as string;
+    if ('eventDate'         in body) data.eventDate         = new Date(body['eventDate'] as string);
+    if ('category'          in body) data.category          = body['category'] as string;
+    if ('opportunity'       in body) data.opportunity       = body['opportunity'] as string;
+    if ('registrationLink'  in body) data.registrationLink  = body['registrationLink'] as string;
+    if ('imageUrl'          in body) data.imageUrl          = body['imageUrl'] as string;
+    if ('featured'          in body) data.featured          = body['featured'] as boolean;
+    if ('status'            in body) data.status            = body['status'] as string;
+    return this.adminService.updateEvent(id, data);
   }
 
   @Delete('events/:id')

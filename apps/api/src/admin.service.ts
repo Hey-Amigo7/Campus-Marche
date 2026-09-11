@@ -30,7 +30,18 @@ export class AdminService {
     const adminEmail = this.config.getOrThrow<string>('ADMIN_EMAIL');
     const adminPassword = this.config.getOrThrow<string>('ADMIN_PASSWORD');
 
-    if (email.trim().toLowerCase() !== adminEmail.toLowerCase() || password !== adminPassword) {
+    // Pad both passwords to the same fixed length before timingSafeEqual so
+    // the comparison never throws and does not leak the expected password length.
+    const BUF_LEN = 1024;
+    const pwBuf  = Buffer.alloc(BUF_LEN);
+    const expBuf = Buffer.alloc(BUF_LEN);
+    Buffer.from(password).copy(pwBuf);
+    Buffer.from(adminPassword).copy(expBuf);
+
+    const emailMatch    = email.trim().toLowerCase() === adminEmail.toLowerCase();
+    const passwordMatch = crypto.timingSafeEqual(pwBuf, expBuf) && password.length === adminPassword.length;
+
+    if (!emailMatch || !passwordMatch) {
       throw new UnauthorizedException('Invalid admin credentials');
     }
 

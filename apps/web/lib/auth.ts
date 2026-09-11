@@ -8,14 +8,23 @@ export function getAuthToken() {
 }
 
 export function hasAuthToken() {
-  return Boolean(getAuthToken());
+  const token = getAuthToken();
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  if (payload?.exp && typeof payload.exp === "number" && Date.now() / 1000 > payload.exp) {
+    clearAuthToken();
+    return false;
+  }
+  return true;
 }
 
 export function setAuthToken(token: string) {
+  // sessionStorage: tab-scoped, not persisted across browser restarts (safer than localStorage).
+  // We no longer write to localStorage because localStorage is readable by any JS on the page,
+  // making it an XSS target. The cookie covers server-side middleware reads.
   window.sessionStorage.setItem(TOKEN_KEY, token);
-  try { window.localStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
-  // Write cookie so Next.js middleware can read it server-side for route protection
-  const maxAge = 60 * 60 * 24 * 30; // 30 days
+  // 7 days — matches JWT expiry so the cookie doesn't outlive the token
+  const maxAge = 60 * 60 * 24 * 7;
   document.cookie = `cm_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 

@@ -218,6 +218,12 @@ export function Navbar() {
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
   // Fast-path: check token synchronously on first client render to avoid flash
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, []);
+  // React immediately when the API layer detects an expired/rejected token
+  useEffect(() => {
+    function onExpired() { setIsAuthenticated(false); }
+    window.addEventListener("auth:expired", onExpired);
+    return () => window.removeEventListener("auth:expired", onExpired);
+  }, []);
   useEffect(() => { setMenuOpen(false); setUserDropOpen(false); }, [pathname]);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
