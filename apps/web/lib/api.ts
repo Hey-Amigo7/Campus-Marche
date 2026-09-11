@@ -69,6 +69,11 @@ async function request<T>(path: string, fallback: T, init: RequestOptions = {}):
     const response = await fetch(`${API_BASE}${path}`, fetchOptions);
 
     if (!response.ok) {
+      if (response.status === 401 && typeof window !== "undefined") {
+        const { clearAuthToken } = await import("@/lib/auth");
+        clearAuthToken();
+        window.dispatchEvent(new Event("auth:expired"));
+      }
       let message = `Request failed: ${response.status}`;
       const errContentType = response.headers.get("content-type") ?? "";
       if (errContentType.includes("application/json")) {

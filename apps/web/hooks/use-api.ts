@@ -66,7 +66,10 @@ export function useBookings() {
 }
 
 export function useProfile() {
-  return useSWR<Seller | null>("profile", api.getProfile, { fallbackData: null });
+  return useSWR<Seller | null>("profile", api.getProfile, {
+    fallbackData: null,
+    shouldRetryOnError: false,
+  });
 }
 
 export function useBusiness() {

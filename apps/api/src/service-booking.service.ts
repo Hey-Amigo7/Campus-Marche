@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -15,6 +16,8 @@ import type { UpsertAvailabilityDto } from './dto/service-booking.dto';
 
 @Injectable()
 export class ServiceBookingService {
+  private readonly logger = new Logger(ServiceBookingService.name);
+
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
@@ -221,8 +224,9 @@ export class ServiceBookingService {
             'The 48-hour confirmation window expired. Payment has been auto-released to you.',
           )
           .catch(() => undefined);
-      } catch {
+      } catch (err) {
         // releaseEscrowInternal threw — leave booking in AWAITING_CONFIRMATION and retry on next fetch.
+        this.logger.error(`Auto-release failed for booking ${b.id} (order ${b.orderId}): ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 

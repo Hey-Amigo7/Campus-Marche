@@ -14,7 +14,7 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nes
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { memoryStorage } from 'multer';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
@@ -36,6 +36,35 @@ const MEDIA_MIME_TYPES = [
   'application/zip', 'application/x-zip-compressed',
 ];
 const MAX_MEDIA_SIZE = 25 * 1024 * 1024; // 25 MB
+
+// Extension is derived from the validated MIME type, not the client-supplied filename,
+// so a file named "malware.exe.jpg" cannot slip a dangerous extension through.
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg':    '.jpg',
+  'image/png':     '.png',
+  'image/webp':    '.webp',
+  'image/gif':     '.gif',
+  'audio/mpeg':    '.mp3',
+  'audio/mp3':     '.mp3',
+  'audio/ogg':     '.ogg',
+  'audio/wav':     '.wav',
+  'audio/webm':    '.webm',
+  'audio/m4a':     '.m4a',
+  'audio/aac':     '.aac',
+  'audio/flac':    '.flac',
+  'audio/x-m4a':   '.m4a',
+  'application/pdf':    '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel':    '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':   '.xlsx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'text/plain': '.txt',
+  'text/csv':   '.csv',
+  'application/zip':             '.zip',
+  'application/x-zip-compressed': '.zip',
+};
 
 @ApiTags('uploads')
 @Controller('uploads')
@@ -126,7 +155,7 @@ export class UploadController {
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('No file uploaded');
 
-    const filename = `${uuidv4()}${extname(file.originalname).toLowerCase()}`;
+    const filename = `${uuidv4()}${MIME_TO_EXT[file.mimetype] ?? '.bin'}`;
 
     let url: string;
     try {
@@ -168,7 +197,7 @@ export class UploadController {
   async uploadMessageMedia(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('No file uploaded');
 
-    const filename = `${uuidv4()}${extname(file.originalname).toLowerCase()}`;
+    const filename = `${uuidv4()}${MIME_TO_EXT[file.mimetype] ?? '.bin'}`;
 
     let url: string;
     try {
