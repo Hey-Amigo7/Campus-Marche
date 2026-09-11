@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { api, type PaginatedProducts, type ProductFilters } from "@/lib/api";
-import { hasAuthToken } from "@/lib/auth";
+import { hasAuthToken, isEnvAdminToken } from "@/lib/auth";
 import type { ApiConversation, ApiMessage, Category, Notification, Payout, Product, Seller, Wallet } from "@/types";
 
 export function useProduct(id: string | null) {
@@ -67,10 +67,11 @@ export function useBookings() {
 }
 
 export function useProfile() {
-  return useSWR<Seller | null>(hasAuthToken() ? "profile" : null, api.getProfile, {
-    fallbackData: null,
-    shouldRetryOnError: false,
-  });
+  return useSWR<Seller | null>(
+    hasAuthToken() && !isEnvAdminToken() ? "profile" : null,
+    api.getProfile,
+    { fallbackData: null, shouldRetryOnError: false },
+  );
 }
 
 export function useBusiness() {
