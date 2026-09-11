@@ -1,13 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2, Shield } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { setAuthToken } from "@/lib/auth";
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -21,7 +19,10 @@ export default function AdminLoginPage() {
     try {
       const res = await api.admin.adminLogin(email.trim(), password);
       setAuthToken(res.token);
-      router.push("/admin");
+      // Hard redirect so the browser sends a fresh HTTP request with the
+      // cm_token cookie already set — router.push (soft nav) can race the
+      // cookie write in some Next.js/Vercel edge environments.
+      window.location.href = "/admin";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed. Check your credentials.");
     } finally {
