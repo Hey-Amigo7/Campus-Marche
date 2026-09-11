@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EscrowStatus } from '@prisma/client';
-import { calculateCommission, generateVerificationCode } from './commission.engine';
+import { calculateCommission } from './commission.engine';
 import { PrismaService } from './prisma.service';
 import type { NotificationService } from './notification.service';
 import type { ChatGateway } from './chat.gateway';
@@ -17,7 +17,7 @@ const ALLOWED_BUYER_TRANSITIONS: Record<string, string[]> = {
 };
 
 // Seller can mark shipping stages; payment/escrow transitions are handled by PaymentService
-// 'Delivered' is intentionally removed — only reachable via verifyDeliveryCode() to prevent false delivery claims
+// 'Delivered' is intentionally removed — sellers cannot self-mark as delivered; buyer must confirm via releaseEscrow
 const ALLOWED_SELLER_TRANSITIONS: Record<string, string[]> = {
   'Awaiting payment': ['Cancelled'],
   'In progress':      ['Out for delivery', 'Cancelled'],
@@ -106,22 +106,12 @@ export class OrderService {
 
     const role: 'buyer' | 'seller' | 'delivery' = isBuyer ? 'buyer' : isSeller ? 'seller' : 'delivery';
 
-    // Verification codes are stripped server-side — only the authorised party receives them.
-    // Seller/delivery person sees pickupCode; buyer sees deliveryCode.
-    // This prevents a seller from fetching the buyer's delivery code via direct API calls.
-    const canSeePickup   = isSeller || isDelivery;
-    const canSeeDelivery = isBuyer;
-
     return {
       ...order,
       role,
       meetupLocation: order.product.location,
       counterpart: isBuyer ? order.product.seller.name : order.buyer.name,
       counterpartId: isBuyer ? order.product.seller.id : order.buyer.id,
-      pickupCode:          canSeePickup   ? order.pickupCode          : undefined,
-      pickupCodeExpires:   canSeePickup   ? order.pickupCodeExpires   : undefined,
-      deliveryCode:        canSeeDelivery ? order.deliveryCode        : undefined,
-      deliveryCodeExpires: canSeeDelivery ? order.deliveryCodeExpires : undefined,
     };
   }
 
@@ -222,7 +212,7 @@ export class OrderService {
     if (!order) throw new NotFoundException('Order not found');
     if (order.product.sellerId !== requesterId) throw new ForbiddenException('Only the seller can assign a delivery person');
     if (!['In progress'].includes(order.status)) {
-      if (order.pickupVerifiedAt) {
+      if (order.status === 'Out for delivery' || order.status === 'Delivered') {
         throw new BadRequestException('Delivery has already started and cannot be changed. Contact support if there is an issue.');
       }
       throw new BadRequestException('Can only assign a delivery person once the order is in progress and payment has been received');
@@ -235,10 +225,6 @@ export class OrderService {
       where: { OR: [{ email: contact.toLowerCase() }, { phone: contact }, { id: contact }] },
     });
 
-    // Generate pickup code (12h expiry) — delivery person must enter this to start delivery
-    const pickupCode = generateVerificationCode();
-    const pickupCodeExpires = new Date(Date.now() + 12 * 60 * 60 * 1000);
-
     if (registeredUser) {
       // Link to registered account — clears any previous external contact
       const updated = await this.prisma.order.update({
@@ -247,10 +233,6 @@ export class OrderService {
           deliveryPersonId:        registeredUser.id,
           externalDeliveryName:    null,
           externalDeliveryContact: null,
-          pickupCode,
-          pickupCodeExpires,
-          pickupVerifiedAt:        null,
-          // Status stays "In progress" until delivery person verifies the pickup code
         },
       });
 
@@ -259,7 +241,7 @@ export class OrderService {
           registeredUser.id,
           'delivery_assigned',
           'You have been assigned as delivery person',
-          'Contact the seller for the pickup code. You will need to enter it in your app to confirm collection.',
+          'You have been assigned to deliver an order. Check the order details for the delivery address.',
         )
         .catch(() => undefined);
 
@@ -287,7 +269,7 @@ export class OrderService {
 
     if (!order) throw new NotFoundException('Order not found');
     if (order.product.sellerId !== requesterId) throw new ForbiddenException('Only the seller can remove the delivery person');
-    if (order.pickupVerifiedAt) {
+    if (order.status === 'Out for delivery' || order.status === 'Delivered') {
       throw new BadRequestException('Delivery has already started and cannot be changed. Contact support if there is an issue.');
     }
 
@@ -297,72 +279,8 @@ export class OrderService {
         deliveryPersonId:        null,
         externalDeliveryName:    null,
         externalDeliveryContact: null,
-        pickupCode:              null,
-        pickupCodeExpires:       null,
-        pickupVerifiedAt:        null,
       },
     });
-  }
-
-  async verifyPickupCode(orderId: string, deliveryPersonId: string, code: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Order not found');
-    if (order.deliveryPersonId !== deliveryPersonId) {
-      throw new ForbiddenException('You are not the assigned delivery person for this order');
-    }
-    if (!order.pickupCode) throw new BadRequestException('No pickup code has been generated for this order');
-    if (order.pickupVerifiedAt) throw new BadRequestException('Pickup has already been verified');
-    if (order.pickupCodeExpires && order.pickupCodeExpires < new Date()) {
-      throw new BadRequestException('Pickup code has expired — ask the seller to re-assign the delivery person');
-    }
-    if (order.pickupCode !== code.toUpperCase().trim()) {
-      throw new BadRequestException('Invalid pickup code');
-    }
-
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        pickupVerifiedAt: new Date(),
-        status: 'Out for delivery',
-        escrowStatus: EscrowStatus.SHIPPED,
-      },
-    });
-
-    this.notificationService
-      ?.notify(order.buyerId, 'order_status', 'Order picked up', 'Your order has been collected by the delivery person and is on the way.')
-      .catch(() => undefined);
-
-    this.chatGateway?.emitOrderUpdated(orderId, { escrowStatus: EscrowStatus.SHIPPED, paymentStatus: 'Paid' });
-
-    return updated;
-  }
-
-  async verifyDeliveryCode(orderId: string, deliveryPersonId: string, code: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Order not found');
-    if (order.deliveryPersonId !== deliveryPersonId) {
-      throw new ForbiddenException('You are not the assigned delivery person for this order');
-    }
-    if (!order.deliveryCode) throw new BadRequestException('No delivery code found for this order');
-    if (order.deliveryVerifiedAt) throw new BadRequestException('Delivery has already been verified');
-    if (order.deliveryCodeExpires && order.deliveryCodeExpires < new Date()) {
-      throw new BadRequestException('Delivery code has expired — the buyer must request a new order');
-    }
-    if (order.deliveryCode !== code.toUpperCase().trim()) {
-      throw new BadRequestException('Invalid delivery code');
-    }
-
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { deliveryVerifiedAt: new Date(), escrowStatus: EscrowStatus.DELIVERED, status: 'Delivered' },
-    });
-
-    // Trigger escrow release
-    if (this.paymentService) {
-      await this.paymentService.releaseEscrowInternal(orderId);
-    }
-
-    return { message: 'Delivery verified. Payment is being released to the seller.' };
   }
 
   async disputeOrder(orderId: string, userId: string, reason: string) {
@@ -411,10 +329,16 @@ export class OrderService {
     heading?: number,
     speed?: number,
   ) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { product: { select: { sellerId: true } } },
+    });
     if (!order) throw new NotFoundException('Order not found');
-    if (order.deliveryPersonId !== deliveryPersonId) {
-      throw new ForbiddenException('You are not the assigned delivery person for this order');
+
+    const isAssignedDelivery = order.deliveryPersonId === deliveryPersonId;
+    const isSellerDelivery   = order.deliveryMethod === 'SELLER_DELIVERY' && order.product.sellerId === deliveryPersonId;
+    if (!isAssignedDelivery && !isSellerDelivery) {
+      throw new ForbiddenException('You are not authorized to update the delivery location for this order');
     }
 
     const result = await this.prisma.deliveryTracking.upsert({

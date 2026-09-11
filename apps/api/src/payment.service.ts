@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EscrowStatus, PayoutMethod, PayoutStatus } from '@prisma/client';
-import { calculateCommission, escrowToStatus, generateVerificationCode, ghsToPesewas, isEscrowPaid } from './commission.engine';
+import { calculateCommission, escrowToStatus, ghsToPesewas, isEscrowPaid } from './commission.engine';
 import type { NotificationService } from './notification.service';
 import type { ChatGateway } from './chat.gateway';
 import { PayoutService } from './payout.service';
@@ -1361,12 +1361,6 @@ export class PaymentService {
       funded = true;
 
       // 2. Update order: ESCROW_HELD + financial fields
-      //    Delivery code is only relevant for product orders — service orders use the
-      //    booking completion flow instead.
-      const codeFields = isServiceOrder ? {} : {
-        deliveryCode:        generateVerificationCode(),
-        deliveryCodeExpires: new Date(Date.now() + 72 * 60 * 60 * 1000), // 72h
-      };
       await tx.order.update({
         where: { id: order.id },
         data: {
@@ -1378,7 +1372,6 @@ export class PaymentService {
           platformFee:      escrowFee,
           sellerAmount:     escrowSeller,
           sellerId,
-          ...codeFields,
         },
       });
 
