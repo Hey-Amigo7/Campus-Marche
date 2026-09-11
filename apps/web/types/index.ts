@@ -164,6 +164,10 @@ export type DeliveryTracking = {
   heading?: number | null;
   speed?: number | null;
   updatedAt: string;
+  // Buyer's shared location (stored in the same row)
+  buyerLatitude?: number | null;
+  buyerLongitude?: number | null;
+  buyerLocationUpdatedAt?: string | null;
 };
 
 export type OrderTrackingResponse = {
@@ -201,12 +205,6 @@ export type Order = {
   deliveryPersonId?: string | null;
   deliveryPerson?: { id: string; name: string; avatar: string; phone?: string | null } | null;
   tracking?: DeliveryTracking | null;
-  pickupCode?: string | null;
-  pickupCodeExpires?: string | null;
-  pickupVerifiedAt?: string | null;
-  deliveryCode?: string | null;
-  deliveryCodeExpires?: string | null;
-  deliveryVerifiedAt?: string | null;
   disputeReason?: string | null;
   disputedAt?: string | null;
   serviceBooking?: { id: string; status: string; scheduledAt: string } | null;

@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { api, type PaginatedProducts, type ProductFilters } from "@/lib/api";
+import { hasAuthToken } from "@/lib/auth";
 import type { ApiConversation, ApiMessage, Category, Notification, Payout, Product, Seller, Wallet } from "@/types";
 
 export function useProduct(id: string | null) {
@@ -41,7 +42,7 @@ export function useSearchProducts(q: string) {
 }
 
 export function useOrders() {
-  return useSWR("orders", api.getOrders, {
+  return useSWR(hasAuthToken() ? "orders" : null, api.getOrders, {
     fallbackData: [],
     shouldRetryOnError: false,
   });
@@ -59,21 +60,21 @@ export function useOrder(id: string | null) {
 }
 
 export function useBookings() {
-  return useSWR<import("@/types").ServiceBooking[]>("bookings", api.getBookings, {
+  return useSWR<import("@/types").ServiceBooking[]>(hasAuthToken() ? "bookings" : null, api.getBookings, {
     fallbackData: [],
     shouldRetryOnError: false,
   });
 }
 
 export function useProfile() {
-  return useSWR<Seller | null>("profile", api.getProfile, {
+  return useSWR<Seller | null>(hasAuthToken() ? "profile" : null, api.getProfile, {
     fallbackData: null,
     shouldRetryOnError: false,
   });
 }
 
 export function useBusiness() {
-  return useSWR("business", api.getBusiness, { fallbackData: null });
+  return useSWR(hasAuthToken() ? "business" : null, api.getBusiness, { fallbackData: null, shouldRetryOnError: false });
 }
 
 export function useEvents() {
@@ -89,12 +90,13 @@ export function useLocations() {
 }
 
 export function useMyListings() {
-  return useSWR<Product[]>("my-listings", api.getMyListings, { fallbackData: [] });
+  return useSWR<Product[]>(hasAuthToken() ? "my-listings" : null, api.getMyListings, { fallbackData: [], shouldRetryOnError: false });
 }
 
 export function useConversations() {
-  return useSWR<ApiConversation[]>("conversations", api.getConversations, {
+  return useSWR<ApiConversation[]>(hasAuthToken() ? "conversations" : null, api.getConversations, {
     fallbackData: [],
+    shouldRetryOnError: false,
     refreshInterval: 60000, // socket handles real-time; this is a fallback
   });
 }
@@ -108,7 +110,10 @@ export function useMessages(conversationId: string | null) {
 }
 
 export function useNotifications() {
-  return useSWR<Notification[]>("notifications", api.getNotifications, { fallbackData: [] });
+  return useSWR<Notification[]>(hasAuthToken() ? "notifications" : null, api.getNotifications, {
+    fallbackData: [],
+    shouldRetryOnError: false,
+  });
 }
 
 export function useSeller(id: string | undefined) {
@@ -126,23 +131,23 @@ export function useReviews(productId: string | undefined) {
 }
 
 export function useSavedItems() {
-  return useSWR<Product[]>("saved-items", api.getSavedItems, { fallbackData: [] });
+  return useSWR<Product[]>(hasAuthToken() ? "saved-items" : null, api.getSavedItems, { fallbackData: [], shouldRetryOnError: false });
 }
 
 export function useSavedStatus(productId: string | undefined) {
   return useSWR(
-    productId ? `saved-status-${productId}` : null,
+    productId && hasAuthToken() ? `saved-status-${productId}` : null,
     () => api.isSaved(productId!),
-    { fallbackData: { saved: false, productId: productId ?? "" } },
+    { fallbackData: { saved: false, productId: productId ?? "" }, shouldRetryOnError: false },
   );
 }
 
 export function useWallet() {
-  return useSWR<Wallet | null>("wallet", api.getWallet, { fallbackData: null, refreshInterval: 30000 });
+  return useSWR<Wallet | null>(hasAuthToken() ? "wallet" : null, api.getWallet, { fallbackData: null, shouldRetryOnError: false, refreshInterval: 30000 });
 }
 
 export function usePayouts() {
-  return useSWR<Payout[]>("payouts", api.getPayouts, { fallbackData: [], refreshInterval: 30000 });
+  return useSWR<Payout[]>(hasAuthToken() ? "payouts" : null, api.getPayouts, { fallbackData: [], shouldRetryOnError: false, refreshInterval: 30000 });
 }
 
 export function useSiteStats() {
