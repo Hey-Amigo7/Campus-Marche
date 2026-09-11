@@ -4,6 +4,7 @@ import { CalendarCheck, Camera, CheckCircle2, Clock, Info, Loader2, Package, Plu
 import { useRouter } from "next/navigation";
 import { DragEvent, FormEvent, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { mutate } from "swr";
 import { api } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { BoostProductModal } from "@/components/modal";

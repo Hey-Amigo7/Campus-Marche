@@ -161,8 +161,12 @@ function ListingRow({
         className="flex items-center gap-4 rounded-2xl p-4 transition-colors hover:bg-[var(--surface-raised)]"
         style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
       >
-        {/* Image */}
-        <Link href={`/products/${product.id}`} className="shrink-0 h-16 w-16 rounded-xl overflow-hidden" style={{ background: "var(--surface-raised)" }}>
+        {/* Image — drafts go to edit, published go to product page */}
+        <Link
+          href={status === "draft" ? `/profile/listings/${product.id}/edit` : `/products/${product.id}`}
+          className="shrink-0 h-16 w-16 rounded-xl overflow-hidden"
+          style={{ background: "var(--surface-raised)" }}
+        >
           {img ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={img} alt={product.title} className="h-full w-full object-cover" />
@@ -174,7 +178,7 @@ function ListingRow({
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <Link href={`/products/${product.id}`}>
+            <Link href={status === "draft" ? `/profile/listings/${product.id}/edit` : `/products/${product.id}`}>
               <p
                 className="text-sm font-semibold truncate max-w-[200px] hover:underline sm:max-w-[280px]"
                 style={{ color: "var(--on-surface)" }}
