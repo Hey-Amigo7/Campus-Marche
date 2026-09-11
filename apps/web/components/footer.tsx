@@ -15,10 +15,11 @@ const LINKS = {
     { label: "Pricing",       href: "/subscription" },
   ],
   Company: [
-    { label: "About",   href: "/about"   },
-    { label: "Contact", href: "/contact" },
-    { label: "Privacy", href: "/privacy" },
-    { label: "Terms",   href: "/terms"   },
+    { label: "About",        href: "/about"          },
+    { label: "Contact",      href: "/contact"        },
+    { label: "Privacy",      href: "/privacy"        },
+    { label: "Terms",        href: "/terms"          },
+    { label: "Install App",  href: "/how-to-install" },
   ],
 };
 
