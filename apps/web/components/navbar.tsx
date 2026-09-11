@@ -6,6 +6,7 @@ import {
   LogIn, ChevronDown, LogOut, User, ShoppingBag,
   Package, Settings, MessageCircle, Heart, Bell,
   BarChart2, X, Palette, ShoppingCart, Store, Wallet, ReceiptText, CalendarCheck,
+  Download,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -19,6 +20,7 @@ import { useCart } from "@/providers/cart-provider";
 import { useCombinedNotifications } from "@/hooks/use-combined-notifications";
 import { THEMES, useTheme } from "@/providers/theme-provider";
 import { isEnvAdminToken } from "@/lib/auth";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 const spring = { type: "spring", stiffness: 340, damping: 26 } as const;
 
@@ -213,6 +215,7 @@ export function Navbar() {
   const { data: profile } = useProfile();
   const { unreadCount }   = useCombinedNotifications();
   const { cartCount }     = useCart();
+  const { canInstall, install, installing } = usePwaInstall();
 
   // Sync token state on every route change; also run once immediately on mount
   useEffect(() => { setIsAuthenticated(hasAuthToken()); }, [pathname]);
@@ -515,6 +518,22 @@ export function Navbar() {
                       style={{ background: "#72CC23" }}>
                       <LogIn size={15} /> Sign In to your account
                     </Link>
+                  </div>
+                )}
+
+                {/* Install App — shown when browser provides a native install prompt */}
+                {canInstall && (
+                  <div className="mt-auto px-3 pb-4 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+                    <button
+                      type="button"
+                      onClick={install}
+                      disabled={installing}
+                      className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--surface-raised)] disabled:opacity-60"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      <Download size={14} />
+                      {installing ? "Installing…" : "Install App"}
+                    </button>
                   </div>
                 )}
               </motion.div>
